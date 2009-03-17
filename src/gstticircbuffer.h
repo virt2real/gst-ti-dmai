@@ -63,7 +63,6 @@ struct _GstTICircBuffer {
     gboolean           fixedBlockSize;
     gboolean           contiguousData;
     gboolean           consumerAborted;
-    Int8              *discontReadPtr;
     Framecopy_Handle   hFc;
     BufferGfx_Attrs    *gfxAttrs;
 

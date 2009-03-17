@@ -24,6 +24,7 @@
 #endif
 
 #include <sys/resource.h>
+#include <stdlib.h>
 
 #include <gst/gst.h>
 
@@ -37,7 +38,9 @@
 #include "gsttividdec.h"
 #include "gsttividdec2.h"
 #include "gsttiimgenc1.h"
+#include "gsttiimgenc.h"
 #include "gsttiimgdec1.h"
+#include "gsttiimgdec.h"
 #include "gsttidmaivideosink.h"
 #include "gsttividenc.h"
 #include "gsttividenc1.h"
@@ -49,53 +52,87 @@
 static gboolean
 TICodecPlugin_init (GstPlugin * TICodecPlugin)
 {
+    Char    *env_value;
+
     /* Initialize the codec engine run time */
     CERuntime_init();
 
     /* Initialize DMAI */
     Dmai_init(); 
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIVidenc1_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIVidenc1", GST_RANK_PRIMARY,
         GST_TYPE_TIVIDENC1))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIVidenc_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIVidenc", GST_RANK_PRIMARY,
         GST_TYPE_TIVIDENC))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIViddec_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIViddec", GST_RANK_PRIMARY,
         GST_TYPE_TIVIDDEC))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIViddec2_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIViddec2", GST_RANK_PRIMARY,
         GST_TYPE_TIVIDDEC2))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIImgenc1_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIImgenc1", GST_RANK_PRIMARY,
         GST_TYPE_TIIMGENC1))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIImgenc_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
+        TICodecPlugin, "TIImgenc", GST_RANK_PRIMARY,
+        GST_TYPE_TIIMGENC))
+        return FALSE;
+
+    env_value = getenv("GST_TI_TIImgdec1_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIImgdec1", GST_RANK_PRIMARY,
         GST_TYPE_TIIMGDEC1))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIImgdec_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
+        TICodecPlugin, "TIImgdec", GST_RANK_PRIMARY,
+        GST_TYPE_TIIMGDEC))
+        return FALSE;
+
+    env_value = getenv("GST_TI_TIAuddec_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIAuddec", GST_RANK_PRIMARY,
         GST_TYPE_TIAUDDEC))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIAuddec1_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIAuddec1", GST_RANK_PRIMARY,
         GST_TYPE_TIAUDDEC1))
         return FALSE;
 
-    if (!gst_element_register(
+    env_value = getenv("GST_TI_TIDmaiVideoSink_DISABLE");
+
+    if ((!env_value || strcmp(env_value,"1")) && !gst_element_register(
         TICodecPlugin, "TIDmaiVideoSink", GST_RANK_PRIMARY,
         GST_TYPE_TIDMAIVIDEOSINK))
         return FALSE;
