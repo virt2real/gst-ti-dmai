@@ -1,0 +1,94 @@
+2009-03-01  Diego Dompe, RidgeRun
+	* src/gsttividdec2.{c.h}:
+	Create the output buffer tab using the recently added height and width
+	attributes passed by the capabilities. This solves integration problems
+	with other elements like ffmpegcolorspace and xvimagesink, where they 
+	will fail because the second buffer pushed over the src pad of the 
+	decoder has a size different from the first one. Using the input caps 
+	for the creation of the buffer tab we have a more educated guess on the
+	output buffer size, and the resizing won't be required.
+
+2009-02-25  Brijesh Singh, Texas Instruments, Inc.
+	* src/{gsttividenc1.{c,h},gsttividenc.{c,h},gsttividdec1.{c,h},gsttividdec.
+	{c,h},gsttiauddec1.{c,h},gsttiauddec.{c,h},gsttiimgdec1.{c,h},gsttiimgenc1.
+	{c,h}}:
+	Fix potential dead-lock in all elements.
+
+2009-02-24  Diego Dompe, RidgeRun
+	* src/Makefile.am:
+	Add XDC_USER_PATH to the XDC_PATH so people can add the location 
+	of codecs without needing to change the Makefile.am
+	* src/{gsttiauddec.c,gsttiauddec1.c,gsttiimgdec1.c,gsttividdec2.c,
+	gsttividdec.c,gsttiimgenc1.c}:
+	Rename the source and sinks to standard "src" and "sink" names, so
+	the autoplug system may pick them.	
+
+2009-02-23  Diego Dompe, RidgeRun
+	* src/{gsttividenc.c,gsttividdec.c,gsttividdec2.c,gstvidenc1.c}:
+	- Correct the static capabilities so the plugins can be pickup by
+	the autoplugging system.
+	- Fix some typos on the generation of capabilities
+	- Remove invalid assignment of videnc1->device field.
+
+2009-02-20  Brijesh Singh, Texas Instruments, Inc.
+	* src/{gsttividenc.{c,h},Makefile.am,gstticodecplugin.c}:
+	Add xDM 1.x video encoder support
+
+2009-02-20  Brijesh Singh, Texas Instruments, Inc.
+	* src/{gsttividenc.{c,h},Makefile.am,gstticodecplugin.c}:
+	Add xDM 0.9 video encoder support
+
+2009-02-20  Brijesh Singh, Texas Instruments, Inc.
+	* src/{gsttiauddec.c,gsttiauddec1.c,gsttiimgdec1.c,gsttiimgenc1.c,
+	gsttividdec.c,gsttividdec2.c}:
+	Fix potential memory leak in all element, see bug#303.
+
+2009-02-20 Chase Maupin, Texas Instruments, Inc.
+	* src/gsttidmaivideosink.c, gsttidmaivideosink.h:
+	Changed how DMAI video sink does auto detection of the video
+	standard.  Added a new parameter to enable auto detection.
+	Added the ability for the plugin to retry finding a video
+	standard that works if the first selected standard fails.
+
+2009-02-20 Chase Maupin, Texas Instruments, Inc.
+	* src/{gsttiauddec.c,gsttiauddec1.c,gsttiimgdec1.c,gsttiimgenc1.c,
+	gsttividdec.c,gsttividdec2.c}:
+	Fix memory leak in all elements.  See bug#389.
+	
+2009-02-20  Don Darling, Texas Instruments, Inc.
+	Release 0.99.00.  This is our first major release.  The ChangeLog before
+	this point in time may be incomplete.
+
+2009-02-19  Diego Dompe, Ridgerun
+	* BUILDING_STAND_ALONE.txt,Makefile.external
+	Add information about how to build the plugins outside project's build 
+	system
+
+2009-01-12  Don Darling, Texas Instruments, Inc.
+	* src/{gsttiauddec.c,gsttiauddec1.c,gsttiimgdec1.c,gsttiimgenc1.c,
+	gsttividdec.c,gsttividdec2.c}:
+	Fix potential deadlock issue with the queue Fifo object on all elements.
+
+2009-01-12  Don Darling, Texas Instruments, Inc.
+	* src/gstticircbuffer.{c,h}:
+	Optimize circular buffer for encoding with support for fixed-sized
+	blocks.
+
+	* src/{gsttiauddec.{c,h},gsttiauddec1.{c,h},gsttiimgdec1.c,gsttiimgenc1.c,
+	gsttividdec.c,gsttividdec2.c}:
+	Update calls to gst_ticircbuffer_new to pass the correct value for
+	the new fixedBlockSize parameter.
+
+	* src/gsttiimgdec1.c:
+	Use three windows in the circular buffer for image decoder to match the
+	video decoder.
+
+2009-01-07  Diego Dompe <diego.dompe@ridgerun.com>
+	* src/{gsttiauddec.{c,h},gsttiauddec1.{c,h}}: Add multiple buffer
+	support to audio decoders, and a property to set the desired
+	value. Default number of buffers for audio decoders will be 2.
+
+2008-11-17  Don Darling, Texas Instruments, Inc.
+
+	Initial creation.
+
