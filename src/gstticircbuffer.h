@@ -73,8 +73,8 @@ struct _GstTICircBuffer {
     /* Input Thresholds */
     Int32              windowSize;
     gboolean           drain;
-    gboolean           pause;
     gboolean           flush;
+    Rendezvous_Handle  waitOnFlush;
     Int32              bytesNeeded;
 
     /* Blocking Conditions to Throttle I/O */
@@ -99,9 +99,9 @@ gboolean         gst_ticircbuffer_data_consumed(GstTICircBuffer *circBuf,
 gboolean         gst_ticircbuffer_time_consumed(
                      GstTICircBuffer *circBuf, GstClockTime timeConsumed);
 GstBuffer*       gst_ticircbuffer_get_data(GstTICircBuffer *circBuf);
-void 	         gst_ticircbuffer_pause(GstTICircBuffer *circBuf);
 void             gst_ticircbuffer_drain(GstTICircBuffer *circBuf,
                      gboolean status);
+gboolean         gst_ticircbuffer_is_empty(GstTICircBuffer *circBuf);
 void             gst_ticircbuffer_flush(GstTICircBuffer *circBuf);
 void             gst_ticircbuffer_set_display(GstTICircBuffer *circBuf,
                      gboolean disp);

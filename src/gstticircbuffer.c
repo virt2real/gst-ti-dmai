@@ -54,7 +54,6 @@ static gboolean  gst_ticircbuffer_window_available(GstTICircBuffer *circBuf);
 static Int32     gst_ticircbuffer_data_available(GstTICircBuffer *circBuf);
 static Int32     gst_ticircbuffer_data_size(GstTICircBuffer *circBuf);
 static Int32     gst_ticircbuffer_write_space(GstTICircBuffer *circBuf);
-static Int32     gst_ticircbuffer_is_empty(GstTICircBuffer *circBuf);
 static void      gst_ticircbuffer_display(GstTICircBuffer *circBuf);
 static gboolean  gst_ticircbuffer_hw_accel_memcpy(GstTICircBuffer *circBuf,
                     Int8* circBufPtr, GstBuffer *buf);
@@ -143,6 +142,10 @@ static void gst_ticircbuffer_finalize(GstTICircBuffer* circBuf)
         Rendezvous_delete(circBuf->waitOnConsumer);
     }
 
+    if (circBuf->waitOnFlush) {
+        Rendezvous_delete(circBuf->waitOnFlush);
+    }
+
     if (circBuf->hFc) {
         Framecopy_delete(circBuf->hFc);
     }
@@ -175,7 +178,7 @@ static void gst_ticircbuffer_init(GTypeInstance *instance,
     circBuf->waitOnConsumer  = Rendezvous_create(100, &rzvAttrs);
     circBuf->drain           = FALSE;
     circBuf->flush           = FALSE;
-    circBuf->pause           = FALSE;
+    circBuf->waitOnFlush     = Rendezvous_create(2, &rzvAttrs);
     circBuf->bytesNeeded     = 0UL;
     circBuf->maxConsumed     = 0UL;
     circBuf->displayBuffer   = FALSE;
@@ -238,9 +241,6 @@ GstTICircBuffer* gst_ticircbuffer_new(Int32 windowSize, Int32 numWindows,
     }
 
     circBuf->readPtr = circBuf->writePtr = Buffer_getUserPtr(circBuf->hBuf);
-
-    /* The circular buffers starts in an unpaused state */
-    circBuf->pause = FALSE;
 
     return circBuf;
 }
@@ -514,6 +514,8 @@ gboolean gst_ticircbuffer_data_consumed(
 	circBuf->readPtr = circBuf->writePtr = Buffer_getUserPtr(circBuf->hBuf);
 	circBuf->contiguousData  = TRUE;
 	circBuf->flush = FALSE;
+	Rendezvous_meet(circBuf->waitOnFlush);
+        Rendezvous_reset(circBuf->waitOnFlush);
     }
 
     /* Unblock the input buffer queue if there is room for more buffers. */
@@ -565,7 +567,7 @@ GstBuffer* gst_ticircbuffer_get_data(GstTICircBuffer *circBuf)
     gst_ticircbuffer_reset_read_pointer(circBuf);
 
     /* Don't return any data util we have a full window available */
-    while (!circBuf->drain && !gst_ticircbuffer_window_available(circBuf)) {
+    while (!circBuf->drain && !circBuf->flush && !gst_ticircbuffer_window_available(circBuf)) {
 
         GST_LOG("blocking output until a full window is available\n");
         gst_ticircbuffer_wait_on_producer(circBuf);
@@ -574,12 +576,6 @@ GstBuffer* gst_ticircbuffer_get_data(GstTICircBuffer *circBuf)
 
         /* Reset our mutex condition so calling wait_on_consumer will block */
         Rendezvous_reset(circBuf->waitOnProducer);
-    }
-
-    /* We enter on pause state until we receive newer buffers */
-    if (circBuf->pause) {
-        gst_ticircbuffer_wait_on_producer(circBuf);
-	circBuf->pause = FALSE;
     }
 
     /* Set the size of the buffer to be no larger than the window size.  Some
@@ -693,19 +689,14 @@ void gst_ticircbuffer_consumer_aborted(GstTICircBuffer *circBuf)
 void gst_ticircbuffer_flush(GstTICircBuffer *circBuf)
 {
     if (circBuf->writePtr != circBuf->readPtr) {
-        GST_DEBUG("enable flush on circbuf\n");
+        GST_DEBUG("enable flush on circbuf (%d bytes in buffer)\n",
+	    gst_ticircbuffer_data_available(circBuf));
         circBuf->flush = TRUE;
+        gst_ticircbuffer_broadcast_producer(circBuf);
+	Rendezvous_meet(circBuf->waitOnFlush);
     } else {
 	GST_DEBUG("not re-flushing on circbuf\n");
     }
-}
-
-
-/******************************************************************************
- * gst_ticircbuffer_pause
- ******************************************************************************/
-void gst_ticircbuffer_pause(GstTICircBuffer *circBuf){
-    circBuf->pause = TRUE;
 }
 
 /******************************************************************************
@@ -926,9 +917,9 @@ void gst_ticircbuffer_set_display(GstTICircBuffer *circBuf, gboolean disp)
 /******************************************************************************
  * gst_ticircbuffer_is_empty
  ******************************************************************************/
-static Int32 gst_ticircbuffer_is_empty(GstTICircBuffer *circBuf)
+gboolean gst_ticircbuffer_is_empty(GstTICircBuffer *circBuf)
 {
-    return (circBuf->contiguousData && circBuf->readPtr == circBuf->writePtr);
+    return (gboolean)(circBuf->contiguousData && circBuf->readPtr == circBuf->writePtr);
 }
 
 

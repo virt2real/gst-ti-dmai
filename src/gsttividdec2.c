@@ -157,7 +157,7 @@ static void
      Int32 waitQueueSize);
 static void
  gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2);
-static void
+static gboolean
  gst_tividdec2_drain_pipeline(GstTIViddec2 *viddec2);
 static GstClockTime
  gst_tividdec2_frame_duration(GstTIViddec2 *viddec2);
@@ -652,14 +652,18 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
             GST_DEBUG("EOS: draining remaining encoded video data\n");
 
             if (!viddec2->draining) {
-               gst_tividdec2_drain_pipeline(viddec2);
-             }
+                if (gst_tividdec2_drain_pipeline(viddec2)){
+		    /* If the pipeline is draining, it would generate a new
+		       EOS event when is completely drained
+		     */
+		    gst_event_unref(event);
+		    ret = TRUE;
+        	    break;
+	        }
+            }
 	     
-	    gst_event_unref(event);
-
-	    ret = TRUE;
-            break;
-
+    	    ret = gst_pad_push_event(viddec2->srcpad, event);
+	    break;		
         case GST_EVENT_FLUSH_START:
             gst_tividdec2_flush_pipeline(viddec2);
 
@@ -689,9 +693,7 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
     }
 
     return ret;
-
 }
-
 
 /******************************************************************************
  * gst_tividdec2_chain
@@ -1016,8 +1018,6 @@ static GstStateChangeReturn gst_tividdec2_change_state(GstElement *element,
 
     /* Handle ramp-up state changes */
     switch (transition) {
-        case GST_STATE_CHANGE_NULL_TO_READY:
-            break;
         default:
             break;
     }
@@ -1035,7 +1035,6 @@ static GstStateChangeReturn gst_tividdec2_change_state(GstElement *element,
                 return GST_STATE_CHANGE_FAILURE;
             }
             break;
-
         default:
             break;
     }
@@ -1210,6 +1209,8 @@ static void* gst_tividdec2_decode_thread(void *arg)
     Buffer_Handle  hEncDataWindow;
     GstBuffer     *outBuf;
     Int            ret;
+///
+///gboolean blocking = FALSE;
 
     GST_DEBUG("init video decode_thread \n");
 
@@ -1231,11 +1232,27 @@ static void* gst_tividdec2_decode_thread(void *arg)
 
     /* Main thread loop */
     while (TRUE) {
+///
+if (viddec2->flushing) GST_DEBUG("Begin of decode cycle\n");
         /* Obtain an encoded data frame */
         encDataWindow  = gst_ticircbuffer_get_data(viddec2->circBuf);
         encDataTime    = GST_BUFFER_TIMESTAMP(encDataWindow);
         hEncDataWindow = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encDataWindow);
 
+	if (viddec2->flushing){
+	    /* We may have received an incomplete frame because
+	       we are on the middle of a flush. In such case don't
+	       bother to decode the data provided. Releasing it ASAP
+	       will finish the flush process.
+	     */
+	    GST_DEBUG("Flushing encoded frames\n");
+    	    gst_ticircbuffer_data_consumed(viddec2->circBuf, encDataWindow,
+                  GST_BUFFER_SIZE(encDataWindow));
+    	    encDataWindow = NULL;
+	    continue;
+	}
+///
+if (viddec2->flushing) GST_DEBUG("Data obtained\n");
         /* If we received a data frame of zero size, there is no more data to
          * process -- exit the thread.  If we weren't told that we are
          * draining the pipeline, something is not right, so exit with an
@@ -1294,6 +1311,8 @@ static void* gst_tividdec2_decode_thread(void *arg)
             }
         }
 
+///
+if (viddec2->flushing) GST_DEBUG("Getting free buffer\n");
         /* Obtain a free output buffer for the decoded data */
         hDstBuf = BufTab_getFreeBuf(viddec2->hOutBufTab);
         if (hDstBuf == NULL) {
@@ -1304,6 +1323,8 @@ static void* gst_tividdec2_decode_thread(void *arg)
         /* Make sure the whole buffer is used for output */
         BufferGfx_resetDimensions(hDstBuf);
 
+///
+if (viddec2->flushing) GST_DEBUG("Ready to decode\n");
         /* Invoke the video decoder */
         GST_LOG("invoking the video decoder\n");
         ret             = Vdec2_process(viddec2->hVd, hEncDataWindow, hDstBuf);
@@ -1325,6 +1346,8 @@ static void* gst_tividdec2_decode_thread(void *arg)
             GST_LOG("Vdec2_process returned success code %d\n", ret); 
         }
 
+///
+if (viddec2->flushing) GST_DEBUG("Data decoded\n");
         /* Release the reference buffer, and tell the circular buffer how much
          * data was consumed.
          */
@@ -1405,6 +1428,12 @@ static void* gst_tividdec2_decode_thread(void *arg)
             /* Push the transport buffer to the source pad */
             GST_LOG("pushing display buffer to source pad\n");
 
+///
+//if (gst_pad_is_blocking(viddec2->srcpad)){
+    GST_DEBUG("About to block in the src pad\n");
+//    blocking = TRUE;
+//}
+
             if (gst_pad_push(viddec2->srcpad, outBuf) != GST_FLOW_OK) {
 		if (viddec2->flushing){
             	    GST_DEBUG("push to source pad failed while in flushing state\n");
@@ -1412,6 +1441,11 @@ static void* gst_tividdec2_decode_thread(void *arg)
 		    GST_DEBUG("push to source pad failed\n");
         	}
 	    }
+///
+//if (blocking){
+    GST_DEBUG("Passed the block in the src pad\n");
+//    blocking = FALSE;
+//}
 
             hDstBuf = Vdec2_getDisplayBuf(viddec2->hVd);
         }
@@ -1422,6 +1456,8 @@ static void* gst_tividdec2_decode_thread(void *arg)
             Buffer_freeUseMask(hFreeBuf, gst_tividdec2_CODEC_FREE);
             hFreeBuf = Vdec2_getFreeBuf(viddec2->hVd);
         }
+///
+if (viddec2->flushing) GST_DEBUG("End of decode cycle\n");
     }
 
 thread_failure:
@@ -1594,8 +1630,9 @@ static void gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2)
 
     /* Now flush the decode thread */
     if (viddec2->draining){
-        gst_ticircbuffer_drain(viddec2->circBuf,FALSE);
+        gst_ticircbuffer_drain(viddec2->circBuf, FALSE);
 	viddec2->draining = FALSE;
+	GST_DEBUG("Disable draining since we are flushing\n");
     }
     
     if (viddec2->circBuf != NULL) {
@@ -1610,7 +1647,7 @@ static void gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2)
  * gst_tividdec2_drain_pipeline
  *    Push any remaining input buffers through the queue and decode threads
  ******************************************************************************/
-static void gst_tividdec2_drain_pipeline(GstTIViddec2 *viddec2)
+static gboolean gst_tividdec2_drain_pipeline(GstTIViddec2 *viddec2)
 {
     gboolean checkResult;
 
@@ -1619,7 +1656,12 @@ static void gst_tividdec2_drain_pipeline(GstTIViddec2 *viddec2)
      */
     if (!gst_tithread_check_status(
              viddec2, TIThread_DECODE_RUNNING, checkResult)) {
-        return;
+        return FALSE;
+    }
+    
+    if (gst_ticircbuffer_is_empty(viddec2->circBuf) && !viddec2->shutdown){
+	GST_DEBUG("No data on circular buffer, not draining\n");
+	return FALSE;
     }
 
     GST_DEBUG("Draining the pipeline\n");
@@ -1635,6 +1677,8 @@ static void gst_tividdec2_drain_pipeline(GstTIViddec2 *viddec2)
     } else {
         Rendezvous_force(viddec2->waitOnQueueThread);
     }
+    
+    return TRUE;
 }
 
 
