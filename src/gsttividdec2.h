@@ -6,15 +6,18 @@
  *
  * Original Author:
  *     Don Darling, Texas Instruments, Inc.
+ * Contributor:
+ *     Diego Dompe, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2009 RidgeRun
  *
- * This program is free software; you can redistribute it and/or modify 
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed #as is# WITHOUT ANY WARRANTY of any kind,
- * whether express or implied; without even the implied warranty of 
+ * whether express or implied; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
@@ -26,7 +29,7 @@
 #include <pthread.h>
 
 #include <gst/gst.h>
-#include "gstticircbuffer.h"
+#include "gsttiparsers.h"
 
 #include <xdc/std.h>
 #include <ti/sdo/ce/Engine.h>
@@ -62,6 +65,7 @@ struct _GstTIViddec2
   GstElement     element;
   GstPad        *sinkpad;
   GstPad        *srcpad;
+  GstCaps       *outCaps;
 
   /* Element properties */
   const gchar*   engineName;
@@ -70,30 +74,24 @@ struct _GstTIViddec2
   gboolean       genTimeStamps;
 
   /* Element state */
-  Engine_Handle    hEngine;
-  Vdec2_Handle     hVd;
-  gboolean         draining;
-  gboolean         flushing;
-  gboolean         shutdown;
-  pthread_mutex_t  threadStatusMutex;
-  UInt32           threadStatus;
-  gboolean         firstFrame;
+  Engine_Handle    	hEngine;
+  Vdec2_Handle     	hVd;
+  gboolean         	eos;
+  gboolean         	flushing;
+  gboolean		   	paused;
+  pthread_mutex_t  	threadStatusMutex;
+  UInt32           	threadStatus;
 
   /* Decode thread */
   pthread_t          decodeThread;
-
-  /* Queue thread */
-  pthread_t          queueThread;
   Fifo_Handle        hInFifo;
-  gboolean           queueFlushed;
-  Rendezvous_Handle  waitOnQueueFlush;
+  struct parser_ops  *parser;
+  void				 *codec_private;
+  Rendezvous_Handle	 waitOnDecodeThread;
 
   /* Blocking Conditions to Throttle I/O */
-  Rendezvous_Handle  waitOnQueueThread;
-  Int32              waitQueueSize;
-
-  /* Blocking Condition for creating queue thread */
-  Rendezvous_Handle  waitOnDecodeThread;
+  Rendezvous_Handle  waitOnFifoFlush;
+  Rendezvous_Handle  waitOnInputBuffersAvailable;
 
   /* Framerate (Num/Den) */
   gint               framerateNum;
@@ -102,18 +100,17 @@ struct _GstTIViddec2
   gint               width;
 
   /* Buffer management */
+  UInt32           numInputBufs;
+  BufTab_Handle    hInBufTab;
   UInt32           numOutputBufs;
   BufTab_Handle    hOutBufTab;
-  GstTICircBuffer *circBuf;
 
   /* Quicktime h264 header  */
-  GstBuffer       *sps_pps_data;
-  GstBuffer       *nal_code_prefix;
-  guint           nal_length;
+  struct h264_parser_private h264_data;
 };
 
 /* _GstTIViddec2Class object */
-struct _GstTIViddec2Class 
+struct _GstTIViddec2Class
 {
   GstElementClass parent_class;
 };
