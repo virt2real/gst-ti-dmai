@@ -8,7 +8,7 @@ libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttiauddec.c gsttiauddec1.c
 gsttividdec.c gsttividdec2.c gsttiimgenc1.c gsttiimgenc.c gsttiimgdec1.c \
 gsttiimgdec.c gsttidmaibuffertransport.c gstticircbuffer.c \
 gsttidmaivideosink.c gstticodecs.c gstticodecs_platform.c  gsttiquicktime_aac.c \
-gsttiquicktime_h264.c gsttividenc.c gsttividenc1.c gstticommon_utils.c \
+gsttiquicktime_h264.c gsttividenc.c gsttividenc1.c gstticommonutils.c \
 gsttiparser_h264.c
 
 # flags used to compile this plugin
@@ -22,7 +22,7 @@ noinst_HEADERS = gsttiauddec.h gsttiauddec1.h gsttividdec.h gsttividdec2.h \
 gsttiimgenc1.h gsttiimgenc.h gsttiimgdec1.h gsttiimgdec.h \
 gsttidmaibuffertransport.h gstticircbuffer.h \
 gsttidmaivideosink.h gsttithreadprops.h gstticodecs.h gsttiquicktime_aac.h \
-gsttiquicktime_h264.h gsttividenc.h gsttividenc1.h gstticommon_utils.h \
+gsttiquicktime_h264.h gsttividenc.h gsttividenc1.h gstticommonutils.h \
 gsttiparsers.h
 
 # XDC Configuration

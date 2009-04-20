@@ -165,7 +165,7 @@ GstBuffer *h264_parse(GstBuffer *buf, void *private){
 		Buffer_setNumBytesUsed(priv->outbuf, didx);
 
 		outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-														priv->hInBufTab);
+														priv->waitOnInBufTab);
 		priv->outbuf = NULL;
 		priv->current_offset = GST_BUFFER_SIZE(buf);
 	} else {
@@ -220,7 +220,7 @@ GstBuffer *h264_drain(void *private){
 	}
 
 	Buffer_setNumBytesUsed(houtbuf,1);
-	outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(houtbuf);
+	outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(houtbuf,priv->waitOnInBufTab);
 	GST_BUFFER_SIZE(outbuf) = 0;
 
 	GST_DEBUG("Parser drained");
