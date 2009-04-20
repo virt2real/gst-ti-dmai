@@ -1,10 +1,10 @@
 /*
  * gsttidmaibuffertransport.c
- * 
+ *
  * This file defines the "TIDmaiBufferTransport" buffer object, which is used
  * to encapsulate an existing DMAI buffer object inside of a gStreamer
  * buffer so it can be passed along the gStreamer pipeline.
- * 
+ *
  * Specifically, this object provides a finalize function that will release
  * a DMAI buffer properly when gst_buffer_unref() is called.  If the specified
  * DMAI buffer is part of a BufTab, it will be released for re-use.
@@ -22,7 +22,7 @@
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  *
- * This program is free software; you can redistribute it and/or modify 
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
  *
@@ -152,7 +152,7 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
 
     /* If rendezvous handle is set then wake-up caller */
     if (cbuf->hRv) {
-         Rendezvous_force(cbuf->hRv);
+         Rendezvous_forceAndReset(cbuf->hRv);
     }
 
     GST_LOG("end finalize\n");
@@ -163,10 +163,10 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
  * gst_tidmaibuffertransport_new
  *    Create a new DMAI buffer transport object.
  *
- * Note: If rendenzvous handle is set then Rendenzvous_force will be called for 
+ * Note: If rendenzvous handle is set then Rendenzvous_force will be called for
  *       this handle during finalize method.
  ******************************************************************************/
-GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf, 
+GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
      Rendezvous_Handle hRv)
 {
     GstTIDmaiBufferTransport *buf;
