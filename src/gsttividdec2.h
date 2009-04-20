@@ -78,6 +78,7 @@ struct _GstTIViddec2
   Vdec2_Handle     	hVd;
   gboolean         	eos;
   gboolean         	flushing;
+  gboolean 			shutdown;
   gboolean		   	paused;
   pthread_mutex_t  	threadStatusMutex;
   UInt32           	threadStatus;

@@ -333,6 +333,7 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     viddec2->hVd                = NULL;
     viddec2->eos                = FALSE;
     viddec2->flushing    		= FALSE;
+    viddec2->shutdown			= FALSE;
     viddec2->threadStatus       = 0UL;
 
     viddec2->decodeThread	    = NULL;
@@ -922,12 +923,27 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
     /* Discard data on the pipeline */
     gst_tividdec2_flush_pipeline(viddec2);
 
+    /* Disable flushing since we will drain next */
+    viddec2->flushing = FALSE;
+
     /* Shut down the decode thread thanks to the Fifo_flush*/
     if (viddec2->decodeThread) {
-        /* Flush the fifo to trigger exit on the thread */
-        Fifo_flush(viddec2->hInFifo);
-
     	GST_DEBUG("shutting down decode thread\n");
+
+    	viddec2->shutdown = TRUE;
+
+        /* Drain the codec before shutdown the decode thread
+         * Since the parser is flushed, it should return an empty
+         * buffer to shutdown the decode thread
+         */
+        if (Fifo_put(viddec2->hInFifo,
+        		viddec2->parser->drain(viddec2->codec_private)) < 0) {
+    		/* Put the buffer on the FIFO
+    		 * This FIFO is throttled by the availability of buffers in the hInBufTab
+           	 */
+        	GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
+    							("Failed to send buffer to decode thread"));
+        }
 
         if (pthread_join(viddec2->decodeThread, &thread_ret) == 0) {
             if (thread_ret == GstTIThreadFailure) {
@@ -1302,7 +1318,7 @@ static void* gst_tividdec2_decode_thread(void *arg)
         }
 
 		if (GST_BUFFER_SIZE(encData) == 0){
-			if (!viddec2->eos){
+			if (!viddec2->eos && !viddec2->shutdown){
 	    		GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
 	    				("Zero size packet received but not EOS active"));
 				goto thread_failure;
@@ -1327,6 +1343,7 @@ static void* gst_tividdec2_decode_thread(void *arg)
         if (hDstBuf == NULL) {
             GST_LOG("Failed to get free buffer, waiting on bufTab\n");
             Rendezvous_meet(viddec2->waitOnOutBufTab);
+
             hDstBuf = BufTab_getFreeBuf(viddec2->hOutBufTab);
 
             if (hDstBuf == NULL) {
@@ -1441,7 +1458,6 @@ static void* gst_tividdec2_decode_thread(void *arg)
             	    GST_DEBUG("push to source pad failed while in flushing state\n");
             	} else {
             		GST_DEBUG("push to source pad failed\n");
-///            		goto thread_exit;
             	}
             }
 
@@ -1463,6 +1479,12 @@ static void* gst_tividdec2_decode_thread(void *arg)
         	codecFlushed = FALSE;
         	GST_DEBUG("Decode thread is drained\n");
         	gst_pad_push_event(viddec2->srcpad,gst_event_new_eos());
+
+        	if (viddec2->shutdown){
+    			GST_DEBUG("Shutdown after codec flushed: exiting decode thread\n");
+    			viddec2->shutdown = FALSE;
+        	    goto thread_exit;
+        	}
         }
     }
 
