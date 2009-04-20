@@ -89,7 +89,7 @@ struct parser_ops {
 
 /* H264 Parser */
 struct h264_parser_private {
-    Rendezvous_Handle  	waitOnInputBuffersAvailable;
+    Rendezvous_Handle  	waitOnInBufTab;
     BufTab_Handle 		hInBufTab;
 	GstBuffer       	*sps_pps_data;
 	GstBuffer       	*nal_code_prefix;

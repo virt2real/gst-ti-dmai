@@ -91,7 +91,8 @@ struct _GstTIViddec2
 
   /* Blocking Conditions to Throttle I/O */
   Rendezvous_Handle  waitOnFifoFlush;
-  Rendezvous_Handle  waitOnInputBuffersAvailable;
+  Rendezvous_Handle  waitOnInBufTab;
+  Rendezvous_Handle	 waitOnOutBufTab;
 
   /* Framerate (Num/Den) */
   gint               framerateNum;

@@ -59,7 +59,7 @@
 #include "gstticodecs.h"
 #include "gsttithreadprops.h"
 #include "gsttiquicktime_h264.h"
-#include "gsttivideo_utils.h"
+#include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC (gst_tividdec2_debug);
@@ -339,7 +339,8 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     viddec2->hInFifo            = NULL;
     viddec2->waitOnDecodeThread = NULL;
     viddec2->waitOnFifoFlush    = NULL;
-    viddec2->waitOnInputBuffersAvailable = NULL;
+    viddec2->waitOnInBufTab 	= NULL;
+    viddec2->waitOnOutBufTab 	= NULL;
     viddec2->parser				= NULL;
     viddec2->codec_private		= NULL;
 
@@ -835,16 +836,17 @@ static gboolean gst_tividdec2_init_video(GstTIViddec2 *viddec2)
     pthread_mutex_init(&viddec2->threadStatusMutex, NULL);
 
     /* Initialize rendezvous objects for making threads wait on conditions */
-    viddec2->waitOnFifoFlush				= Rendezvous_create(2, &rzvAttrs);
-    viddec2->waitOnInputBuffersAvailable 	= Rendezvous_create(2, &rzvAttrs);
-    viddec2->waitOnDecodeThread 		 	= Rendezvous_create(2, &rzvAttrs);
+    viddec2->waitOnFifoFlush	= Rendezvous_create(2, &rzvAttrs);
+    viddec2->waitOnInBufTab 	= Rendezvous_create(2, &rzvAttrs);
+    viddec2->waitOnOutBufTab 	= Rendezvous_create(2, &rzvAttrs);
+    viddec2->waitOnDecodeThread = Rendezvous_create(2, &rzvAttrs);
     viddec2->eos          = FALSE;
     viddec2->flushing     = FALSE;
     viddec2->paused		  = FALSE;
 
     /* Setup private data */
     if (gst_is_h264_decoder(viddec2->codecName)){
-    	viddec2->h264_data.waitOnInputBuffersAvailable = viddec2->waitOnInputBuffersAvailable;
+    	viddec2->h264_data.waitOnInBufTab = viddec2->waitOnInBufTab;
     }
 
     /* Initialize custom thread attributes */
@@ -962,9 +964,14 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
         viddec2->waitOnFifoFlush = NULL;
     }
 
-    if (viddec2->waitOnInputBuffersAvailable) {
-        Rendezvous_delete(viddec2->waitOnInputBuffersAvailable);
-        viddec2->waitOnInputBuffersAvailable = NULL;
+    if (viddec2->waitOnInBufTab) {
+        Rendezvous_delete(viddec2->waitOnInBufTab);
+        viddec2->waitOnInBufTab = NULL;
+    }
+
+    if (viddec2->waitOnOutBufTab) {
+        Rendezvous_delete(viddec2->waitOnOutBufTab);
+        viddec2->waitOnOutBufTab = NULL;
     }
 
     if (viddec2->h264_data.sps_pps_data) {
@@ -1316,11 +1323,17 @@ static void* gst_tividdec2_decode_thread(void *arg)
 		}
 
         /* Obtain a free output buffer for the decoded data */
-        hDstBuf = BufTab_getFreeBuf(viddec2->hOutBufTab);
+		hDstBuf = BufTab_getFreeBuf(viddec2->hOutBufTab);
         if (hDstBuf == NULL) {
-    		GST_ELEMENT_ERROR(viddec2,RESOURCE,NO_SPACE_LEFT,(NULL),
-    				("failed to get a free contiguous buffer from BufTab"));
-            goto thread_failure;
+            GST_LOG("Failed to get free buffer, waiting on bufTab\n");
+            Rendezvous_meet(viddec2->waitOnOutBufTab);
+            hDstBuf = BufTab_getFreeBuf(viddec2->hOutBufTab);
+
+            if (hDstBuf == NULL) {
+        		GST_ELEMENT_ERROR(viddec2,RESOURCE,NO_SPACE_LEFT,(NULL),
+        				("failed to get a free contiguous buffer from BufTab"));
+                goto thread_failure;
+            }
         }
 
         /* Make sure the whole buffer is used for output */
@@ -1361,7 +1374,6 @@ static void* gst_tividdec2_decode_thread(void *arg)
        										  | GST_BUFFER_COPY_TIMESTAMPS);
         gst_buffer_unref(encData);
         Buffer_freeUseMask(hEncData, gst_tividdec2_CODEC_FREE);
-    	Rendezvous_forceAndReset(viddec2->waitOnInputBuffersAvailable);
         encData = NULL;
 
     	/* Obtain the display buffer returned by the codec (it may be a
@@ -1400,13 +1412,14 @@ static void* gst_tividdec2_decode_thread(void *arg)
              * buffer for re-use in this element when the source pad calls
              * gst_buffer_unref().
              */
-            outBuf = gst_tidmaibuffertransport_new(hDstBuf);
+            outBuf = gst_tidmaibuffertransport_new(hDstBuf,
+											viddec2->waitOnOutBufTab);
             gst_buffer_copy_metadata(outBuf,metabuffer, GST_BUFFER_COPY_FLAGS
 												| GST_BUFFER_COPY_TIMESTAMPS);
             gst_buffer_unref(metabuffer);
             metabuffer = NULL;
             gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
-                gst_calculate_display_bufSize(hDstBuf));
+            		gst_ti_calculate_display_bufSize(hDstBuf));
             gst_buffer_set_caps(outBuf, viddec2->outCaps);
 
             /* If we have a valid time stamp, set it on the buffer */
@@ -1480,7 +1493,7 @@ thread_exit:
     gst_object_unref(viddec2);
 
     /* Unblock the parser if blocked*/
-    Rendezvous_forceAndReset(viddec2->waitOnInputBuffersAvailable);
+    Rendezvous_forceAndReset(viddec2->waitOnInBufTab);
 
     GST_DEBUG("exit video decode_thread (%d)\n", (int)threadRet);
     return threadRet;

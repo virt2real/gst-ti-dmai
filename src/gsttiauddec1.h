@@ -72,20 +72,19 @@ struct _GstTIAuddec1
   Engine_Handle    hEngine;
   Adec1_Handle      hAd;
   gint             channels;
-  gboolean         draining;
-  gboolean         flushing;
-  gboolean         shutdown;
+  gboolean         drainingEOS;
   pthread_mutex_t  threadStatusMutex;
   UInt32           threadStatus;
 
   /* Decode thread */
   pthread_t          decodeThread;
+  gboolean           decodeDrained;
+  Rendezvous_Handle  waitOnDecodeDrain;
+  Rendezvous_Handle  waitOnBufTab;
 
   /* Queue thread */
   pthread_t          queueThread;
   Fifo_Handle        hInFifo;
-  gboolean           queueFlushed;
-  Rendezvous_Handle  waitOnQueueFlush;
 
   /* Blocking Conditions to Throttle I/O */
   Rendezvous_Handle  waitOnQueueThread;

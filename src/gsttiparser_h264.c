@@ -84,7 +84,7 @@ GstBuffer *h264_parse(GstBuffer *buf, void *private){
 	if (!priv->outbuf){
 		priv->outbuf = BufTab_getFreeBuf(priv->hInBufTab);
 		if (!priv->outbuf){
-			Rendezvous_meet(priv->waitOnInputBuffersAvailable);
+			Rendezvous_meet(priv->waitOnInBufTab);
 			/*
 			 * If we are sleeping to get a buffer, and we start flushing we
 			 * need to discard the incoming data.
@@ -164,7 +164,8 @@ GstBuffer *h264_parse(GstBuffer *buf, void *private){
 		/* Set the number of bytes used, required by the DMAI APIs*/
 		Buffer_setNumBytesUsed(priv->outbuf, didx);
 
-		outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf);
+		outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
+														priv->hInBufTab);
 		priv->outbuf = NULL;
 		priv->current_offset = GST_BUFFER_SIZE(buf);
 	} else {
@@ -209,7 +210,7 @@ GstBuffer *h264_drain(void *private){
 	 */
 	houtbuf = BufTab_getFreeBuf(priv->hInBufTab);
 	if (!houtbuf){
-		Rendezvous_meet(priv->waitOnInputBuffersAvailable);
+		Rendezvous_meet(priv->waitOnInBufTab);
 		houtbuf = BufTab_getFreeBuf(priv->hInBufTab);
 
 		if (!houtbuf){
@@ -234,8 +235,8 @@ void h264_flush_start(void *private){
 	struct h264_parser_private *priv = (struct h264_parser_private *)private;
 
 	priv->flushing = TRUE;
-	if (priv->waitOnInputBuffersAvailable){
-		Rendezvous_forceAndReset(priv->waitOnInputBuffersAvailable);
+	if (priv->waitOnInBufTab){
+		Rendezvous_forceAndReset(priv->waitOnInBufTab);
 	}
 	GST_DEBUG("Parser flushed");
 	return;

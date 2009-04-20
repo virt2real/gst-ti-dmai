@@ -45,6 +45,7 @@
 #include "gsttidmaibuffertransport.h"
 #include "gstticodecs.h"
 #include "gsttithreadprops.h"
+#include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC (gst_tiimgenc_debug);
@@ -178,6 +179,10 @@ static gboolean
     gst_tiimgenc_codec_start (GstTIImgenc  *imgenc);
 static gboolean 
     gst_tiimgenc_codec_stop (GstTIImgenc  *imgenc);
+static void 
+    gst_tiimgenc_string_cap(gchar *str);
+static void 
+    gst_tiimgenc_init_env(GstTIImgenc *imgenc);
 
 /******************************************************************************
  * gst_tiimgenc_class_init_trampoline
@@ -346,6 +351,81 @@ static void gst_tiimgenc_class_init(GstTIImgencClass *klass)
     GST_LOG("Finish\n");
 }
 
+/******************************************************************************
+ * gst_tiimgenc_init_env
+ *  Initialize element property default by reading environment variables.
+ *****************************************************************************/
+static void gst_tiimgenc_init_env(GstTIImgenc *imgenc)
+{
+    GST_LOG("gst_tiimgenc_init_env - begin");
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_engineName")) {
+        imgenc->engineName = gst_ti_env_get_string("GST_TI_TIImgenc_engineName");
+        GST_LOG("Setting engineName=%s\n", imgenc->engineName);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_codecName")) {
+        imgenc->codecName = gst_ti_env_get_string("GST_TI_TIImgenc_codecName");
+        GST_LOG("Setting codecName=%s\n", imgenc->codecName);
+    }
+    
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_numOutputBufs")) {
+        imgenc->numOutputBufs = 
+                            gst_ti_env_get_int("GST_TI_TIImgenc_numOutputBufs");
+        GST_LOG("Setting numOutputBufs=%ld\n", imgenc->numOutputBufs);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_displayBuffer")) {
+        imgenc->displayBuffer = 
+                gst_ti_env_get_boolean("GST_TI_TIImgenc_displayBuffer");
+        GST_LOG("Setting displayBuffer=%s\n",
+                 imgenc->displayBuffer  ? "TRUE" : "FALSE");
+    }
+ 
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_genTimeStamps")) {
+        imgenc->genTimeStamps = 
+                gst_ti_env_get_boolean("GST_TI_TIImgenc_genTimeStamps");
+        GST_LOG("Setting genTimeStamps =%s\n", 
+                    imgenc->genTimeStamps ? "TRUE" : "FALSE");
+    }
+    
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_framerate")) {
+        imgenc->framerateNum = gst_ti_env_get_int("GST_TI_TIImgenc_framerate");
+        imgenc->framerateDen = 1;
+        
+        /* If 30fps was specified, use 29.97 */        
+        if (imgenc->framerateNum == 30) {
+            imgenc->framerateNum = 30000;
+            imgenc->framerateDen = 1001;
+        }
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_qValue")) {
+        imgenc->qValue =  gst_ti_env_get_int("GST_TI_TIImgenc_qValue");
+        GST_LOG("Setting qValue=%d\n", imgenc->qValue);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_iColorSpace")) {
+        imgenc->iColor = gst_ti_env_get_string("GST_TI_TIImgenc_iColorSpace") ;
+        gst_tiimgenc_string_cap(imgenc->iColor);
+        GST_LOG("Setting engineName=%s\n", imgenc->iColor);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_oColorSpace")) {
+        imgenc->oColor = gst_ti_env_get_string("GST_TI_TIImgenc_oColorSpace");
+        gst_tiimgenc_string_cap(imgenc->oColor);
+        GST_LOG("Setting engineName=%s\n", imgenc->oColor);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIImgenc_resolution")) {
+        sscanf(gst_ti_env_get_string("GST_TI_TIImgenc_resolution"), "%dx%d", 
+                &imgenc->width,&imgenc->height);
+        GST_LOG("Setting resolution=%dx%d\n", imgenc->width, imgenc->height);
+    }
+    
+    GST_LOG("gst_tiimgenc_init_env - end");
+}
+
 
 /******************************************************************************
  * gst_tiimgenc_init
@@ -409,6 +489,7 @@ static void gst_tiimgenc_init(GstTIImgenc *imgenc, GstTIImgencClass *gclass)
     imgenc->waitOnEncodeDrain  = NULL;
 
     imgenc->waitOnEncodeThread = NULL;
+    imgenc->waitOnBufTab       = NULL;
 
     imgenc->hInFifo            = NULL;
 
@@ -421,6 +502,8 @@ static void gst_tiimgenc_init(GstTIImgenc *imgenc, GstTIImgencClass *gclass)
     imgenc->numOutputBufs      = 0UL;
     imgenc->hOutBufTab         = NULL;
     imgenc->circBuf            = NULL;
+
+    gst_tiimgenc_init_env(imgenc);
 
     GST_LOG("Finish\n");
 }
@@ -1228,6 +1311,7 @@ static gboolean gst_tiimgenc_init_image(GstTIImgenc *imgenc)
     imgenc->waitOnEncodeDrain  = Rendezvous_create(100, &rzvAttrs);
     imgenc->waitOnQueueThread  = Rendezvous_create(100, &rzvAttrs);
     imgenc->waitOnEncodeThread = Rendezvous_create(2, &rzvAttrs);
+    imgenc->waitOnBufTab       = Rendezvous_create(100, &rzvAttrs);
     imgenc->drainingEOS        = FALSE;
 
     /* Initialize custom thread attributes */
@@ -1336,7 +1420,17 @@ static gboolean gst_tiimgenc_exit_image(GstTIImgenc *imgenc)
         GST_LOG("shutting down queue thread\n");
 
         /* Unstop the queue thread if needed, and wait for it to finish */
-        Fifo_flush(imgenc->hInFifo);
+        /* Push the gst_ti_flush_fifo buffer to let the queue thread know
+         * when the Fifo has finished draining.  If the Fifo is currently
+         * empty when we get to this point, then pushing this buffer will
+         * also unblock the encode/decode thread if it is currently blocked
+         * on a Fifo_get().  Our first thought was to use DMAI's Fifo_flush()
+         * routine here, but this method assumes the Fifo to be empty and
+         * will leak any buffer still in the Fifo.
+         */
+        if (Fifo_put(imgenc->hInFifo,&gst_ti_flush_fifo) < 0) {
+            GST_ERROR("Could not put flush value to Fifo\n");
+        }
 
         if (pthread_join(imgenc->queueThread, &thread_ret) == 0) {
             if (thread_ret == GstTIThreadFailure) {
@@ -1363,6 +1457,11 @@ static gboolean gst_tiimgenc_exit_image(GstTIImgenc *imgenc)
     if (imgenc->waitOnEncodeThread) {
         Rendezvous_delete(imgenc->waitOnEncodeThread);
         imgenc->waitOnEncodeThread = NULL;
+    }
+
+    if (imgenc->waitOnBufTab) {
+        Rendezvous_delete(imgenc->waitOnBufTab);
+        imgenc->waitOnBufTab = NULL;
     }
 
     /* Shut down thread status management */
@@ -1609,11 +1708,24 @@ static void* gst_tiimgenc_encode_thread(void *arg)
         }
 
         /* Obtain a free output buffer for the encoded data */
+        /* If we are not able to find free buffer from BufTab then decoder 
+         * thread will be blocked on waitOnBufTab rendezvous. And this will be 
+         * woke-up by dmaitransportbuffer finalize method.
+         */
         hDstBuf = BufTab_getFreeBuf(imgenc->hOutBufTab);
         if (hDstBuf == NULL) {
-            GST_ERROR("failed to get a free contiguous buffer from BufTab\n");
-            goto thread_failure;
+            Rendezvous_meet(imgenc->waitOnBufTab);
+            hDstBuf = BufTab_getFreeBuf(imgenc->hOutBufTab);
+
+            if (hDstBuf == NULL) {
+                GST_ERROR("failed to get a free contiguous buffer from"
+                            " BufTab\n");
+                goto thread_failure;
+            }
         }
+
+        /* Reset waitOnBufTab rendezvous handle to its orignal state */
+        Rendezvous_reset(imgenc->waitOnBufTab);
 
         /* Make sure the whole buffer is used for output */
         BufferGfx_resetDimensions(hDstBuf);
@@ -1683,7 +1795,7 @@ static void* gst_tiimgenc_encode_thread(void *arg)
          * buffer for re-use in this element when the source pad calls
          * gst_buffer_unref().
          */
-        outBuf = gst_tidmaibuffertransport_new(hDstBuf);
+        outBuf = gst_tidmaibuffertransport_new(hDstBuf, imgenc->waitOnBufTab);
         gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
             Buffer_getNumBytesUsed(hDstBuf));
         gst_buffer_set_caps(outBuf, GST_PAD_CAPS(imgenc->srcpad));
@@ -1769,14 +1881,26 @@ static void* gst_tiimgenc_queue_thread(void *arg)
             goto thread_failure;
         }
 
-        /* Did the image thread flush the fifo? */
-        if (fifoRet == Dmai_EFLUSH) {
+        if (encData == (GstBuffer *)(&gst_ti_flush_fifo)) {
+            GST_DEBUG("Processed last input buffer from Fifo; exiting.\n");
             goto thread_exit;
         }
 
+/* This code is if'ed out for now until more work has been done for state
+ * transitions.  For now we do not want to print this message repeatedly
+ * which will happen when flushing the fifo when the decode thread has
+ * exited.
+ */
         /* Send the buffer to the circular buffer */
         if (!gst_ticircbuffer_queue_data(imgenc->circBuf, encData)) {
+#if 0
+            GST_ERROR("queue thread could not queue data\n");
+            GST_ERROR("queue thread encData size = %d\n", GST_BUFFER_SIZE(encData));
+            gst_buffer_unref(encData);
             goto thread_failure;
+#else
+            ; /* Do nothing */
+#endif
         }
 
         /* Release the buffer we received from the sink pad */

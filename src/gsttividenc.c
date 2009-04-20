@@ -52,6 +52,7 @@
 #include "gsttidmaibuffertransport.h"
 #include "gstticodecs.h"
 #include "gsttithreadprops.h"
+#include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC (gst_tividenc_debug);
@@ -363,6 +364,7 @@ static void gst_tividenc_init(GstTIVidenc *videnc, GstTIVidencClass *gclass)
     videnc->waitQueueSize           = 0;
 
     videnc->waitOnEncodeThread      = NULL;
+    videnc->waitOnBufTab            = NULL;
 
     videnc->framerateNum            = 0;
     videnc->framerateDen            = 0;
@@ -809,6 +811,7 @@ static gboolean gst_tividenc_init_video(GstTIVidenc *videnc)
     videnc->waitOnEncodeDrain   = Rendezvous_create(100, &rzvAttrs);
     videnc->waitOnQueueThread   = Rendezvous_create(100, &rzvAttrs);
     videnc->waitOnEncodeThread  = Rendezvous_create(2, &rzvAttrs);
+    videnc->waitOnBufTab        = Rendezvous_create(100, &rzvAttrs);
     videnc->drainingEOS         = FALSE;
 
     /* Initialize thread status management */
@@ -921,7 +924,17 @@ static gboolean gst_tividenc_exit_video(GstTIVidenc *videnc)
         GST_LOG("shutting down queue thread\n");
 
         /* Unstop the queue thread if needed, and wait for it to finish */
-        Fifo_flush(videnc->hInFifo);
+        /* Push the gst_ti_flush_fifo buffer to let the queue thread know
+         * when the Fifo has finished draining.  If the Fifo is currently
+         * empty when we get to this point, then pushing this buffer will
+         * also unblock the encode/decode thread if it is currently blocked
+         * on a Fifo_get().  Our first thought was to use DMAI's Fifo_flush()
+         * routine here, but this method assumes the Fifo to be empty and
+         * will leak any buffer still in the Fifo.
+         */
+        if (Fifo_put(videnc->hInFifo,&gst_ti_flush_fifo) < 0) {
+            GST_ERROR("Could not put flush value to Fifo\n");
+        }
 
         if (pthread_join(videnc->queueThread, &thread_ret) == 0) {
             if (thread_ret == GstTIThreadFailure) {
@@ -953,6 +966,11 @@ static gboolean gst_tividenc_exit_video(GstTIVidenc *videnc)
     if (videnc->waitOnEncodeDrain) {
         Rendezvous_delete(videnc->waitOnEncodeDrain);
         videnc->waitOnEncodeDrain = NULL;
+    }
+
+    if (videnc->waitOnBufTab) {
+        Rendezvous_delete(videnc->waitOnBufTab);
+        videnc->waitOnBufTab = NULL;
     }
 
     if (videnc->circBuf) {
@@ -1226,11 +1244,24 @@ static void* gst_tividenc_encode_thread(void *arg)
         }
 
         /* Obtain a free output buffer for the encoded data */
+        /* If we are not able to find free buffer from BufTab then decoder 
+         * thread will be blocked on waitOnBufTab rendezvous. And this will be 
+         * woke-up by dmaitransportbuffer finalize method.
+         */
         hDstBuf = BufTab_getFreeBuf(videnc->hOutBufTab);
         if (hDstBuf == NULL) {
-            GST_ERROR("failed to get a free contiguous buffer from BufTab\n");
-            goto thread_failure;
+            Rendezvous_meet(videnc->waitOnBufTab);
+            hDstBuf = BufTab_getFreeBuf(videnc->hOutBufTab);
+
+            if (hDstBuf == NULL) {
+                GST_ERROR("failed to get a free contiguous buffer from"
+                            " BufTab\n");
+                goto thread_failure;
+            }
         }
+
+        /* Reset waitOnBufTab rendezvous handle to its orignal state */
+        Rendezvous_reset(videnc->waitOnBufTab);
 
         /* Make sure the whole buffer is used for output */
         BufferGfx_resetDimensions(hDstBuf);
@@ -1296,7 +1327,7 @@ static void* gst_tividenc_encode_thread(void *arg)
          * buffer for re-use in this element when the source pad calls
          * gst_buffer_unref().
          */
-        outBuf = gst_tidmaibuffertransport_new(hDstBuf);
+        outBuf = gst_tidmaibuffertransport_new(hDstBuf, videnc->waitOnBufTab);
         gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
             Buffer_getNumBytesUsed(hDstBuf));
         gst_buffer_set_caps(outBuf, GST_PAD_CAPS(videnc->srcpad));
@@ -1378,14 +1409,26 @@ static void* gst_tividenc_queue_thread(void *arg)
             goto thread_failure;
         }
 
-        /* Did the video thread flush the fifo? */
-        if (fifoRet == Dmai_EFLUSH) {
+        if (encData == (GstBuffer *)(&gst_ti_flush_fifo)) {
+            GST_DEBUG("Processed last input buffer from Fifo; exiting.\n");
             goto thread_exit;
         }
 
+/* This code is if'ed out for now until more work has been done for state
+ * transitions.  For now we do not want to print this message repeatedly
+ * which will happen when flushing the fifo when the decode thread has
+ * exited.
+ */
         /* Send the buffer to the circular buffer */
         if (!gst_ticircbuffer_queue_data(videnc->circBuf, encData)) {
+#if 0
+            GST_ERROR("queue thread could not queue data\n");
+            GST_ERROR("queue thread encData size = %d\n", GST_BUFFER_SIZE(encData));
+            gst_buffer_unref(encData);
             goto thread_failure;
+#else
+            ; /* Do nothing */
+#endif
         }
         /* Release the buffer we received from the sink pad */
         gst_buffer_unref(encData);

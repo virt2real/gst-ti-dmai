@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <gst/gst.h>
+#include <semaphore.h>
 
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/VideoStd.h>
@@ -54,7 +55,7 @@
 #include "gstticodecs.h"
 #include "gsttithreadprops.h"
 #include "gsttiquicktime_h264.h"
-#include "gsttivideo_utils.h"
+#include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC (gst_tividdec_debug);
@@ -155,6 +156,8 @@ static gboolean
     gst_tividdec_codec_start (GstTIViddec  *viddec);
 static gboolean 
     gst_tividdec_codec_stop (GstTIViddec  *viddec);
+static void 
+    gst_tividdec_init_env(GstTIViddec *viddec);
 
 /******************************************************************************
  * gst_tividdec_class_init_trampoline
@@ -283,6 +286,53 @@ static void gst_tividdec_class_init(GstTIViddecClass *klass)
 
 
 /******************************************************************************
+ * gst_tividdec_init_env
+ *****************************************************************************/
+static void gst_tividdec_init_env(GstTIViddec *viddec)
+{
+    GST_LOG("gst_tividdec_init_env - begin\n");
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec_engineName")) {
+        viddec->engineName = gst_ti_env_get_string("GST_TI_TIViddec_engineName");
+        GST_LOG("Setting engineName=%s\n", viddec->engineName);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec_codecName")) {
+        viddec->codecName = gst_ti_env_get_string("GST_TI_TIViddec_codecName");
+        GST_LOG("Setting codecName=%s\n", viddec->codecName);
+    }
+    
+    if (gst_ti_env_is_defined("GST_TI_TIViddec_numOutputBufs")) {
+        viddec->numOutputBufs = 
+                            gst_ti_env_get_int("GST_TI_TIViddec_numOutputBufs");
+        GST_LOG("Setting numOutputBufs=%ld\n", viddec->numOutputBufs);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec_displayBuffer")) {
+        viddec->displayBuffer = 
+                gst_ti_env_get_boolean("GST_TI_TIViddec_displayBuffer");
+        GST_LOG("Setting displayBuffer=%s\n",
+                 viddec->displayBuffer  ? "TRUE" : "FALSE");
+    }
+ 
+    if (gst_ti_env_is_defined("GST_TI_TIViddec_genTimeStamps")) {
+        viddec->genTimeStamps = 
+                gst_ti_env_get_boolean("GST_TI_TIViddec_genTimeStamps");
+        GST_LOG("Setting genTimeStamps =%s\n", 
+                    viddec->genTimeStamps ? "TRUE" : "FALSE");
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec_frameRate")) {
+        viddec->framerateNum = 
+            gst_ti_env_get_int("GST_TI_TIViddec_frameRate");
+        GST_LOG("Setting frameRate=%d\n", viddec->framerateNum);
+    }
+
+    GST_LOG("gst_tividdec_init_env - end\n");
+}
+
+
+/******************************************************************************
  * gst_tividdec_init
  *    Initializes a new element instance, instantiates pads and sets the pad
  *    callback functions.
@@ -335,6 +385,7 @@ static void gst_tividdec_init(GstTIViddec *viddec, GstTIViddecClass *gclass)
     viddec->decodeDrained       = FALSE;
     viddec->waitOnDecodeDrain   = NULL;
     viddec->waitOnDecodeThread  = NULL;
+    viddec->waitOnBufTab        = NULL;
 
     viddec->hInFifo             = NULL;
 
@@ -351,6 +402,8 @@ static void gst_tividdec_init(GstTIViddec *viddec, GstTIViddecClass *gclass)
     viddec->sps_pps_data        = NULL;
     viddec->nal_code_prefix     = NULL;
     viddec->nal_length          = 0;
+
+    gst_tividdec_init_env(viddec);
 }
 
 
@@ -779,6 +832,7 @@ static gboolean gst_tividdec_init_video(GstTIViddec *viddec)
     viddec->waitOnDecodeDrain   = Rendezvous_create(100, &rzvAttrs);
     viddec->waitOnQueueThread   = Rendezvous_create(100, &rzvAttrs);
     viddec->waitOnDecodeThread  = Rendezvous_create(2, &rzvAttrs);
+    viddec->waitOnBufTab        = Rendezvous_create(100, &rzvAttrs);
     viddec->drainingEOS         = FALSE;
 
     /* Initialize custom thread attributes */
@@ -887,7 +941,17 @@ static gboolean gst_tividdec_exit_video(GstTIViddec *viddec)
         GST_LOG("shutting down queue thread\n");
 
         /* Unstop the queue thread if needed, and wait for it to finish */
-        Fifo_flush(viddec->hInFifo);
+        /* Push the gst_ti_flush_fifo buffer to let the queue thread know
+         * when the Fifo has finished draining.  If the Fifo is currently
+         * empty when we get to this point, then pushing this buffer will
+         * also unblock the encode/decode thread if it is currently blocked
+         * on a Fifo_get().  Our first thought was to use DMAI's Fifo_flush()
+         * routine here, but this method assumes the Fifo to be empty and
+         * will leak any buffer still in the Fifo.
+         */
+        if (Fifo_put(viddec->hInFifo,&gst_ti_flush_fifo) < 0) {
+            GST_ERROR("Could not put flush value to Fifo\n");
+        }
 
         if (pthread_join(viddec->queueThread, &thread_ret) == 0) {
             if (thread_ret == GstTIThreadFailure) {
@@ -919,6 +983,11 @@ static gboolean gst_tividdec_exit_video(GstTIViddec *viddec)
     if (viddec->waitOnDecodeThread) {
         Rendezvous_delete(viddec->waitOnDecodeThread);
         viddec->waitOnDecodeThread = NULL;
+    }
+
+    if (viddec->waitOnBufTab) {
+        Rendezvous_delete(viddec->waitOnBufTab);
+        viddec->waitOnBufTab = NULL;
     }
 
     if (viddec->circBuf) {
@@ -1181,11 +1250,25 @@ static void* gst_tividdec_decode_thread(void *arg)
         }
 
         /* Obtain a free output buffer for the decoded data */
+        /* If we are not able to find free buffer from BufTab then decoder 
+         * thread will be blocked on waitOnBufTab rendezvous. And this will be 
+         * woke-up by dmaitransportbuffer finalize method.
+         */
         hDstBuf = BufTab_getFreeBuf(viddec->hOutBufTab);
         if (hDstBuf == NULL) {
-            GST_ERROR("failed to get a free contiguous buffer from BufTab\n");
-            goto thread_failure;
+            GST_LOG("Failed to get free buffer, waiting on bufTab\n");
+            Rendezvous_meet(viddec->waitOnBufTab);
+            hDstBuf = BufTab_getFreeBuf(viddec->hOutBufTab);
+
+            if (hDstBuf == NULL) {
+                GST_ERROR("failed to get a free contiguous buffer"
+                          " from BufTab\n");
+                goto thread_failure;
+            }
         }
+        
+        /* Reset waitOnBufTab rendezvous handle to its orignal state */
+        Rendezvous_reset(viddec->waitOnBufTab);
 
         /* Make sure the whole buffer is used for output */
         BufferGfx_resetDimensions(hDstBuf);
@@ -1240,9 +1323,10 @@ static void* gst_tividdec_decode_thread(void *arg)
              * buffer for re-use in this element when the source pad calls
              * gst_buffer_unref().
              */
-            outBuf = gst_tidmaibuffertransport_new(hDstBuf);
+            outBuf = gst_tidmaibuffertransport_new(hDstBuf,
+                                                    viddec->waitOnBufTab);
             gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
-                 gst_calculate_display_bufSize(hDstBuf));
+                 gst_ti_calculate_display_bufSize(hDstBuf));
             gst_buffer_set_caps(outBuf, GST_PAD_CAPS(viddec->srcpad));
 
             /* If we have a valid time stamp, set it on the buffer */
@@ -1288,8 +1372,7 @@ thread_failure:
     Rendezvous_force(viddec->waitOnQueueThread);
 
 thread_exit:
- 
-    /* Initialize codec engine */
+    /* stop codec engine */
     if (gst_tividdec_codec_stop(viddec) < 0) {
         GST_ERROR("failed to stop codec\n");
     }
@@ -1326,14 +1409,26 @@ static void* gst_tividdec_queue_thread(void *arg)
             goto thread_failure;
         }
 
-        /* Did the video thread flush the fifo? */
-        if (fifoRet == Dmai_EFLUSH) {
+        if (encData == (GstBuffer *)(&gst_ti_flush_fifo)) {
+            GST_DEBUG("Processed last input buffer from Fifo; exiting.\n");
             goto thread_exit;
         }
 
+/* This code is if'ed out for now until more work has been done for state
+ * transitions.  For now we do not want to print this message repeatedly
+ * which will happen when flushing the fifo when the decode thread has
+ * exited.
+ */
         /* Send the buffer to the circular buffer */
         if (!gst_ticircbuffer_queue_data(viddec->circBuf, encData)) {
+#if 0
+            GST_ERROR("queue thread could not queue data\n");
+            GST_ERROR("queue thread encData size = %d\n", GST_BUFFER_SIZE(encData));
+            gst_buffer_unref(encData);
             goto thread_failure;
+#else
+            ; /* Do nothing */
+#endif
         }
 
         /* Release the buffer we received from the sink pad */
