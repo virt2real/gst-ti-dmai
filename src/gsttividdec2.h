@@ -45,15 +45,15 @@ G_BEGIN_DECLS
 
 /* Standard macros for maniuplating TIViddec2 objects */
 #define GST_TYPE_TIVIDDEC2 \
-  (gst_tividdec2_get_type())
+    (gst_tividdec2_get_type())
 #define GST_TIVIDDEC2(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_TIVIDDEC2,GstTIViddec2))
+    (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_TIVIDDEC2,GstTIViddec2))
 #define GST_TIVIDDEC2_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_TIVIDDEC2,GstTIViddec2Class))
+    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_TIVIDDEC2,GstTIViddec2Class))
 #define GST_IS_TIVIDDEC2(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_TIVIDDEC2))
+    (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_TIVIDDEC2))
 #define GST_IS_TIVIDDEC2_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_TIVIDDEC2))
+    (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_TIVIDDEC2))
 
 typedef struct _GstTIViddec2      GstTIViddec2;
 typedef struct _GstTIViddec2Class GstTIViddec2Class;
@@ -61,61 +61,61 @@ typedef struct _GstTIViddec2Class GstTIViddec2Class;
 /* _GstTIViddec2 object */
 struct _GstTIViddec2
 {
-  /* gStreamer infrastructure */
-  GstElement     element;
-  GstPad        *sinkpad;
-  GstPad        *srcpad;
-  GstCaps       *outCaps;
+    /* gStreamer infrastructure */
+    GstElement     element;
+    GstPad        *sinkpad;
+    GstPad        *srcpad;
+    GstCaps       *outCaps;
 
-  /* Element properties */
-  const gchar*   engineName;
-  const gchar*   codecName;
-  gboolean       genTimeStamps;
+    /* Element properties */
+    const gchar*   engineName;
+    const gchar*   codecName;
+    gboolean       genTimeStamps;
 
-  /* Element state */
-  Engine_Handle    	hEngine;
-  Vdec2_Handle     	hVd;
-  gboolean         	eos;
-  gboolean         	flushing;
-  gboolean 			shutdown;
-  gboolean		   	paused;
-  gboolean			codecFlushed;
-  pthread_mutex_t  	threadStatusMutex;
-  UInt32           	threadStatus;
+    /* Element state */
+    Engine_Handle    	hEngine;
+    Vdec2_Handle     	hVd;
+    gboolean         	eos;
+    gboolean         	flushing;
+    gboolean 			shutdown;
+    gboolean		   	paused;
+    gboolean			codecFlushed;
+    pthread_mutex_t  	threadStatusMutex;
+    UInt32           	threadStatus;
 
-  /* Decode thread */
-  pthread_t          decodeThread;
-  Fifo_Handle        hInFifo;
-  struct gstti_parser_ops  *parser;
-  void				 *codec_private;
-  Rendezvous_Handle	 waitOnDecodeThread;
-  GstSegment 		 segment;
+    /* Decode thread */
+    pthread_t          decodeThread;
+    Fifo_Handle        hInFifo;
+    struct gstti_parser_ops  *parser;
+    void				 *codec_private;
+    Rendezvous_Handle	 waitOnDecodeThread;
+    GstSegment 		 segment;
 
-  /* Blocking Conditions to Throttle I/O */
-  Rendezvous_Handle  waitOnFifoFlush;
-  Rendezvous_Handle  waitOnInBufTab;
-  Rendezvous_Handle	 waitOnOutBufTab;
+    /* Blocking Conditions to Throttle I/O */
+    Rendezvous_Handle  waitOnFifoFlush;
+    Rendezvous_Handle  waitOnInBufTab;
+    Rendezvous_Handle	 waitOnOutBufTab;
 
-  /* Framerate (Num/Den) */
-  gint               framerateNum;
-  gint               framerateDen;
-  gint               height;
-  gint               width;
+    /* Framerate (Num/Den) */
+    gint               framerateNum;
+    gint               framerateDen;
+    gint               height;
+    gint               width;
 
-  /* Buffer management */
-  UInt32           numInputBufs;
-  BufTab_Handle    hInBufTab;
-  UInt32           numOutputBufs;
-  BufTab_Handle    hOutBufTab;
+    /* Buffer management */
+    UInt32           numInputBufs;
+    BufTab_Handle    hInBufTab;
+    UInt32           numOutputBufs;
+    BufTab_Handle    hOutBufTab;
 
-  /* Quicktime h264 header  */
-  struct gstti_h264_parser_private h264_data;
+    /* Quicktime h264 header  */
+    struct gstti_h264_parser_private h264_data;
 };
 
 /* _GstTIViddec2Class object */
 struct _GstTIViddec2Class
 {
-  GstElementClass parent_class;
+    GstElementClass parent_class;
 };
 
 /* External function declarations */
