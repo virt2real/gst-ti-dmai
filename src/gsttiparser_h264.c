@@ -34,13 +34,13 @@
 GST_DEBUG_CATEGORY_STATIC (gst_tiparser_h264_debug);
 #define GST_CAT_DEFAULT gst_tiparser_h264_debug
 
-gboolean  h264_init(void *);
-GstBuffer *h264_parse(GstBuffer *, void *);
-GstBuffer *h264_drain(void *);
-void h264_flush_stop(void *);
-void h264_flush_start(void *);
+static gboolean  h264_init(void *);
+static GstBuffer *h264_parse(GstBuffer *, void *);
+static GstBuffer *h264_drain(void *);
+static void h264_flush_stop(void *);
+static void h264_flush_start(void *);
 
-struct parser_ops h264_parser = {
+struct gstti_parser_ops gstti_h264_parser = {
 	.init  = h264_init,
 	.parse = h264_parse,
 	.drain = h264_drain,
@@ -51,8 +51,8 @@ struct parser_ops h264_parser = {
 /******************************************************************************
  * Init the parser
  ******************************************************************************/
-gboolean h264_init(void *private){
-	struct h264_parser_private *priv = (struct h264_parser_private *)private;
+static gboolean h264_init(void *private){
+	struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
 
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tiparser_h264_debug, "TIParserh264", 0,
@@ -64,8 +64,8 @@ gboolean h264_init(void *private){
 /******************************************************************************
  * Parse the h264 stream
  ******************************************************************************/
-GstBuffer *h264_parse(GstBuffer *buf, void *private){
-	struct h264_parser_private *priv = (struct h264_parser_private *)private;
+static GstBuffer *h264_parse(GstBuffer *buf, void *private){
+	struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
 	guchar *dest;
 	guint	didx;
 	GstBuffer *outbuf = NULL;
@@ -200,8 +200,8 @@ GstBuffer *h264_parse(GstBuffer *buf, void *private){
 /******************************************************************************
  * Drain the buffer
  ******************************************************************************/
-GstBuffer *h264_drain(void *private){
-	struct h264_parser_private *priv = (struct h264_parser_private *)private;
+static GstBuffer *h264_drain(void *private){
+	struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
 	GstBuffer 		*outbuf = NULL;
 	Buffer_Handle	houtbuf;
 
@@ -231,8 +231,8 @@ GstBuffer *h264_drain(void *private){
 /******************************************************************************
  * Flush the buffer
  ******************************************************************************/
-void h264_flush_start(void *private){
-	struct h264_parser_private *priv = (struct h264_parser_private *)private;
+static void h264_flush_start(void *private){
+	struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
 
 	priv->flushing = TRUE;
 	if (priv->waitOnInBufTab){
@@ -242,8 +242,8 @@ void h264_flush_start(void *private){
 	return;
 }
 
-void h264_flush_stop(void *private){
-	struct h264_parser_private *priv = (struct h264_parser_private *)private;
+static void h264_flush_stop(void *private){
+	struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
 
 	priv->flushing = FALSE;
 	GST_DEBUG("Parser flush stopped");

@@ -70,7 +70,6 @@ struct _GstTIViddec2
   /* Element properties */
   const gchar*   engineName;
   const gchar*   codecName;
-  gboolean       displayBuffer;
   gboolean       genTimeStamps;
 
   /* Element state */
@@ -80,15 +79,17 @@ struct _GstTIViddec2
   gboolean         	flushing;
   gboolean 			shutdown;
   gboolean		   	paused;
+  gboolean			codecFlushed;
   pthread_mutex_t  	threadStatusMutex;
   UInt32           	threadStatus;
 
   /* Decode thread */
   pthread_t          decodeThread;
   Fifo_Handle        hInFifo;
-  struct parser_ops  *parser;
+  struct gstti_parser_ops  *parser;
   void				 *codec_private;
   Rendezvous_Handle	 waitOnDecodeThread;
+  GstSegment 		 segment;
 
   /* Blocking Conditions to Throttle I/O */
   Rendezvous_Handle  waitOnFifoFlush;
@@ -108,7 +109,7 @@ struct _GstTIViddec2
   BufTab_Handle    hOutBufTab;
 
   /* Quicktime h264 header  */
-  struct h264_parser_private h264_data;
+  struct gstti_h264_parser_private h264_data;
 };
 
 /* _GstTIViddec2Class object */

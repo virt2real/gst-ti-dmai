@@ -73,7 +73,6 @@ enum
   PROP_CODEC_NAME,      /* codecName      (string)  */
   PROP_NUM_OUTPUT_BUFS, /* numOutputBufs  (int)     */
   PROP_FRAMERATE,       /* frameRate      (int)     */
-  PROP_DISPLAY_BUFFER,  /* displayBuffer  (boolean) */
   PROP_GEN_TIMESTAMPS   /* genTimeStamps  (boolean) */
 };
 
@@ -271,15 +270,49 @@ static void gst_tividdec2_class_init(GstTIViddec2Class *klass)
             "specify 30 for this setting",
             1, G_MAXINT32, 30, G_PARAM_WRITABLE));
 
-    g_object_class_install_property(gobject_class, PROP_DISPLAY_BUFFER,
-        g_param_spec_boolean("displayBuffer", "Display Buffer",
-            "Display circular buffer status while processing",
-            FALSE, G_PARAM_WRITABLE));
-
     g_object_class_install_property(gobject_class, PROP_GEN_TIMESTAMPS,
         g_param_spec_boolean("genTimeStamps", "Generate Time Stamps",
             "Set timestamps on output buffers",
             TRUE, G_PARAM_WRITABLE));
+}
+
+/******************************************************************************
+ * gst_tividdec2_init_env
+ *****************************************************************************/
+static void gst_tividdec2_init_env(GstTIViddec2 *viddec2)
+{
+    GST_LOG("gst_tividdec2_init_env - begin\n");
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec2_engineName")) {
+        viddec2->engineName = gst_ti_env_get_string("GST_TI_TIViddec2_engineName");
+        GST_LOG("Setting engineName=%s\n", viddec2->engineName);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec2_codecName")) {
+        viddec2->codecName = gst_ti_env_get_string("GST_TI_TIViddec2_codecName");
+        GST_LOG("Setting codecName=%s\n", viddec2->codecName);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec2_numOutputBufs")) {
+        viddec2->numOutputBufs =
+                            gst_ti_env_get_int("GST_TI_TIViddec2_numOutputBufs");
+        GST_LOG("Setting numOutputBufs=%ld\n", viddec2->numOutputBufs);
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec2_genTimeStamps")) {
+        viddec2->genTimeStamps =
+                gst_ti_env_get_boolean("GST_TI_TIViddec2_genTimeStamps");
+        GST_LOG("Setting genTimeStamps =%s\n",
+                    viddec2->genTimeStamps ? "TRUE" : "FALSE");
+    }
+
+    if (gst_ti_env_is_defined("GST_TI_TIViddec2_frameRate")) {
+        viddec2->framerateNum =
+            gst_ti_env_get_int("GST_TI_TIViddec2_frameRate");
+        GST_LOG("Setting frameRate=%d\n", viddec2->framerateNum);
+    }
+
+    GST_LOG("gst_tividdec2_init_env - end\n");
 }
 
 
@@ -326,7 +359,6 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     viddec2->outCaps			= NULL;
     viddec2->engineName         = NULL;
     viddec2->codecName          = NULL;
-    viddec2->displayBuffer      = FALSE;
     viddec2->genTimeStamps      = TRUE;
 
     viddec2->hEngine            = NULL;
@@ -355,7 +387,11 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     viddec2->numInputBufs       = 0UL;
     viddec2->hInBufTab          = NULL;
 
-    memset(&viddec2->h264_data,0,sizeof(struct h264_parser_private));
+    gst_segment_init (&viddec2->segment, GST_FORMAT_TIME);
+
+    memset(&viddec2->h264_data,0,sizeof(struct gstti_h264_parser_private));
+
+    gst_tividdec2_init_env(viddec2);
 }
 
 
@@ -410,11 +446,6 @@ static void gst_tividdec2_set_property(GObject *object, guint prop_id,
                 (gdouble)viddec2->framerateDen);
             break;
         }
-        case PROP_DISPLAY_BUFFER:
-            viddec2->displayBuffer = g_value_get_boolean(value);
-            GST_LOG("setting \"displayBuffer\" to \"%s\"\n",
-                viddec2->displayBuffer ? "TRUE" : "FALSE");
-            break;
         case PROP_GEN_TIMESTAMPS:
             viddec2->genTimeStamps = g_value_get_boolean(value);
             GST_LOG("setting \"genTimeStamps\" to \"%s\"\n",
@@ -530,7 +561,7 @@ static gboolean gst_tividdec2_set_sink_caps(GstPad *pad, GstCaps *caps)
     /* H.264 Decode */
     else if (!strcmp(mime, "video/x-h264")) {
         codec = gst_ticodec_get_codec("H.264 Video Decoder");
-        viddec2->parser = &h264_parser;
+        viddec2->parser = &gstti_h264_parser;
         viddec2->codec_private = &viddec2->h264_data;
     }
 
@@ -634,15 +665,34 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
     switch (GST_EVENT_TYPE(event)) {
 
         case GST_EVENT_NEWSEGMENT:
-//TODO
-            /* maybe save and/or update the current segment (e.g. for output
-             * clipping) or convert the event into one in a different format
-             * (e.g. BYTES to TIME) or drop it and set a flag to send a
-             * newsegment event in a different format later
-             */
+        {
+			gboolean update;
+            GstFormat fmt;
+            gint64 start, stop, time;
+            gdouble rate, arate;
+
+            gst_event_parse_new_segment_full (event, &update, &rate, &arate, &fmt,
+                 &start, &stop, &time);
+
+            switch (fmt) {
+               case GST_FORMAT_TIME:
+            	   /* We handle in time format, so this is OK */
+            	   break;
+               default:
+            	   GST_WARNING("unknown format received in NEWSEGMENT");
+            	   gst_event_unref (event);
+            	   return FALSE;
+            }
+
+            GST_DEBUG("NEWSEGMENT in time start %" GST_TIME_FORMAT " -- stop %"
+                GST_TIME_FORMAT, GST_TIME_ARGS (start), GST_TIME_ARGS (stop));
+
+            gst_segment_set_newsegment_full (&viddec2->segment, update,
+                     rate, arate, fmt, start, stop, time);
+
             ret = gst_pad_push_event(viddec2->srcpad, event);
             break;
-
+        }
         case GST_EVENT_EOS:
         	/* end-of-stream: process any remaining encoded frame data */
             GST_DEBUG("EOS: draining remaining encoded video data\n");
@@ -656,12 +706,18 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
 
    			/* We will generate a new EOS event upon exhausting the current
    			 * packets
+   			 *
+   			 * Break the cycle upon a NULL pointer (failure) or a zero sized
+   			 * buffer
+   			 *
+   			 * The pushing of buffers to the decode thread is throttled by
+   			 * the amount of input buffers available. Once we are using all
+   			 * the input buffers, the drain function will block waiting for
+   			 * more
    			 */
    			while ((pushBuffer =
    				   viddec2->parser->drain(viddec2->codec_private))){
-   				/* Put the buffer on the FIFO
-   				 * This FIFO is throttled by the availability of buffers in the hInBufTab
-   				 */
+   				/* Put the buffer on the FIFO */
 		    	if (Fifo_put(viddec2->hInFifo, pushBuffer) < 0) {
 		    		GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
 		    				("Failed to send buffer to decode thread"));
@@ -723,7 +779,7 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
 /******************************************************************************
  * gst_tividdec2_chain
  *    This is the main processing routine.  This function receives a buffer
- *    from the sink pad, and pass it to the parser, how is responsible to either
+ *    from the sink pad, and pass it to the parser, who is responsible to either
  *    buffer them until it has a full frame. If the parser returns a full frame
  *    we push a gsttidmaibuffer to the decoder thread.
  ******************************************************************************/
@@ -844,6 +900,7 @@ static gboolean gst_tividdec2_init_video(GstTIViddec2 *viddec2)
     viddec2->eos          = FALSE;
     viddec2->flushing     = FALSE;
     viddec2->paused		  = FALSE;
+    viddec2->codecFlushed = TRUE;
 
     /* Setup private data */
     if (gst_is_h264_decoder(viddec2->codecName)){
@@ -930,20 +987,26 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
     if (viddec2->decodeThread) {
     	GST_DEBUG("shutting down decode thread\n");
 
-    	viddec2->shutdown = TRUE;
+		/* IF the Codec is already flushed, then we just empty the fifo */
+    	if (viddec2->codecFlushed){
+    		Fifo_flush(viddec2->hInFifo);
+    	} else {
+    		/* If the Codec is not flushed, we shutdown with a drain buffer */
+			viddec2->shutdown = TRUE;
 
-        /* Drain the codec before shutdown the decode thread
-         * Since the parser is flushed, it should return an empty
-         * buffer to shutdown the decode thread
-         */
-        if (Fifo_put(viddec2->hInFifo,
-        		viddec2->parser->drain(viddec2->codec_private)) < 0) {
-    		/* Put the buffer on the FIFO
-    		 * This FIFO is throttled by the availability of buffers in the hInBufTab
-           	 */
-        	GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
-    							("Failed to send buffer to decode thread"));
-        }
+			/* Drain the codec before shutdown the decode thread
+			 * Since the parser is flushed, it should return an empty
+			 * buffer to shutdown the decode thread
+			 */
+			if (Fifo_put(viddec2->hInFifo,
+					viddec2->parser->drain(viddec2->codec_private)) < 0) {
+				/* Put the buffer on the FIFO
+				 * This FIFO is throttled by the availability of buffers in the hInBufTab
+				 */
+				GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
+									("Failed to send buffer to decode thread"));
+			}
+    	}
 
         if (pthread_join(viddec2->decodeThread, &thread_ret) == 0) {
             if (thread_ret == GstTIThreadFailure) {
@@ -1000,7 +1063,7 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
         gst_buffer_unref(viddec2->h264_data.nal_code_prefix);
     }
 
-    memset(&viddec2->h264_data,0,sizeof(struct h264_parser_private));
+    memset(&viddec2->h264_data,0,sizeof(struct gstti_h264_parser_private));
 
     GST_DEBUG("end exit_video\n");
     return TRUE;
@@ -1234,6 +1297,14 @@ static gboolean gst_tividdec2_codec_start (GstTIViddec2  *viddec2)
     return TRUE;
 }
 
+/*
+ * This function returns TRUE if the frame should be displayed, or FALSE
+ * if the frame should be clipped.
+ */
+static gboolean gst_tividdec2_clip_buffer(GstTIViddec2  *viddec2,GstBuffer * buf){
+	return TRUE;
+}
+
 /******************************************************************************
  * gst_tividdec2_decode_thread
  *     Call the video codec to process a full input buffer
@@ -1247,7 +1318,7 @@ static void* gst_tividdec2_decode_thread(void *arg)
     GstBuffer     *encData		  = NULL;
     gboolean       codecFlushed   = FALSE;
     void          *threadRet      = GstTIThreadSuccess;
-    Buffer_Handle  hDstBuf, hDpyBuf;
+    Buffer_Handle  hDstBuf;
     Buffer_Handle  hFreeBuf;
     Int32          encDataConsumed, originalBufferSize;
     GstClockTime   encDataTime;
@@ -1330,12 +1401,15 @@ static void* gst_tividdec2_decode_thread(void *arg)
              */
             Vdec2_flush(viddec2->hVd);
             codecFlushed = TRUE;
+            viddec2->codecFlushed = TRUE;
 
             /* Use the input dummy buffer for the process call.
              * After a flush the codec ignores the input buffer, but since
              * Codec Engine still address translates the buffer, it needs
              * to exist.
              */
+		} else {
+			viddec2->codecFlushed = FALSE;
 		}
 
         /* Obtain a free output buffer for the decoded data */
@@ -1382,6 +1456,10 @@ static void* gst_tividdec2_decode_thread(void *arg)
             GST_LOG("Vdec2_process returned success code %d\n", ret);
         }
 
+        if (!gst_tividdec2_clip_buffer(viddec2,encData)){
+
+        }
+
         /*
          * Release the input buffer, but first let's save this metadata
          * for future usage
@@ -1396,16 +1474,7 @@ static void* gst_tividdec2_decode_thread(void *arg)
     	/* Obtain the display buffer returned by the codec (it may be a
          * different one than the one we passed it.
          */
-        hDpyBuf = Vdec2_getDisplayBuf(viddec2->hVd);
-
-        if (!hDpyBuf) {
-        	/* If the codec failed to process, free the
-	         * output buffer provided
-	         */
-    	    Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
-				        gst_tividdec2_CODEC_FREE);
-        }
-        hDstBuf = hDpyBuf;
+        hDstBuf = Vdec2_getDisplayBuf(viddec2->hVd);
 
         /* If we were given back decoded frame, push it to the source pad */
         while (hDstBuf) {
@@ -1445,9 +1514,6 @@ static void* gst_tividdec2_decode_thread(void *arg)
                 GST_LOG("video timestamp value: %llu\n", encDataTime);
                 GST_BUFFER_TIMESTAMP(outBuf) = encDataTime;
                 GST_BUFFER_DURATION(outBuf)  = frameDuration;
-            }
-            else {
-                GST_BUFFER_TIMESTAMP(outBuf) = GST_CLOCK_TIME_NONE;
             }
 
             /* Push the transport buffer to the source pad */

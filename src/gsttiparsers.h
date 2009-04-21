@@ -33,7 +33,7 @@ typedef GstBuffer * (* parser_drain) (void *);
 typedef void (* parser_flush) (void *);
 typedef gboolean (* parser_init) (void *);
 
-struct parser_ops {
+struct gstti_parser_ops {
 	/*
 	 * Parser init
 	 * This function initializes any data structures required by the parser
@@ -88,7 +88,7 @@ struct parser_ops {
  */
 
 /* H264 Parser */
-struct h264_parser_private {
+struct gstti_h264_parser_private {
     Rendezvous_Handle  	waitOnInBufTab;
     BufTab_Handle 		hInBufTab;
 	GstBuffer       	*sps_pps_data;
@@ -101,6 +101,6 @@ struct h264_parser_private {
 	gboolean			flushing;
 };
 
-extern struct parser_ops h264_parser;
+extern struct gstti_parser_ops gstti_h264_parser;
 
 #endif
