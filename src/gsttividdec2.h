@@ -87,7 +87,7 @@ struct _GstTIViddec2
     pthread_t          decodeThread;
     Fifo_Handle        hInFifo;
     struct gstti_parser_ops  *parser;
-    void				 *codec_private;
+    void				 *parser_private;
     Rendezvous_Handle	 waitOnDecodeThread;
     GstSegment 		 segment;
 
@@ -108,8 +108,10 @@ struct _GstTIViddec2
     UInt32           numOutputBufs;
     BufTab_Handle    hOutBufTab;
 
-    /* Quicktime h264 header  */
+    /* Parser structures  */
+    struct gstti_common_parser_data parser_common;
     struct gstti_h264_parser_private h264_data;
+    struct gstti_mpeg4_parser_private mpeg4_data;
 };
 
 /* _GstTIViddec2Class object */

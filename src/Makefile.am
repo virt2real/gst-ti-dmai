@@ -9,7 +9,7 @@ gsttividdec.c gsttividdec2.c gsttiimgenc1.c gsttiimgenc.c gsttiimgdec1.c \
 gsttiimgdec.c gsttidmaibuffertransport.c gstticircbuffer.c \
 gsttidmaivideosink.c gstticodecs.c gstticodecs_platform.c  gsttiquicktime_aac.c \
 gsttiquicktime_h264.c gsttividenc.c gsttividenc1.c gstticommonutils.c \
-gsttiparser_h264.c
+gsttiparser_h264.c gsttiparser_mpeg4.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed

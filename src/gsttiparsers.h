@@ -41,6 +41,10 @@ struct gstti_parser_ops {
      */
     parser_init		init;
     /*
+     * Cleans any data structure allocated by the parser
+     */
+    parser_init     clean;
+    /*
      * Parser function
      * The parser function receives a GstBuffer and is responsible for parsing his
      * contents and create a GstTIDmaiBufferTransport with a full frame of data
@@ -87,20 +91,39 @@ struct gstti_parser_ops {
  * Custom data structures for each parser available
  */
 
+struct gstti_common_parser_data{
+    const gchar*        codecName;
+    Rendezvous_Handle   waitOnInBufTab;
+    BufTab_Handle       hInBufTab;
+};
+
 /* H264 Parser */
 struct gstti_h264_parser_private {
-    Rendezvous_Handle  	waitOnInBufTab;
-    BufTab_Handle 		hInBufTab;
+    struct gstti_common_parser_data *common;
+    gboolean            firstBuffer;
     GstBuffer       	*sps_pps_data;
     GstBuffer       	*nal_code_prefix;
     guint           	nal_length;
-    Buffer_Handle		outbuf;
-    guint				out_offset;
-    GstBuffer			*current;
-    guint				current_offset;
-    gboolean			flushing;
+    Buffer_Handle       outbuf;
+    guint               out_offset;
+    GstBuffer           *current;
+    guint               current_offset;
+    gboolean            flushing;
+};
+
+/* MPEG4 Parser */
+struct gstti_mpeg4_parser_private {
+    struct gstti_common_parser_data *common;
+    gboolean            firstBuffer;
+    GstBuffer           *header;
+    Buffer_Handle       outbuf;
+    guint               out_offset;
+    GstBuffer           *current;
+    guint               current_offset;
+    gboolean            flushing;
 };
 
 extern struct gstti_parser_ops gstti_h264_parser;
+extern struct gstti_parser_ops gstti_mpeg4_parser;
 
 #endif

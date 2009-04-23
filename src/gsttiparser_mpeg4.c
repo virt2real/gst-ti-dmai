@@ -1,14 +1,14 @@
 /*
- * gsttiparser_h264.c
+ * gsttiparser_mpeg4.c
  *
- * This file parses h264 streams
+ * This file parses mpeg4 streams
  *
  * Original Author:
  *     Diego Dompe, RidgeRun
  *
- * Parser code based on h624parse of gstreamer.
- * Packetized to byte stream code from gsttiquicktime_h264.c by:
- *     Brijesh Singh, Texas Instruments, Inc.
+ * Parser code based on mpeg4parse of gstreamer.
+ * Packetized to byte stream code from gsttiquicktime_mpeg4.c by:
+ *     Pratheesh Gangadhar, Texas Instruments, Inc.
  *
  * Copyright (C) 2009 RidgeRun
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
@@ -30,42 +30,44 @@
 
 #include "gsttiparsers.h"
 #include "gsttidmaibuffertransport.h"
-#include "gsttiquicktime_h264.h"
 
-GST_DEBUG_CATEGORY_STATIC (gst_tiparser_h264_debug);
-#define GST_CAT_DEFAULT gst_tiparser_h264_debug
+GST_DEBUG_CATEGORY_STATIC (gst_tiparser_mpeg4_debug);
+#define GST_CAT_DEFAULT gst_tiparser_mpeg4_debug
 
-static gboolean  h264_init(void *);
-static gboolean  h264_clean(void *);
-static GstBuffer *h264_parse(GstBuffer *, void *);
-static GstBuffer *h264_drain(void *);
-static void h264_flush_stop(void *);
-static void h264_flush_start(void *);
+/* Function to check if we have valid avcC header */
+static gboolean gst_mpeg4_valid_quicktime_header (GstBuffer *buf);
+/* Function to read sps and pps data field from avcc header */
+static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf);
 
-struct gstti_parser_ops gstti_h264_parser = {
-    .init  = h264_init,
-    .clean = h264_clean,
-    .parse = h264_parse,
-    .drain = h264_drain,
-    .flush_start = h264_flush_start,
-    .flush_stop = h264_flush_stop,
+static gboolean  mpeg4_init(void *);
+static gboolean  mpeg4_clean(void *);
+static GstBuffer *mpeg4_parse(GstBuffer *, void *);
+static GstBuffer *mpeg4_drain(void *);
+static void mpeg4_flush_stop(void *);
+static void mpeg4_flush_start(void *);
+
+struct gstti_parser_ops gstti_mpeg4_parser = {
+    .init  = mpeg4_init,
+    .clean = mpeg4_clean,
+    .parse = mpeg4_parse,
+    .drain = mpeg4_drain,
+    .flush_start = mpeg4_flush_start,
+    .flush_stop = mpeg4_flush_stop,
 };
 
 
 /******************************************************************************
  * Init the parser
  ******************************************************************************/
-static gboolean h264_init(void *private){
-    struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
+static gboolean mpeg4_init(void *private){
+    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
 
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tiparser_h264_debug, "TIParserh264", 0,
-        "TI h264 parser");
+    GST_DEBUG_CATEGORY_INIT(gst_tiparser_mpeg4_debug, "TIParsermpeg4", 0,
+        "TI mpeg4 parser");
 
     priv->flushing = FALSE;
-    priv->sps_pps_data = NULL;
-    priv->nal_code_prefix = NULL;
-    priv->nal_length = 0;
+    priv->header = NULL;
     priv->firstBuffer = TRUE;
     priv->current = NULL;
     priv->current_offset = 0;
@@ -77,17 +79,12 @@ static gboolean h264_init(void *private){
 /******************************************************************************
  * Clean the parser
  ******************************************************************************/
-static gboolean h264_clean(void *private){
-    struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
+static gboolean mpeg4_clean(void *private){
+    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
 
-    if (priv->sps_pps_data) {
-        GST_DEBUG("freeing sps_pps buffers\n");
-        gst_buffer_unref(priv->sps_pps_data);
-    }
-
-    if (priv->nal_code_prefix) {
-        GST_DEBUG("freeing nal code prefix buffers\n");
-        gst_buffer_unref(priv->nal_code_prefix);
+    if (priv->header) {
+        GST_DEBUG("freeing mpeg4 header buffers\n");
+        gst_buffer_unref(priv->header);
     }
 
     return TRUE;
@@ -95,20 +92,18 @@ static gboolean h264_clean(void *private){
 
 
 /******************************************************************************
- * Parse the h264 stream
+ * Parse the mpeg4 stream
  ******************************************************************************/
-static GstBuffer *h264_parse(GstBuffer *buf, void *private){
-    struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
+static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
+    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
     guchar *dest;
     guint	didx;
     GstBuffer *outbuf = NULL;
 
     if (priv->firstBuffer){
         priv->firstBuffer = FALSE;
-        if (gst_h264_valid_quicktime_header(buf)) {
-            priv->nal_length = gst_h264_get_nal_length(buf);
-            priv->sps_pps_data = gst_h264_get_sps_pps_data(buf);
-            priv->nal_code_prefix = gst_h264_get_nal_prefix_code();
+        if (gst_mpeg4_valid_quicktime_header(buf)) {
+            priv->header = gst_mpeg4_get_header(buf);
         }
     }
 
@@ -155,56 +150,23 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
 
     priv->current = buf;
 
-    if (priv->sps_pps_data){
+    if (priv->header){
         /*
          * This is a quicktime movie, so we know that full frames are being
          * passed around.
          *
-         * Prefix sps and pps header data into the buffer.
-         *
-         * H264 in quicktime is what we call in gstreamer 'packtized' h264.
-         * A codec_data is exchanged in the caps that contains, among other things,
-         * the nal_length_size field and SPS, PPS.
-
-         * The data consists of a nal_length_size header containing the length of
-         * the NAL unit that immediatly follows the size header.
-
-         * Inserting the SPS,PPS (after prefixing them with nal prefix codes) and
-         * exchanging the size header with nal prefix codes is a valid way to transform
-         * a packetized stream into a byte stream.
+         * A codec_data is exchanged in the caps that contains MPEG4 header
+         * which needs to be prefixed before first frame
          */
-        gint i, nal_size=0;
-        guint8 *inBuf = GST_BUFFER_DATA(buf);
-        gint avail = GST_BUFFER_SIZE(buf);
-        guint8 nal_length = priv->nal_length;
-        int offset = 0;
 
-        memcpy(&dest[didx],GST_BUFFER_DATA(priv->sps_pps_data),GST_BUFFER_SIZE(priv->sps_pps_data));
-        didx+=GST_BUFFER_SIZE(priv->sps_pps_data);
-
-        do {
-            nal_size = 0;
-            for (i=0; i < nal_length; i++) {
-                nal_size = (nal_size << 8) | inBuf[offset + i];
-            }
-            offset += nal_length;
-
-            /* Put NAL prefix code */
-            memcpy(&dest[didx],GST_BUFFER_DATA(priv->nal_code_prefix),
-                GST_BUFFER_SIZE(priv->nal_code_prefix));
-            didx+=GST_BUFFER_SIZE(priv->nal_code_prefix);
-
-            /* Put the data */
-            memcpy(&dest[didx],&inBuf[offset],nal_size);
-            didx+=nal_size;
-
-            offset += nal_size;
-            avail -= (nal_size + nal_length);
-        } while (avail > 0);
+        memcpy(&dest[didx],GST_BUFFER_DATA(priv->header),GST_BUFFER_SIZE(priv->header));
+        didx+=GST_BUFFER_SIZE(priv->header);
+        memcpy(&dest[didx],GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
+        didx+=GST_BUFFER_SIZE(buf);
 
         /* At this point didx says how much data we have */
         if (didx > Buffer_getSize(priv->outbuf)){
-            GST_ERROR("Memory overflow when parsing the h264 stream\n");
+            GST_ERROR("Memory overflow when parsing the mpeg4 stream\n");
             return NULL;
         }
 
@@ -223,29 +185,29 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
         data += idx;
 
         /*
-         * Bytestream, we need to identify a full frame
+         * Look for VOP start
          */
         if (avail < 5){
             memcpy(&dest[didx],&data[idx],avail);
             idx+=avail;
             didx+=avail;
         } else {
-            gint next_nalu_pos = -1;
+            gint next_vop_pos = -1;
 
-            /* Find next NALU header */
-            for (i = 1; i < avail - 4; ++i) {
-                if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0
-                    && data[i + 3] == 1) {
-                    next_nalu_pos = i;
+            /* Find next VOP start header */
+            for (i = 1; i < avail - 5; ++i) {
+                if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 1
+                    && data[i + 3] == 0xB6) {
+                    next_vop_pos = i;
                     break;
                 }
             }
 
-            if (next_nalu_pos){
+            if (next_vop_pos){
                 /* We find the start of next frame */
-                memcpy(&dest[didx],&data[idx],next_nalu_pos);
-                idx+=next_nalu_pos;
-                didx+=next_nalu_pos;
+                memcpy(&dest[didx],&data[idx],next_vop_pos);
+                idx+=next_vop_pos;
+                didx+=next_vop_pos;
 
                 /* Set the number of bytes used, required by the DMAI APIs*/
                 Buffer_setNumBytesUsed(priv->outbuf, didx);
@@ -284,8 +246,8 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
 /******************************************************************************
  * Drain the buffer
  ******************************************************************************/
-static GstBuffer *h264_drain(void *private){
-    struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
+static GstBuffer *mpeg4_drain(void *private){
+    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
     GstBuffer 		*outbuf = NULL;
     Buffer_Handle	houtbuf;
 
@@ -330,13 +292,13 @@ static GstBuffer *h264_drain(void *private){
 /******************************************************************************
  * Flush the buffer
  ******************************************************************************/
-static void h264_flush_start(void *private){
-    struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
+static void mpeg4_flush_start(void *private){
+    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
 
     priv->flushing = TRUE;
 
     if (priv->outbuf){
-        Buffer_freeUseMask(priv->outbuf,Buffer_getUseMask(priv->outbuf));
+        Buffer_freeUseMask(priv->outbuf, Buffer_getUseMask(priv->outbuf));
         priv->outbuf = NULL;
         gst_buffer_unref(priv->current);
     }
@@ -348,12 +310,80 @@ static void h264_flush_start(void *private){
     return;
 }
 
-static void h264_flush_stop(void *private){
-    struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
+static void mpeg4_flush_stop(void *private){
+    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
 
     priv->flushing = FALSE;
     GST_DEBUG("Parser flush stopped");
     return;
+}
+
+
+/******************************************************************************
+ * gst_mpeg4_get_header - This function gets codec_data field from the cap
+ ******************************************************************************/
+static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf)
+{
+    const GValue *value;
+    GstStructure *capStruct;
+    GstCaps      *caps = GST_BUFFER_CAPS(buf);
+    GstBuffer    *codec_data = NULL;
+
+    capStruct = gst_caps_get_structure(caps,0);
+
+    /* Read extra data passed via demuxer. */
+    value = gst_structure_get_value(capStruct, "codec_data");
+    if (value < 0) {
+        GST_ERROR("demuxer does not have codec_data field\n");
+        return NULL;
+    }
+
+    codec_data = gst_value_get_buffer(value);
+    gst_buffer_ref(codec_data);
+
+    return codec_data;
+}
+
+/******************************************************************************
+ * gst_mpeg4_valid_quicktime_header - This function checks if codec_data has a
+ * valid header in MPEG4 stream.
+ * To do this, it reads codec_data field passed via demuxer and if the
+ * codec_data buffer size is greater than 7 (?), then we have a valid quicktime
+ * MPEG4 atom header.
+ *
+ *      -: avcC atom header :-
+ *  -----------------------------------
+ *  1 byte  - version
+ *  1 byte  - h.264 stream profile
+ *  1 byte  - h.264 compatible profiles
+ *  1 byte  - h.264 stream level
+ *  6 bits  - reserved set to 63
+ *  2 bits  - NAL length
+ * ------------------------------------------
+ *****************************************************************************/
+static gboolean gst_mpeg4_valid_quicktime_header (GstBuffer *buf)
+{
+    GstBuffer *codec_data = gst_mpeg4_get_header(buf);
+    int i;
+    guint8 *inBuf = GST_BUFFER_DATA(buf);
+    if (codec_data == NULL) {
+        GST_LOG("demuxer does not have codec_data field\n");
+        return FALSE;
+    }
+
+    /* Check the buffer size. */
+    if (GST_BUFFER_SIZE(codec_data) < 7) {
+        GST_LOG("codec_data field does not have a valid quicktime header\n");
+        return FALSE;
+    }
+
+    /* print some debugging */
+    for (i=0; i < GST_BUFFER_SIZE(codec_data); i++) {
+        GST_LOG(" %02X ", inBuf[i]);
+    }
+    GST_LOG("\n");
+
+    return TRUE;
 }
 
 

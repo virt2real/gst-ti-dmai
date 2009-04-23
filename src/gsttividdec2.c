@@ -58,7 +58,6 @@
 #include "gsttidmaibuffertransport.h"
 #include "gstticodecs.h"
 #include "gsttithreadprops.h"
-#include "gsttiquicktime_h264.h"
 #include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
@@ -148,7 +147,9 @@ static GstStateChangeReturn
 static void*
  gst_tividdec2_decode_thread(void *arg);
 static void
- gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2);
+ gst_tividdec2_start_flushing(GstTIViddec2 *viddec2);
+static void
+ gst_tividdec2_stop_flushing(GstTIViddec2 *viddec2);
 static GstClockTime
  gst_tividdec2_frame_duration(GstTIViddec2 *viddec2);
 static gboolean
@@ -375,7 +376,7 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     viddec2->waitOnInBufTab 	= NULL;
     viddec2->waitOnOutBufTab 	= NULL;
     viddec2->parser				= NULL;
-    viddec2->codec_private		= NULL;
+    viddec2->parser_private		= NULL;
 
     viddec2->framerateNum       = 0;
     viddec2->framerateDen       = 0;
@@ -389,7 +390,7 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
 
     gst_segment_init (&viddec2->segment, GST_FORMAT_TIME);
 
-    memset(&viddec2->h264_data,0,sizeof(struct gstti_h264_parser_private));
+    memset(&viddec2->parser_common,0,sizeof(struct gstti_common_parser_data));
 
     gst_tividdec2_init_env(viddec2);
 }
@@ -550,7 +551,9 @@ static gboolean gst_tividdec2_set_sink_caps(GstPad *pad, GstCaps *caps)
         }
         else if (mpegversion == 4) {
             codec = gst_ticodec_get_codec("MPEG4 Video Decoder");
-            viddec2->parser = NULL;
+            viddec2->parser = &gstti_mpeg4_parser;
+            viddec2->parser_private = &viddec2->mpeg4_data;
+            viddec2->mpeg4_data.common = &viddec2->parser_common;
         }
         else {
             gst_object_unref(viddec2);
@@ -562,7 +565,8 @@ static gboolean gst_tividdec2_set_sink_caps(GstPad *pad, GstCaps *caps)
     else if (!strcmp(mime, "video/x-h264")) {
         codec = gst_ticodec_get_codec("H.264 Video Decoder");
         viddec2->parser = &gstti_h264_parser;
-        viddec2->codec_private = &viddec2->h264_data;
+        viddec2->parser_private = &viddec2->h264_data;
+        viddec2->h264_data.common = &viddec2->parser_common;
     }
 
     /* Mime type not supported */
@@ -574,7 +578,7 @@ static gboolean gst_tividdec2_set_sink_caps(GstPad *pad, GstCaps *caps)
     }
 
     if (!viddec2->parser ||
-        !viddec2->parser->init(viddec2->codec_private)){
+        !viddec2->parser->init(viddec2->parser_private)){
         GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
             ("Failed to initialize a parser for the stream"));
     }
@@ -602,6 +606,8 @@ static gboolean gst_tividdec2_set_sink_caps(GstPad *pad, GstCaps *caps)
     if (!viddec2->codecName) {
         viddec2->codecName = codec->CE_CodecName;
     }
+
+    viddec2->parser_common.codecName = viddec2->codecName;
 
     gst_object_unref(viddec2);
 
@@ -716,7 +722,7 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
          * more
          */
         while ((pushBuffer =
-            viddec2->parser->drain(viddec2->codec_private))){
+            viddec2->parser->drain(viddec2->parser_private))){
             /* Put the buffer on the FIFO */
             if (Fifo_put(viddec2->hInFifo, pushBuffer) < 0) {
                 GST_ELEMENT_ERROR(viddec2,STREAM,FAILED,(NULL),
@@ -743,15 +749,13 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
         ret = TRUE;
         break;
     case GST_EVENT_FLUSH_START:
-        gst_tividdec2_flush_pipeline(viddec2);
+        gst_tividdec2_start_flushing(viddec2);
 
         ret = gst_pad_push_event(viddec2->srcpad, event);
         break;
     case GST_EVENT_FLUSH_STOP:
-        viddec2->flushing = FALSE;
 
-        if (viddec2->parser)
-            viddec2->parser->flush_stop(viddec2->codec_private);
+        gst_tividdec2_stop_flushing(viddec2);
 
         ret = gst_pad_push_event(viddec2->srcpad, event);
         break;
@@ -809,16 +813,6 @@ static GstFlowReturn gst_tividdec2_chain(GstPad * pad, GstBuffer * buf)
             gst_buffer_unref(buf);
             return GST_FLOW_UNEXPECTED;
         }
-
-        /* check if we have recieved buffer from qtdemuxer. To do this,
-         * we will verify if codec_data field has a valid avcC header.
-         */
-        if (gst_is_h264_decoder(viddec2->codecName) &&
-            gst_h264_valid_quicktime_header(buf)) {
-            viddec2->h264_data.nal_length = gst_h264_get_nal_length(buf);
-            viddec2->h264_data.sps_pps_data = gst_h264_get_sps_pps_data(buf);
-            viddec2->h264_data.nal_code_prefix = gst_h264_get_nal_prefix_code();
-        }
     }
 
     if (!viddec2->parser){
@@ -833,7 +827,7 @@ static GstFlowReturn gst_tividdec2_chain(GstPad * pad, GstBuffer * buf)
         return GST_FLOW_OK;
     }
 
-    while ((pushBuffer = viddec2->parser->parse(buf,viddec2->codec_private))){
+    while ((pushBuffer = viddec2->parser->parse(buf,viddec2->parser_private))){
         /* If we got a buffer, put it on the FIFO
          * This FIFO is throttled by the availability of buffers in the hInBufTab
          */
@@ -903,9 +897,7 @@ static gboolean gst_tividdec2_init_video(GstTIViddec2 *viddec2)
     viddec2->codecFlushed = TRUE;
 
     /* Setup private data */
-    if (gst_is_h264_decoder(viddec2->codecName)){
-        viddec2->h264_data.waitOnInBufTab = viddec2->waitOnInBufTab;
-    }
+    viddec2->parser_common.waitOnInBufTab = viddec2->waitOnInBufTab;
 
     /* Initialize custom thread attributes */
     if (pthread_attr_init(&attr)) {
@@ -978,10 +970,10 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
     GST_DEBUG("begin exit_video\n");
 
     /* Discard data on the pipeline */
-    gst_tividdec2_flush_pipeline(viddec2);
+    gst_tividdec2_start_flushing(viddec2);
 
     /* Disable flushing since we will drain next */
-    viddec2->flushing = FALSE;
+    gst_tividdec2_stop_flushing(viddec2);
 
     /* Shut down the decode thread thanks to the Fifo_flush*/
     if (viddec2->decodeThread) {
@@ -999,7 +991,7 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
              * buffer to shutdown the decode thread
              */
             if (Fifo_put(viddec2->hInFifo,
-                viddec2->parser->drain(viddec2->codec_private)) < 0) {
+                viddec2->parser->drain(viddec2->parser_private)) < 0) {
                 /* Put the buffer on the FIFO
                  * This FIFO is throttled by the availability of buffers in the hInBufTab
                  */
@@ -1053,17 +1045,10 @@ static gboolean gst_tividdec2_exit_video(GstTIViddec2 *viddec2)
         viddec2->waitOnOutBufTab = NULL;
     }
 
-    if (viddec2->h264_data.sps_pps_data) {
-        GST_DEBUG("freeing sps_pps buffers\n");
-        gst_buffer_unref(viddec2->h264_data.sps_pps_data);
-    }
+    memset(&viddec2->parser_common,0,sizeof(struct gstti_common_parser_data));
 
-    if (viddec2->h264_data.nal_code_prefix) {
-        GST_DEBUG("freeing nal code prefix buffers\n");
-        gst_buffer_unref(viddec2->h264_data.nal_code_prefix);
-    }
-
-    memset(&viddec2->h264_data,0,sizeof(struct gstti_h264_parser_private));
+    if (viddec2->parser)
+        viddec2->parser->clean(viddec2->parser_private);
 
     GST_DEBUG("end exit_video\n");
     return TRUE;
@@ -1290,9 +1275,7 @@ static gboolean gst_tividdec2_codec_start (GstTIViddec2  *viddec2)
         return FALSE;
     }
 
-    if (gst_is_h264_decoder(viddec2->codecName)){
-        viddec2->h264_data.hInBufTab = viddec2->hInBufTab;
-    }
+    viddec2->parser_common.hInBufTab = viddec2->hInBufTab;
 
     return TRUE;
 }
@@ -1588,10 +1571,10 @@ static void* gst_tividdec2_decode_thread(void *arg)
 }
 
 /******************************************************************************
- * gst_tividdec2_flush_pipeline
+ * gst_tividdec2_start_flushing
  *    Push any remaining input buffers through the queue and decode threads
  ******************************************************************************/
-static void gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2)
+static void gst_tividdec2_start_flushing(GstTIViddec2 *viddec2)
 {
     gboolean checkResult;
 
@@ -1602,7 +1585,7 @@ static void gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2)
      * Flush the parser
      */
     if (viddec2->parser)
-        viddec2->parser->flush_start(viddec2->codec_private);
+        viddec2->parser->flush_start(viddec2->parser_private);
 
     if (gst_tithread_check_status(
         viddec2, TIThread_DECODE_RUNNING, checkResult)) {
@@ -1643,6 +1626,19 @@ static void gst_tividdec2_flush_pipeline(GstTIViddec2 *viddec2)
     }
 
     GST_DEBUG("Pipeline flushed");
+}
+
+
+/******************************************************************************
+ * gst_tividdec2_stop_flushing
+ *    Push any remaining input buffers through the queue and decode threads
+ ******************************************************************************/
+static void gst_tividdec2_stop_flushing(GstTIViddec2 *viddec2)
+{
+    viddec2->flushing = FALSE;
+
+    if (viddec2->parser)
+        viddec2->parser->flush_stop(viddec2->parser_private);
 }
 
 /******************************************************************************
