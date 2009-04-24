@@ -78,7 +78,6 @@ struct _GstTIViddec2
     gboolean         	eos;
     gboolean         	flushing;
     gboolean 			shutdown;
-    gboolean		   	paused;
     gboolean			codecFlushed;
     pthread_mutex_t  	threadStatusMutex;
     UInt32           	threadStatus;
@@ -86,15 +85,15 @@ struct _GstTIViddec2
     /* Decode thread */
     pthread_t          decodeThread;
     Fifo_Handle        hInFifo;
+    pthread_mutex_t    fifoMutex;
     struct gstti_parser_ops  *parser;
-    void				 *parser_private;
-    Rendezvous_Handle	 waitOnDecodeThread;
-    GstSegment 		 segment;
+    void			   *parser_private;
+    Rendezvous_Handle  waitOnDecodeThread;
+    GstSegment 		   segment;
 
     /* Blocking Conditions to Throttle I/O */
-    Rendezvous_Handle  waitOnFifoFlush;
     Rendezvous_Handle  waitOnInBufTab;
-    Rendezvous_Handle	 waitOnOutBufTab;
+    Rendezvous_Handle  waitOnOutBufTab;
 
     /* Framerate (Num/Den) */
     gint               framerateNum;

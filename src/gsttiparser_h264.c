@@ -22,6 +22,15 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
+ * This parser breaks down elementary h264 streams, or gstreamer "packetized streams"
+ * into NAL unit streams to pass into the decoder.
+ *
+ * Example launch line for elementary stream:
+ *
+ * gst-launch file src location=davincieffect_ntsc_1.264 !
+ * video/x-h264, width=720, height=480, framerate=\(fraction\)30000/1001 !
+ * TIViddec2 engineName=decode codecName=h264dec ! xvimagesink
+ *
  */
 
 #include <stdio.h>
@@ -69,6 +78,7 @@ static gboolean h264_init(void *private){
     priv->firstBuffer = TRUE;
     priv->current = NULL;
     priv->current_offset = 0;
+    priv->access_unit_found = 0;
 
     return TRUE;
 }
@@ -131,6 +141,12 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
         priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
         if (!priv->outbuf){
             Rendezvous_meet(priv->common->waitOnInBufTab);
+            /* The inBufTab may have been destroyed in case of error */
+            if (!priv->common->hInBufTab){
+                GST_DEBUG("Input buffer tab vanished on error");
+                return NULL;
+            }
+
             /*
              * If we are sleeping to get a buffer, and we start flushing we
              * need to discard the incoming data.
@@ -233,17 +249,38 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
             gint next_nalu_pos = -1;
 
             /* Find next NALU header */
-            for (i = 1; i < avail - 4; ++i) {
+            for (i = 1; i < avail - 5; ++i) {
                 if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0
-                    && data[i + 3] == 1) {
+                    && data[i + 3] == 1) { /* Find a NAL header */
+                    gint nal_type = data[i+4]&0x1f;
+
+                    if (nal_type == 0  || nal_type == 12 || nal_type == 13)
+                        continue;
+
+                    /* Verify if there is not our first
+                     * access unit delimiter
+                     */
+                    if (((nal_type >= 6 && nal_type <= 9) ||
+                         (nal_type >=13  && nal_type <=18)) &&
+                        !priv->access_unit_found){
+                        continue;
+                    }
+
+                    if (nal_type >= 1 && nal_type <= 5){
+                        if (!priv->access_unit_found) {
+                            priv->access_unit_found = TRUE;
+                            continue;
+                        }
+                    }
+
                     next_nalu_pos = i;
                     break;
                 }
             }
 
-            if (next_nalu_pos){
+            if (next_nalu_pos > 0){
                 /* We find the start of next frame */
-                memcpy(&dest[didx],&data[idx],next_nalu_pos);
+                memcpy(&dest[didx],data,next_nalu_pos);
                 idx+=next_nalu_pos;
                 didx+=next_nalu_pos;
 
@@ -255,7 +292,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
                 priv->outbuf = NULL;
             } else {
                 /* We didn't find start of next frame */
-                memcpy(&dest[didx],&data[idx],avail);
+                memcpy(&dest[didx],data,avail);
                 idx+=avail;
                 didx+=avail;
             }
@@ -308,10 +345,17 @@ static GstBuffer *h264_drain(void *private){
         houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
         if (!houtbuf){
             Rendezvous_meet(priv->common->waitOnInBufTab);
+            /* The inBufTab may have been destroyed in case of error */
+            if (!priv->common->hInBufTab){
+                GST_DEBUG("Input buffer tab vanished on error");
+                return NULL;
+            }
+
             houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
 
             if (!houtbuf){
-                GST_ERROR("failed to get a free buffer when notified it was available");
+                GST_ERROR("failed to get a free buffer when notified it was "
+                "available. This usually implies an error on the decoder...");
                 return NULL;
             }
         }
@@ -334,6 +378,7 @@ static void h264_flush_start(void *private){
     struct gstti_h264_parser_private *priv = (struct gstti_h264_parser_private *)private;
 
     priv->flushing = TRUE;
+    priv->access_unit_found = FALSE;
 
     if (priv->outbuf){
         Buffer_freeUseMask(priv->outbuf,Buffer_getUseMask(priv->outbuf));

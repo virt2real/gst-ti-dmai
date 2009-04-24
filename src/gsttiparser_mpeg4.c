@@ -22,6 +22,15 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
+ * This parser breaks down elementary mpeg4 streams, or mpeg4 streams from qtdemuxer
+ * into mpeg4 streams to pass into the decoder.
+ *
+ * Example launch line for elementary stream:
+ *
+ * gst-launch filesrc location=davincieffect_ntsc_1.m4v ! video/mpeg,
+ * mpegversion=4, systemstream=false, width=720, height=480,
+ * framerate=\(fraction\)30000/1001 ! TIViddec2 engine Name=decode
+ * codecName=mpeg4dec ! xvimagesink
  */
 
 #include <stdio.h>
@@ -126,6 +135,12 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
         priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
         if (!priv->outbuf){
             Rendezvous_meet(priv->common->waitOnInBufTab);
+            /* The inBufTab may have been destroyed in case of error */
+            if (!priv->common->hInBufTab){
+                GST_DEBUG("Input buffer tab vanished on error");
+                return NULL;
+            }
+
             /*
              * If we are sleeping to get a buffer, and we start flushing we
              * need to discard the incoming data.
@@ -138,7 +153,8 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
             priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
 
             if (!priv->outbuf){
-                GST_ERROR("failed to get a free buffer when notified it was available");
+                GST_ERROR("failed to get a free buffer when notified it was "
+                "available. This usually implies an error on the decoder...");
                 return NULL;
             }
         }
@@ -203,9 +219,9 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
                 }
             }
 
-            if (next_vop_pos){
+            if (next_vop_pos > 0){
                 /* We find the start of next frame */
-                memcpy(&dest[didx],&data[idx],next_vop_pos);
+                memcpy(&dest[didx],data,next_vop_pos);
                 idx+=next_vop_pos;
                 didx+=next_vop_pos;
 
@@ -217,7 +233,7 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
                 priv->outbuf = NULL;
             } else {
                 /* We didn't find start of next frame */
-                memcpy(&dest[didx],&data[idx],avail);
+                memcpy(&dest[didx],data,avail);
                 idx+=avail;
                 didx+=avail;
             }
@@ -270,6 +286,11 @@ static GstBuffer *mpeg4_drain(void *private){
         houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
         if (!houtbuf){
             Rendezvous_meet(priv->common->waitOnInBufTab);
+            /* The inBufTab may have been destroyed in case of error */
+            if (!priv->common->hInBufTab){
+                GST_DEBUG("Input buffer tab vanished on error");
+                return NULL;
+            }
             houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
 
             if (!houtbuf){

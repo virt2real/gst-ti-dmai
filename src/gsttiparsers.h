@@ -109,6 +109,7 @@ struct gstti_h264_parser_private {
     GstBuffer           *current;
     guint               current_offset;
     gboolean            flushing;
+    gboolean            access_unit_found;
 };
 
 /* MPEG4 Parser */
