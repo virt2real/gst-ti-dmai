@@ -80,6 +80,7 @@ static gboolean mpeg4_init(void *private){
     priv->firstBuffer = TRUE;
     priv->current = NULL;
     priv->current_offset = 0;
+    priv->vop_found = FALSE;
 
     return TRUE;
 }
@@ -214,6 +215,12 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
             for (i = 1; i < avail - 5; ++i) {
                 if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 1
                     && data[i + 3] == 0xB6) {
+
+                    if (!priv->vop_found){
+                       priv->vop_found = TRUE;
+                       continue;
+                    }
+
                     next_vop_pos = i;
                     break;
                 }
@@ -305,6 +312,7 @@ static GstBuffer *mpeg4_drain(void *private){
 
         GST_DEBUG("Parser drained");
     }
+    priv->vop_found = FALSE;
 
     return outbuf;
 }
@@ -317,6 +325,7 @@ static void mpeg4_flush_start(void *private){
     struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
 
     priv->flushing = TRUE;
+    priv->vop_found = FALSE;
 
     if (priv->outbuf){
         Buffer_freeUseMask(priv->outbuf, Buffer_getUseMask(priv->outbuf));

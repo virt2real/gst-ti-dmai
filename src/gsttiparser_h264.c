@@ -366,6 +366,7 @@ static GstBuffer *h264_drain(void *private){
 
         GST_DEBUG("Parser drained");
     }
+    priv->access_unit_found = FALSE;
 
     return outbuf;
 }
