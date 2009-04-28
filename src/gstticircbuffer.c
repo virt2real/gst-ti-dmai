@@ -438,7 +438,7 @@ gboolean gst_ticircbuffer_queue_data(GstTICircBuffer *circBuf, GstBuffer *buf)
 
     /* Copy new data to the end of the buffer */
     GST_LOG("queued %u bytes of data, total: %d\n", GST_BUFFER_SIZE(buf),
-		gst_ticircbuffer_data_size(circBuf));
+		(int)gst_ticircbuffer_data_size(circBuf));
 
     /* Output the buffer status to stdout if buffer debug is enabled */
     if (circBuf->displayBuffer) {
@@ -690,7 +690,7 @@ void gst_ticircbuffer_flush(GstTICircBuffer *circBuf)
 {
     if (circBuf->writePtr != circBuf->readPtr) {
         GST_DEBUG("enable flush on circbuf (%d bytes in buffer)\n",
-	    gst_ticircbuffer_data_available(circBuf));
+	    (int)gst_ticircbuffer_data_available(circBuf));
         circBuf->flush = TRUE;
         gst_ticircbuffer_broadcast_producer(circBuf);
 	Rendezvous_meet(circBuf->waitOnFlush);
