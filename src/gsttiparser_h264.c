@@ -249,7 +249,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
             gint next_nalu_pos = -1;
 
             /* Find next NALU header */
-            for (i = 1; i < avail - 5; ++i) {
+            for (i = 0; i < avail - 5; ++i) {
                 if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0
                     && data[i + 3] == 1) { /* Find a NAL header */
                     gint nal_type = data[i+4]&0x1f;
@@ -278,7 +278,10 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
                 }
             }
 
-            if (next_nalu_pos > 0){
+            if (next_nalu_pos >= 0){
+                /* Toogle to skip the NAL we already hit */
+                priv->access_unit_found = FALSE;
+
                 /* We find the start of next frame */
                 memcpy(&dest[didx],data,next_nalu_pos);
                 idx+=next_nalu_pos;

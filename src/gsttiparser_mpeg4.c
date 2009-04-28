@@ -82,6 +82,7 @@ static gboolean mpeg4_init(void *private){
     priv->current_offset = 0;
     priv->vop_found = FALSE;
 
+    GST_DEBUG("Parser initialized");
     return TRUE;
 }
 
@@ -116,6 +117,7 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
             priv->header = gst_mpeg4_get_header(buf);
         }
     }
+
 
     /* If this buffer is different from previous ones, reset values */
     if (priv->current != buf) {
@@ -212,10 +214,9 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
             gint next_vop_pos = -1;
 
             /* Find next VOP start header */
-            for (i = 1; i < avail - 5; ++i) {
+            for (i = 0; i < avail - 4; ++i) {
                 if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 1
                     && data[i + 3] == 0xB6) {
-
                     if (!priv->vop_found){
                        priv->vop_found = TRUE;
                        continue;
@@ -226,7 +227,10 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
                 }
             }
 
-            if (next_vop_pos > 0){
+            if (next_vop_pos >= 0){
+                /* Toogle to skip the VOP we already hit */
+                priv->vop_found = FALSE;
+
                 /* We find the start of next frame */
                 memcpy(&dest[didx],data,next_vop_pos);
                 idx+=next_vop_pos;
@@ -359,19 +363,26 @@ static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf)
     GstCaps      *caps = GST_BUFFER_CAPS(buf);
     GstBuffer    *codec_data = NULL;
 
+    if (!caps)
+        goto no_data;
+
     capStruct = gst_caps_get_structure(caps,0);
+
+    if (!capStruct)
+        goto no_data;
 
     /* Read extra data passed via demuxer. */
     value = gst_structure_get_value(capStruct, "codec_data");
-    if (value < 0) {
-        GST_ERROR("demuxer does not have codec_data field\n");
-        return NULL;
-    }
+    if (value < 0)
+        goto no_data;
 
     codec_data = gst_value_get_buffer(value);
-    gst_buffer_ref(codec_data);
 
     return codec_data;
+
+no_data:
+    GST_ERROR("demuxer does not have codec_data field\n");
+    return NULL;
 }
 
 /******************************************************************************
@@ -396,14 +407,15 @@ static gboolean gst_mpeg4_valid_quicktime_header (GstBuffer *buf)
     GstBuffer *codec_data = gst_mpeg4_get_header(buf);
     int i;
     guint8 *inBuf = GST_BUFFER_DATA(buf);
+
     if (codec_data == NULL) {
-        GST_LOG("demuxer does not have codec_data field\n");
+        GST_DEBUG("demuxer does not have codec_data field\n");
         return FALSE;
     }
 
     /* Check the buffer size. */
     if (GST_BUFFER_SIZE(codec_data) < 7) {
-        GST_LOG("codec_data field does not have a valid quicktime header\n");
+        GST_DEBUG("codec_data field does not have a valid quicktime header\n");
         return FALSE;
     }
 

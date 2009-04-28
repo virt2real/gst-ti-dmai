@@ -38,6 +38,18 @@
  *
  */
 
+/*
+ * TODO LIST
+ *
+ *  * Add video clipping
+ *  * Add reverse playback
+ *  * Add pad-alloc functionality
+ *  * Re-factorize to generate multiple elements from the same code
+ *    one for each capability set (mpeg4, h264, etc).
+ *  * Reduce minimal input buffer requirements to 1 frame size and
+ *    implement heuristics to break down the input tab into smaller chunks.
+ */
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -87,6 +99,11 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
     ("video/mpeg, "
      "mpegversion=(int){ 2, 4 }, "  /* MPEG versions 2 and 4 */
         "systemstream=(boolean)false, "
+        "framerate=(fraction)[ 0, MAX ], "
+        "width=(int)[ 1, MAX ], "
+        "height=(int)[ 1, MAX ] ;"
+     "video/x-divx, "               /* AVI containers save mpeg4 as divx... */
+        "divxversion=(int){ 4 }, "
         "framerate=(fraction)[ 0, MAX ], "
         "width=(int)[ 1, MAX ], "
         "height=(int)[ 1, MAX ] ;"
@@ -556,6 +573,28 @@ static gboolean gst_tividdec2_set_sink_caps(GstPad *pad, GstCaps *caps)
             viddec2->mpeg4_data.common = &viddec2->parser_common;
         }
         else {
+            gst_object_unref(viddec2);
+            return FALSE;
+        }
+    }
+
+    /* AVI containers save mpeg4 as divx... so this is a hack, we don't
+     * really handle divx, do we?
+     */
+    else if (!strcmp(mime, "video/x-divx")){
+        gint divxversion;
+
+        /* Retreive video properties */
+        if (!gst_structure_get_int(capStruct, "divxversion", &divxversion)) {
+            divxversion = 0;
+        }
+
+        if (divxversion == 4){
+            codec = gst_ticodec_get_codec("MPEG4 Video Decoder");
+            viddec2->parser = &gstti_mpeg4_parser;
+            viddec2->parser_private = &viddec2->mpeg4_data;
+            viddec2->mpeg4_data.common = &viddec2->parser_common;
+        } else {
             gst_object_unref(viddec2);
             return FALSE;
         }
