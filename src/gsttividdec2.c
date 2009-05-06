@@ -154,6 +154,8 @@ static void
  gst_tividdec2_set_out_caps(GstTIViddec2 *viddec2, Buffer_Handle hBuf);
 static gboolean
  gst_tividdec2_sink_event(GstPad *pad, GstEvent *event);
+static gboolean
+ gst_tividdec2_query(GstPad * pad, GstQuery * query);
 static GstFlowReturn
  gst_tividdec2_chain(GstPad *pad, GstBuffer *buf);
 static gboolean
@@ -358,6 +360,8 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     gst_pad_fixate_caps(viddec2->sinkpad,
         gst_caps_make_writable(
             gst_caps_copy(gst_pad_get_pad_template_caps(viddec2->sinkpad))));
+    gst_pad_set_query_function (viddec2->srcpad,
+        GST_DEBUG_FUNCPTR (gst_tividdec2_query));
 
     /* Instantiate deceoded video source pad.
      *
@@ -397,8 +401,8 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
 
     viddec2->framerateNum       = 0;
     viddec2->framerateDen       = 0;
-    viddec2->height		= 0;
-    viddec2->width		= 0;
+    viddec2->height		        = 0;
+    viddec2->width		        = 0;
 
     viddec2->numOutputBufs      = 0UL;
     viddec2->hOutBufTab         = NULL;
@@ -721,7 +725,8 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
 
         switch (fmt) {
         case GST_FORMAT_TIME:
-            /* We handle in time format, so this is OK */
+        case GST_FORMAT_BYTES:
+            /* We handle in time or bytes format, so this is OK */
             break;
         default:
             GST_WARNING("unknown format received in NEWSEGMENT");
@@ -729,7 +734,7 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
             return FALSE;
         }
 
-        GST_DEBUG("NEWSEGMENT in time start %" GST_TIME_FORMAT " -- stop %"
+        GST_DEBUG("NEWSEGMENT start %" GST_TIME_FORMAT " -- stop %"
             GST_TIME_FORMAT, GST_TIME_ARGS (start), GST_TIME_ARGS (stop));
 
         gst_segment_set_newsegment_full (&viddec2->segment, update,
@@ -818,6 +823,27 @@ static gboolean gst_tividdec2_sink_event(GstPad *pad, GstEvent *event)
 
     return ret;
 }
+
+/*
+ * gst_tividdec2_query
+ * Forward the query up-stream
+ */
+static gboolean gst_tividdec2_query(GstPad * pad, GstQuery * query){
+    gboolean    res     = FALSE;
+    GstPad      *peer   = NULL;
+    GstTIViddec2 *viddec2;
+
+    viddec2 = GST_TIVIDDEC2(GST_OBJECT_PARENT(pad));
+
+    if ((peer = gst_pad_get_peer (viddec2->sinkpad))) {
+        /* just forward to peer */
+        res = gst_pad_query (peer, query);
+        gst_object_unref (peer);
+    }
+
+    return res;
+}
+
 
 /******************************************************************************
  * gst_tividdec2_chain
