@@ -360,8 +360,6 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     gst_pad_fixate_caps(viddec2->sinkpad,
         gst_caps_make_writable(
             gst_caps_copy(gst_pad_get_pad_template_caps(viddec2->sinkpad))));
-    gst_pad_set_query_function (viddec2->srcpad,
-        GST_DEBUG_FUNCPTR (gst_tividdec2_query));
 
     /* Instantiate deceoded video source pad.
      *
@@ -373,6 +371,8 @@ static void gst_tividdec2_init(GstTIViddec2 *viddec2, GstTIViddec2Class *gclass)
     gst_pad_fixate_caps(viddec2->srcpad,
         gst_caps_make_writable(
             gst_caps_copy(gst_pad_get_pad_template_caps(viddec2->srcpad))));
+    gst_pad_set_query_function (viddec2->srcpad,
+        GST_DEBUG_FUNCPTR (gst_tividdec2_query));
 
     /* Add pads to TIViddec2 element */
     gst_element_add_pad(GST_ELEMENT(viddec2), viddec2->sinkpad);
