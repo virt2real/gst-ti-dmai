@@ -1429,9 +1429,14 @@ static void* gst_tividdec2_decode_thread(void *arg)
             /* When no input remains, we must flush any remaining display
              * frames out of the codec and push them to the sink.
              */
-            Vdec2_flush(viddec2->hVd);
             codecFlushed = TRUE;
             viddec2->codecFlushed = TRUE;
+            if (viddec2->shutdown){
+                Vdec2_flush(viddec2->hVd);
+            } else {
+                gst_buffer_unref(encData);
+                goto CodecFlushed;
+            }
 
             /* Use the input dummy buffer for the process call.
              * After a flush the codec ignores the input buffer, but since
@@ -1567,6 +1572,7 @@ static void* gst_tividdec2_decode_thread(void *arg)
             hFreeBuf = Vdec2_getFreeBuf(viddec2->hVd);
         }
 
+CodecFlushed:
         /*
          * If we just drained the codec, then we need to send an
          * EOS event downstream
