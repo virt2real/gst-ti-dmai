@@ -195,9 +195,12 @@ if test "x$preset" = "xdm6446_2" ; then
 	enable_mpeg4dec_xdm2=1;
   	enable_h264dec_xdm2=1;
   	enable_mpeg2dec_xdm2=1;
+	enable_mpeg4enc_xdm1=1;
+	enable_h264enc_xdm1=1;
   	enable_aacdec_xdm1=1;
   	enable_mp3dec_xdm1=1;
   	enable_g711dec_xdm1=1;
+	enable_g711enc_xdm1=1;
   	enable_videosink=1;
   	with_platform=dm6446;
 fi
