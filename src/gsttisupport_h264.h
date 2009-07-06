@@ -1,29 +1,51 @@
 /*
- * gsttiquicktime_h264.h
+ * gsttisupport_h264.h
  *
  * This file declares structure and macro used for creating byte-stream syntax
  * needed for decoding H.264 stream demuxed via qtdemuxer.
  *
  * Original Author:
  *     Brijesh Singh, Texas Instruments, Inc.
+ * Contributor:
+ *     Diego Dompe, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) RidgeRun, 2009
  *
- * This program is free software; you can redistribute it and/or modify 
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
- * whether express or implied; without even the implied warranty of * 
+ * whether express or implied; without even the implied warranty of *
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  */
 
-#ifndef __GST_QUICKTIME_H264_H__
-#define __GST_QUICKTIME_H264_H__
+#ifndef __GST_TISUPPORT_H264_H__
+#define __GST_TISUPPORT_H264_H__
 
 #include <gst/gst.h>
 
-#include <ti/sdo/dmai/Fifo.h>
+/* Caps template for h264 */
+extern GstStaticPadTemplate gstti_h264_sink_caps;
+extern GstStaticPadTemplate gstti_h264_src_caps;
+
+/* H264 Parser */
+struct gstti_h264_parser_private {
+    struct gstti_common_parser_data *common;
+    gboolean            firstBuffer;
+    GstBuffer           *sps_pps_data;
+    GstBuffer           *nal_code_prefix;
+    guint               nal_length;
+    Buffer_Handle       outbuf;
+    guint               out_offset;
+    GstBuffer           *current;
+    guint               current_offset;
+    gboolean            flushing;
+    gboolean            access_unit_found;
+};
+
+extern struct gstti_parser_ops gstti_h264_parser;
 
 /* Get version number from avcC atom  */
 #define AVCC_ATOM_GET_VERSION(header,pos) \
@@ -64,27 +86,7 @@
 #define AVCC_ATOM_GET_PPS_LENGTH(header,pos) \
     GST_BUFFER_DATA(header)[pos] << 8 | GST_BUFFER_DATA(header)[pos+1]
 
-/* Function to check if we have valid avcC header */
-int gst_h264_valid_quicktime_header (GstBuffer *buf);
-
-/* Function to read sps and pps data field from avcc header */
-GstBuffer* gst_h264_get_sps_pps_data (GstBuffer *buf);
-
-/* Function to read NAL length field from avcc header */
-guint8 gst_h264_get_nal_length (GstBuffer *buf);
-
-/* Function to get predefind NAL prefix code */
-GstBuffer* gst_h264_get_nal_prefix_code (void);
-
-/* Function to parse input stream and put in Fifo */
-int gst_h264_parse_and_fifo_put (Fifo_Handle fifoFd, GstBuffer *buf, 
-    GstBuffer *sps_pps_data, GstBuffer *nal_code_prefix, guint8 nal_length );
-
-/* Function to check if we are using h264 decoder */
-gboolean gst_is_h264_decoder (const gchar *name);
-
-
-#endif /* __GST_TIQUICKTIME_H264_H__ */
+#endif /* __GST_TISUPPORT_H264_H__ */
 
 
 /******************************************************************************

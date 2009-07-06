@@ -22,7 +22,7 @@ $(error You need to define the environment variable DMAI_INSTALL_DIR)
 endif
 
 default:
-	@echo "Please specify the target: dm6446, omap3530, dm355, dm6467"
+	@echo "Please specify the target: dm6446, omap35x, dm355, dm6467, dm357"
 
 include $(DVSDK_PATH)/Rules.make
 export PLATFORM=$(MAKECMDGOALS)
@@ -40,45 +40,19 @@ export MVTOOL_PREFIX
 export XDAIS_INSTALL_DIR
 export XDC_INSTALL_DIR
 
-ifeq ($(PLATFORM), dm355)
-    export XDC_TARGET   = gnu.targets.MVArm9
-    export XDC_PLATFORM = ti.platforms.evmDM355
-endif
-
-ifeq ($(PLATFORM), dm6446)
-    export XDC_TARGET   = gnu.targets.MVArm9
-    export XDC_PLATFORM = ti.platforms.evmDM6446
-endif
-
-ifeq ($(PLATFORM), dm6467)
-    export XDC_TARGET   = gnu.targets.MVArm9
-    export XDC_PLATFORM = ti.platforms.evmDM6467
-endif
+PRESET=--with-preset=$(PLATFORM)
 
 ifeq ($(PLATFORM), omap3530)
-    export XDC_TARGET    = gnu.targets.arm.GCArmv5T
-    export XDC_PLATFORM  = ti.platforms.evm3530
     export MVTOOL_PREFIX = $(CSTOOL_PREFIX)
     export MVTOOL_DIR    = $(CSTOOL_DIR)
 endif
-
-CPPFLAGS=-DPlatform_$(PLATFORM) 
 
 configure:
 	./autogen.sh --noconfigure
 
 Makefile: configure
-	./configure CPPFLAGS="$(CPPFLAGS)" --host=arm-none-linux-gnueabi
+	./configure --host=arm-none-linux-gnueabi $(PRESET)
 
-omap3530: Makefile
-	$(MAKE) -f Makefile
-
-dm6446: Makefile
-	$(MAKE) -f Makefile
-
-dm6467: Makefile
-	$(MAKE) -f Makefile
-
-dm355: Makefile
+omap35x dm6446 dm6467 dm355 dm357: Makefile
 	$(MAKE) -f Makefile
 

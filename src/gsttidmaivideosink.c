@@ -235,7 +235,7 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
 
     g_object_class_install_property(gobject_class, PROP_ROTATION,
         g_param_spec_int("rotation", "Rotation angle", "Rotation angle "
-            "(OMAP3530 only)", -1, G_MAXINT, -1, G_PARAM_READWRITE));
+            "(OMAP35x only)", -1, G_MAXINT, -1, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_FRAMERATE,
         g_param_spec_int("framerate", "frame rate of video",
@@ -643,7 +643,7 @@ static int gst_tidmaivideosink_videostd_get_attrs(VideoStd_Type videoStd,
             vattrs->framerate = 60;
             break;
 
-        #if defined(Platform_omap3530)
+        #if PLATFORM == omap35x
         case VideoStd_VGA:
             vattrs->framerate = 60;
             break;
@@ -880,7 +880,7 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
                 return VideoStd_1080P_25;
             else if (!strcmp(sink->videoStd, "1080P_24"))
                 return VideoStd_1080P_24;
-            #if defined(Platform_omap3530)
+            #if PLATFORM == omap35x
             else if (!strcmp(sink->videoStd, "VGA"))
                 return VideoStd_VGA;
             #endif
@@ -903,7 +903,7 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
                 return Display_Output_COMPOSITE;
             else if (!strcmp(sink->videoOutput, "COMPONENT"))
                 return Display_Output_COMPONENT;
-            #if defined(Platform_omap3530)
+            #if PLATFORM == omap35x
             else if (!strcmp(sink->videoOutput, "DVI"))
                 return Display_Output_DVI;
             else if (!strcmp(sink->videoOutput, "LCD"))
@@ -954,7 +954,7 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
         case Cpu_Device_DM6467:
             sink->dAttrs = Display_Attrs_DM6467_VID_DEFAULT;
             break;
-        #if defined(Platform_omap3530)
+        #if PLATFORM == omap35x
         case Cpu_Device_OMAP3530:
             sink->dAttrs = Display_Attrs_O3530_VID_DEFAULT;
             break;
@@ -987,7 +987,7 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
         sink->dAttrs.displayDevice : sink->displayDevice;
 
     /* Set rotation on OMAP35xx */
-    #if defined(Platform_omap3530)
+    #if PLATFORM == omap35x
     if (sink->cpu_dev == Cpu_Device_OMAP3530) {
         sink->dAttrs.rotation = sink->rotation == -1 ?
             sink->dAttrs.rotation : sink->rotation;

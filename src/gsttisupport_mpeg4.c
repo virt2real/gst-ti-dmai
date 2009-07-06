@@ -22,8 +22,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
- * This parser breaks down elementary mpeg4 streams, or mpeg4 streams from qtdemuxer
- * into mpeg4 streams to pass into the decoder.
+ * This parser breaks down elementary mpeg4 streams, or mpeg4 streams from
+ * qtdemuxer into mpeg4 streams to pass into the decoder.
  *
  * Example launch line for elementary stream:
  *
@@ -37,11 +37,13 @@
 #include <string.h>
 #include <gst/gst.h>
 
+#include "gsttidmaidec.h"
 #include "gsttiparsers.h"
+#include "gsttisupport_mpeg4.h"
 #include "gsttidmaibuffertransport.h"
 
-GST_DEBUG_CATEGORY_STATIC (gst_tiparser_mpeg4_debug);
-#define GST_CAT_DEFAULT gst_tiparser_mpeg4_debug
+GST_DEBUG_CATEGORY_STATIC (gst_tisupport_mpeg4_debug);
+#define GST_CAT_DEFAULT gst_tisupport_mpeg4_debug
 
 /* Function to check if we have valid avcC header */
 static gboolean gst_mpeg4_valid_quicktime_header (GstBuffer *buf);
@@ -54,6 +56,39 @@ static GstBuffer *mpeg4_parse(GstBuffer *, void *);
 static GstBuffer *mpeg4_drain(void *);
 static void mpeg4_flush_stop(void *);
 static void mpeg4_flush_start(void *);
+
+GstStaticPadTemplate gstti_mpeg4_sink_caps = GST_STATIC_PAD_TEMPLATE(
+    "sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS
+    ("video/mpeg, "
+     "mpegversion=(int){ 2, 4 }, "  /* MPEG versions 2 and 4 */
+        "systemstream=(boolean)false, "
+         "framerate=(fraction)[ 0, MAX ], "
+         "width=(int)[ 1, MAX ], "
+         "height=(int)[ 1, MAX ] ;"
+     "video/x-divx, "               /* AVI containers save mpeg4 as divx... */
+         "divxversion=(int){ 4 }, "
+         "framerate=(fraction)[ 0, MAX ], "
+         "width=(int)[ 1, MAX ], "
+         "height=(int)[ 1, MAX ] ;"
+    )
+);
+
+GstStaticPadTemplate gstti_mpeg4_src_caps = GST_STATIC_PAD_TEMPLATE(
+    "src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS
+    ("video/mpeg, "
+     "mpegversion=(int){ 2, 4 }, "  /* MPEG versions 2 and 4 */
+        "systemstream=(boolean)false, "
+         "framerate=(fraction)[ 0, MAX ], "
+         "width=(int)[ 1, MAX ], "
+         "height=(int)[ 1, MAX ] ;"
+    )
+);
 
 struct gstti_parser_ops gstti_mpeg4_parser = {
     .init  = mpeg4_init,
@@ -68,19 +103,25 @@ struct gstti_parser_ops gstti_mpeg4_parser = {
 /******************************************************************************
  * Init the parser
  ******************************************************************************/
-static gboolean mpeg4_init(void *private){
-    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
+static gboolean mpeg4_init(void *arg){
+    GstTIDmaidec *dmaidec = (GstTIDmaidec *)arg;
+    struct gstti_mpeg4_parser_private *priv;
 
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tiparser_mpeg4_debug, "TIParsermpeg4", 0,
-        "TI mpeg4 parser");
+    GST_DEBUG_CATEGORY_INIT(gst_tisupport_mpeg4_debug, "TISupportMPEG4", 0,
+        "DMAI plugins MPEG4 Support functions");
 
-    priv->flushing = FALSE;
-    priv->header = NULL;
+    priv = g_malloc(sizeof(struct gstti_mpeg4_parser_private));
+    g_assert(priv != NULL);
+
+    memset(priv,0,sizeof(struct gstti_mpeg4_parser_private));
     priv->firstBuffer = TRUE;
-    priv->current = NULL;
-    priv->current_offset = 0;
-    priv->vop_found = FALSE;
+    priv->common = &dmaidec->parser_common;
+
+    if (dmaidec->parser_private){
+        g_free(dmaidec->parser_private);
+    }
+    dmaidec->parser_private = priv;
 
     GST_DEBUG("Parser initialized");
     return TRUE;
@@ -90,12 +131,19 @@ static gboolean mpeg4_init(void *private){
 /******************************************************************************
  * Clean the parser
  ******************************************************************************/
-static gboolean mpeg4_clean(void *private){
-    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
+static gboolean mpeg4_clean(void *arg){
+    GstTIDmaidec *dmaidec = (GstTIDmaidec *)arg;
+    struct gstti_mpeg4_parser_private *priv =
+        (struct gstti_mpeg4_parser_private *) dmaidec->parser_private;
 
     if (priv->header) {
         GST_DEBUG("freeing mpeg4 header buffers\n");
         gst_buffer_unref(priv->header);
+    }
+
+    if (dmaidec->parser_private){
+        g_free(dmaidec->parser_private);
+        dmaidec->parser_private = NULL;
     }
 
     return TRUE;
@@ -106,7 +154,8 @@ static gboolean mpeg4_clean(void *private){
  * Parse the mpeg4 stream
  ******************************************************************************/
 static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
-    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
+    struct gstti_mpeg4_parser_private *priv =
+        (struct gstti_mpeg4_parser_private *)private;
     guchar *dest;
     guint	didx;
     GstBuffer *outbuf = NULL;
@@ -117,7 +166,6 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
             priv->header = gst_mpeg4_get_header(buf);
         }
     }
-
 
     /* If this buffer is different from previous ones, reset values */
     if (priv->current != buf) {
@@ -178,7 +226,8 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
          * which needs to be prefixed before first frame
          */
 
-        memcpy(&dest[didx],GST_BUFFER_DATA(priv->header),GST_BUFFER_SIZE(priv->header));
+        memcpy(&dest[didx],
+            GST_BUFFER_DATA(priv->header),GST_BUFFER_SIZE(priv->header));
         didx+=GST_BUFFER_SIZE(priv->header);
         memcpy(&dest[didx],GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
         didx+=GST_BUFFER_SIZE(buf);
@@ -274,7 +323,8 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
  * Drain the buffer
  ******************************************************************************/
 static GstBuffer *mpeg4_drain(void *private){
-    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
+    struct gstti_mpeg4_parser_private *priv =
+        (struct gstti_mpeg4_parser_private *)private;
     GstBuffer 		*outbuf = NULL;
     Buffer_Handle	houtbuf;
 
@@ -305,13 +355,15 @@ static GstBuffer *mpeg4_drain(void *private){
             houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
 
             if (!houtbuf){
-                GST_ERROR("failed to get a free buffer when notified it was available");
+                GST_ERROR(
+                 "failed to get a free buffer when notified it was available");
                 return NULL;
             }
         }
 
         Buffer_setNumBytesUsed(houtbuf,1);
-        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(houtbuf,priv->common->waitOnInBufTab);
+        outbuf = (GstBuffer*)
+           gst_tidmaibuffertransport_new(houtbuf,priv->common->waitOnInBufTab);
         GST_BUFFER_SIZE(outbuf) = 0;
 
         GST_DEBUG("Parser drained");
@@ -326,7 +378,8 @@ static GstBuffer *mpeg4_drain(void *private){
  * Flush the buffer
  ******************************************************************************/
 static void mpeg4_flush_start(void *private){
-    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
+    struct gstti_mpeg4_parser_private *priv =
+        (struct gstti_mpeg4_parser_private *)private;
 
     priv->flushing = TRUE;
     priv->vop_found = FALSE;
@@ -345,7 +398,8 @@ static void mpeg4_flush_start(void *private){
 }
 
 static void mpeg4_flush_stop(void *private){
-    struct gstti_mpeg4_parser_private *priv = (struct gstti_mpeg4_parser_private *)private;
+    struct gstti_mpeg4_parser_private *priv =
+        (struct gstti_mpeg4_parser_private *)private;
 
     priv->flushing = FALSE;
     GST_DEBUG("Parser flush stopped");

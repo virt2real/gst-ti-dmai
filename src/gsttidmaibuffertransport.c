@@ -155,6 +155,10 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
          Rendezvous_forceAndReset(cbuf->hRv);
     }
 
+    if (cbuf->release_cb){
+        cbuf->release_cb(cbuf->cb_data,cbuf);
+    }
+
     GST_LOG("end finalize\n");
 }
 
@@ -188,10 +192,26 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
 
     buf->dmaiBuffer = hBuf;
     buf->hRv = hRv;
+    buf->release_cb = NULL;
+    buf->cb_data = NULL;
 
     GST_LOG("end new\n");
 
     return GST_BUFFER(buf);
+}
+
+/******************************************************************************
+ * gst_tidmaibuffertransport_set_release_callback
+ *    Create a new DMAI buffer transport object.
+ *
+ * Note: If rendenzvous handle is set then Rendenzvous_force will be called for
+ *       this handle during finalize method.
+ ******************************************************************************/
+
+void gst_tidmaibuffertransport_set_release_callback
+    (GstTIDmaiBufferTransport *buf,void (*release_cb)(gpointer), gpointer data){
+    buf->release_cb = release_cb;
+    buf->cb_data = data;
 }
 
 

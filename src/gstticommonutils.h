@@ -1,19 +1,19 @@
 /*
  * gstticommonutils.h
  *
- * This file declares common routine used by all elements. 
+ * This file declares common routine used by all elements.
  *
  * Original Author:
  *     Brijesh Singh, Texas Instruments, Inc.
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  *
- * This program is free software; you can redistribute it and/or modify 
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed #as is# WITHOUT ANY WARRANTY of any kind,
- * whether express or implied; without even the implied warranty of 
+ * whether express or implied; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
@@ -30,6 +30,22 @@
 
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
+
+#define dm355   0
+#define dm3446  1
+#define dm6467  2
+#define dm357   3
+#define omap35x 4
+#define dm365   5
+
+/* Type of decoders */
+enum dmai_codec_type
+{
+    DATA_TYPE_UNDEF,
+    VIDEO,
+    AUDIO,
+    IMAGE,
+};
 
 /* This variable is used to flush the fifo.  It is pushed to the
  * fifo when we want to flush it.  When the encode/decode thread
@@ -53,7 +69,7 @@ gint gst_ti_env_get_int (gchar *env);
 /* Function to check if the environment variable is defined */
 gboolean gst_ti_env_is_defined (gchar *env);
 
-#endif 
+#endif
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

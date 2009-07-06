@@ -92,40 +92,8 @@ struct gstti_parser_ops {
  */
 
 struct gstti_common_parser_data{
-    const gchar*        codecName;
     Rendezvous_Handle   waitOnInBufTab;
     BufTab_Handle       hInBufTab;
 };
-
-/* H264 Parser */
-struct gstti_h264_parser_private {
-    struct gstti_common_parser_data *common;
-    gboolean            firstBuffer;
-    GstBuffer       	*sps_pps_data;
-    GstBuffer       	*nal_code_prefix;
-    guint           	nal_length;
-    Buffer_Handle       outbuf;
-    guint               out_offset;
-    GstBuffer           *current;
-    guint               current_offset;
-    gboolean            flushing;
-    gboolean            access_unit_found;
-};
-
-/* MPEG4 Parser */
-struct gstti_mpeg4_parser_private {
-    struct gstti_common_parser_data *common;
-    gboolean            firstBuffer;
-    GstBuffer           *header;
-    Buffer_Handle       outbuf;
-    guint               out_offset;
-    GstBuffer           *current;
-    guint               current_offset;
-    gboolean            flushing;
-    gboolean            vop_found;
-};
-
-extern struct gstti_parser_ops gstti_h264_parser;
-extern struct gstti_parser_ops gstti_mpeg4_parser;
 
 #endif

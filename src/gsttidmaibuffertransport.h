@@ -1,21 +1,21 @@
 /*
  * gsttidmaibuffertransport.h
- * 
+ *
  * This file declares the "TIDmaiBufferTransport" buffer object, which is used
  * to encapsulate an existing DMAI buffer object inside of a gStreamer
  * buffer so it can be passed along the gStreamer pipeline.
- * 
+ *
  * Original Author:
  *     Don Darling, Texas Instruments, Inc.
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  *
- * This program is free software; you can redistribute it and/or modify 
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed #as is# WITHOUT ANY WARRANTY of any kind,
- * whether express or implied; without even the implied warranty of 
+ * whether express or implied; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
@@ -52,13 +52,19 @@ struct _GstTIDmaiBufferTransport {
   GstBuffer         buffer;
   Buffer_Handle     dmaiBuffer;
   Rendezvous_Handle hRv;
+  void              (* release_cb)(gpointer,GstTIDmaiBufferTransport *);
+  gpointer          cb_data;
 };
 
 /* External function declarations */
 GType      gst_tidmaibuffertransport_get_type(void);
 GstBuffer* gst_tidmaibuffertransport_new(Buffer_Handle hBuf,Rendezvous_Handle);
+void       gst_tidmaibuffertransport_set_release_callback
+    (GstTIDmaiBufferTransport *,
+     void (*)(gpointer,GstTIDmaiBufferTransport *),
+     gpointer);
 
-G_END_DECLS 
+G_END_DECLS
 
 #endif /* __GST_DMAIBUFFERTRANSPORT_H__ */
 
