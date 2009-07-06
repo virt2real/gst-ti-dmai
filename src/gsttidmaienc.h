@@ -26,6 +26,7 @@
 #include <pthread.h>
 
 #include <gst/gst.h>
+#include <gst/base/gstadapter.h>
 #include "gsttiparsers.h"
 #include "gstticommonutils.h"
 
@@ -37,6 +38,7 @@
 #include <ti/sdo/dmai/Fifo.h>
 #include <ti/sdo/dmai/BufTab.h>
 #include <ti/sdo/dmai/Rendezvous.h>
+#include <ti/sdo/dmai/ColorSpace.h>
 
 G_BEGIN_DECLS
 

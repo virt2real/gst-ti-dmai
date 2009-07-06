@@ -46,6 +46,7 @@
 #include <ti/sdo/dmai/BufferGfx.h>
 #include <ti/sdo/dmai/BufTab.h>
 #include <ti/xdais/dm/xdm.h>
+#include <ti/xdais/dm/ivideo.h>
 
 #include "gsttidmaienc.h"
 #include "gsttidmaibuffertransport.h"
@@ -102,8 +103,6 @@ static gboolean
  gst_tidmaienc_deconfigure_codec (GstTIDmaienc *dmaienc);
 static GstFlowReturn
  encode(GstTIDmaienc *dmaienc,GstBuffer * buf);
-static GstClockTime
- gst_tidmaienc_frame_duration(GstTIDmaienc *dmaienc);
 
 /*
  * Register all the required encoders
@@ -249,7 +248,7 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
         g_param_spec_string("codecName", "Codec Name", "Name of codec",
             encoder->codecName, G_PARAM_READWRITE));
 
-    g_object_class_install_property(gobject_class, SIZE_OUTPUT_BUF,
+    g_object_class_install_property(gobject_class, PROP_SIZE_OUTPUT_BUF,
         g_param_spec_int("sizeOutputBuf",
             "Size of Ouput Buffer",
             "Size of the output buffer to allocate for encoded data",
@@ -353,9 +352,9 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
         GST_LOG("setting \"codecName\" to \"%s\"\n", dmaienc->codecName);
         break;
     case PROP_SIZE_OUTPUT_BUF:
-        dmaidec->outBufSize = g_value_get_int(value);
-        GST_LOG("setting \"outBufSize\" to \"%ld\"\n",
-            dmaidec->outBufSize);
+        dmaienc->outBufSize = g_value_get_int(value);
+        GST_LOG("setting \"outBufSize\" to \"%d\"\n",
+            dmaienc->outBufSize);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -456,7 +455,6 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
     Rendezvous_Attrs       rzvAttrs  = Rendezvous_Attrs_DEFAULT;
     GstTIDmaiencClass *gclass;
     GstTIDmaiencData *encoder;
-    int i;
 
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
@@ -601,7 +599,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
     if (dmaienc->outBufSize != 0) {
-        dmaienc->outBufSize = (dmaienc.inBufSize * 3;
+        dmaienc->outBufSize = dmaienc->inBufSize * 3;
     }
     dmaienc->headWrap = dmaienc->outBufSize;
 
@@ -609,10 +607,10 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     if (encoder->dops->codec_type == VIDEO) {
         GST_DEBUG("creating output buffer \n");
 
-        dmaienc->outBuf = Buffer_create(dmaienc->outBufSize, &bAttrs);
+        dmaienc->outBuf = Buffer_create(dmaienc->outBufSize, &Attrs);
     } else {
 //TODO
-        outBufSize = 0; // Audio case?
+        dmaienc->outBufSize = 0; // Audio case?
     }
 
     if (dmaienc->outBuf == NULL) {
@@ -707,13 +705,13 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
     }
 
 #if PLATFORM == dm6467
-    dmaienc->colorspace = ColorSpace_YUV422PSEMI;
+    dmaienc->colorSpace = ColorSpace_YUV422PSEMI;
 #else
-    dmaienc->colorspace = ColorSpace_UYVY;
+    dmaienc->colorSpace = ColorSpace_UYVY;
 #endif
 
     dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
-        dmaienc.colorSpace) * dmaienc->height;
+        dmaienc->colorSpace) * dmaienc->height;
 
     if (!gst_tidmaienc_configure_codec(dmaienc)) {
         gst_object_unref(dmaienc);
@@ -751,12 +749,12 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
         /* end-of-stream: process any remaining encoded frame data */
         GST_DEBUG("EOS: draining remaining encoded data\n");
 
-        if (!dmaidec->outputThread){
-            ret = gst_pad_push_event(dmaidec->srcpad, event);
+        if (!dmaienc->outputThread){
+            ret = gst_pad_push_event(dmaienc->srcpad, event);
         } else {
             /* Let the output thread send the EOS */
-            dmaidec->eos = TRUE;
-            pthread_cond_signal(&dmaidec->listCond);
+            dmaienc->eos = TRUE;
+            pthread_cond_signal(&dmaienc->listCond);
 
             gst_event_unref(event);
             ret = TRUE;
@@ -769,7 +767,7 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
         ret = TRUE;
         goto done;
     default:
-        ret = gst_pad_push_event(dmaidec->srcpad, event);
+        ret = gst_pad_push_event(dmaienc->srcpad, event);
     }
 
 done:
@@ -781,7 +779,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
 
     if (Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) !=
-        Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->tail)
+        Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->tail){
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
             ("unexpected behavior freeing buffer that is not on the tail"));
         return;
@@ -794,7 +792,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     }
 }
 
-gint outspace(GstTIDmaienc *dmaienc){
+gint outSpace(GstTIDmaienc *dmaienc){
     if (dmaienc->head == dmaienc->tail){
         dmaienc->head = dmaienc->tail = 0;
         return dmaienc->outBufSize - dmaienc->head;
@@ -824,7 +822,7 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc){
         Rendezvous_meet(dmaienc->waitOnOutBuf);
     }
 
-    BufferCreate(hBuf,&Attrs);
+    hBuf = Buffer_create(0,&Attrs);
     Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->head);
     Buffer_setNumBytesUsed(hBuf,0);
 
@@ -850,7 +848,7 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
             gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(dmaienc->width,
                                                 dmaienc->colorSpace);
 
-            Buffer_create(hBuf,dmaienc->inBufSize,&gfxAttrs);
+            hBuf = Buffer_create(dmaienc->inBufSize, &gfxAttrs.bAttrs);
             Buffer_setUserPtr(hBuf,
                 Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)));
             Buffer_setNumBytesUsed(hBuf,dmaienc->inBufSize);
@@ -869,7 +867,7 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
 
         /* Allocate a Buffer tab and copy the data there */
         if (!dmaienc->inBuf){
-            dmaienc->inBuf = Buffer_create(dmaienc->inBufSize,&gfxAttrs);
+            dmaienc->inBuf = Buffer_create(dmaienc->inBufSize,&gfxAttrs.bAttrs);
 
             if (dmaienc->inBuf == NULL) {
                 GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -920,7 +918,8 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
      * gst_buffer_unref().
          */
     outBuf = gst_tidmaibuffertransport_new(hDstBuf, dmaienc->waitOnOutBuf);
-    gst_tidmaibuffertransport_set_release_callback(release_cb,dmaienc);
+    gst_tidmaibuffertransport_set_release_callback(
+        (GstTIDmaiBufferTransport *)hDstBuf,release_cb,dmaienc);
     gst_buffer_copy_metadata(outBuf,rawData,
         GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
     gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
@@ -964,7 +963,6 @@ failure:
 static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)GST_OBJECT_PARENT(pad);
-    GstBuffer    *pushBuffer = NULL;
     GstTIDmaiencClass *gclass;
     GstTIDmaiencData *encoder;
 
@@ -1025,8 +1023,8 @@ eos:
         /* EOS and list empty? */
         if (dmaienc->eos && !dmaienc->outList){
             gst_pad_push_event(dmaienc->srcpad,gst_event_new_eos());
-            dmaidec->eos = FALSE;
-            if (!dmaidec->shutdown)
+            dmaienc->eos = FALSE;
+            if (!dmaienc->shutdown)
                 goto cond_wait;
         }
 

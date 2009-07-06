@@ -45,7 +45,7 @@ static void gstti_videnc1_destroy(GstTIDmaienc *);
 static gboolean gstti_videnc1_process
  (GstTIDmaienc *, Buffer_Handle,Buffer_Handle);
 
-struct gstti_decoder_ops gstti_videnc1_ops = {
+struct gstti_encoder_ops gstti_videnc1_ops = {
     .xdmversion = "xDM 1.0",
     .codec_type = VIDEO,
     .codec_create = gstti_videnc1_create,
@@ -124,9 +124,9 @@ static gboolean gstti_videnc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     Int             ret;
 
     /* Invoke the video encoder */
-    GST_DEBUG("invoking the video encoder,(%p, %p), %d\n",
+    GST_DEBUG("invoking the video encoder,(%p, %p)\n",
         Buffer_getUserPtr(hSrcBuf),Buffer_getUserPtr(hDstBuf));
-    ret = Venc1_process(dmaienc->hCodec, hEncData, hDstBuf);
+    ret = Venc1_process(dmaienc->hCodec, hSrcBuf, hDstBuf);
 
     if (ret < 0) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,DECODE,(NULL),

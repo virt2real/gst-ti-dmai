@@ -38,6 +38,7 @@
 
 #include "gstticommonutils.h"
 #include "gsttidmaidec.h"
+#include "gsttidmaienc.h"
 #include "gsttidmaivideosink.h"
 #include "gsttisupport_h264.h"
 #include "gsttisupport_mpeg4.h"
@@ -79,8 +80,8 @@ static GstStaticPadTemplate gstti_uyvy_sink_caps = GST_STATIC_PAD_TEMPLATE(
 
 extern struct gstti_decoder_ops gstti_viddec2_ops;
 extern struct gstti_decoder_ops gstti_viddec0_ops;
-extern struct gstti_decoder_ops gstti_videnc1_ops;
-extern struct gstti_decoder_ops gstti_videnc0_ops;
+extern struct gstti_encoder_ops gstti_videnc1_ops;
+extern struct gstti_encoder_ops gstti_videnc0_ops;
 
 #if PLATFORM == dm357
 # ifndef DECODEENGINE

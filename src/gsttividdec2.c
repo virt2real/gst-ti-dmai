@@ -137,9 +137,8 @@ static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
 
     /* Invoke the video decoder */
     originalBufferSize = Buffer_getNumBytesUsed(hEncData);
-    GST_DEBUG("invoking the video decoder, with %d bytes (%p, %p), %d\n",originalBufferSize,
-        Buffer_getUserPtr(hEncData),Buffer_getUserPtr(hDstBuf),
-        BufferGfx_getColorSpace(hDstBuf));
+    GST_DEBUG("invoking the video decoder, with %ld bytes (%p, %p)\n",originalBufferSize,
+        Buffer_getUserPtr(hEncData),Buffer_getUserPtr(hDstBuf));
     ret = Vdec2_process(dmaidec->hCodec, hEncData, hDstBuf);
     GST_DEBUG("test point");
     encDataConsumed = (codecFlushed) ? 0 :

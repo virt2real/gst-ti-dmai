@@ -209,7 +209,9 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
  ******************************************************************************/
 
 void gst_tidmaibuffertransport_set_release_callback
-    (GstTIDmaiBufferTransport *buf,void (*release_cb)(gpointer), gpointer data){
+    (GstTIDmaiBufferTransport *buf,
+	void (*release_cb)(gpointer,GstTIDmaiBufferTransport *buf), 
+	gpointer data){
     buf->release_cb = release_cb;
     buf->cb_data = data;
 }
