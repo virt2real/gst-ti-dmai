@@ -287,13 +287,13 @@ AC_ARG_ENABLE(mpeg4dec-xdm2,
 	[Enable MPEG4 xDM 1.2 decoder  @<:@default=no@:>@])],
   [AC_DEFINE([ENABLE_MPEG4DEC_XDM2],[1],
 			  [mpeg4 xDM 1.2 decoder is enabled])])
-AC_ARG_ENABLE(mpeg4dec-xdm1,
-  [AS_HELP_STRING([--enable-mpeg4dec-xdm1],
+AC_ARG_ENABLE(mpeg4dec-xdm0,
+  [AS_HELP_STRING([--enable-mpeg4dec-xdm0],
 	[Enable MPEG4 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG4DEC_XDM1],[1],
+  [AC_DEFINE([ENABLE_MPEG4DEC_XDM0],[1],
 			  [mpeg4 xDM 0.9 decoder is enabled])])
 if test "${enable_mpeg4dec_xdm2+set}" = set &&
-   test "${enable_mpeg4dec_xdm1+set}" = set ; then
+   test "${enable_mpeg4dec_xdm0+set}" = set ; then
 		AC_MSG_ERROR([MPEG4 decoder is enabled for more than one xDM API. Only one is allowed])
 fi
 
@@ -303,12 +303,12 @@ AC_ARG_ENABLE(h264dec-xdm2,
   [AC_DEFINE([ENABLE_H264DEC_XDM2],[1],
 			  [h264 xDM 1.2 decoder is enabled])])
 AC_ARG_ENABLE(h264dec-xdm1,
-  [AS_HELP_STRING([--enable-h264dec-xdm1],
+  [AS_HELP_STRING([--enable-h264dec-xdm0],
 	[Enable H264 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_H264DEC_XDM1],[1],
+  [AC_DEFINE([ENABLE_H264DEC_XDM0],[1],
 			  [h264 xDM 0.9 decoder is enabled])])
 if test "${enable_h264dec_xdm2+set}" = set &&
-   test "${enable_h264dec_xdm1+set}" = set ; then
+   test "${enable_h264dec_xdm0+set}" = set ; then
 		AC_MSG_ERROR([H264 decoder is enabled for more than one xDM API. Only one is allowed])
 fi
 
@@ -317,13 +317,13 @@ AC_ARG_ENABLE(mpeg2dec-xdm2,
 	[Enable MPEG2 xDM 1.2 decoder  @<:@default=no@:>@])],
   [AC_DEFINE([ENABLE_MPEG2DEC_XDM2],[1],
 			  [mpeg2 xDM 1.2 decoder is enabled])])
-AC_ARG_ENABLE(mpeg2dec-xdm1,
-  [AS_HELP_STRING([--enable-mpeg2dec-xdm1],
+AC_ARG_ENABLE(mpeg2dec-xdm0,
+  [AS_HELP_STRING([--enable-mpeg2dec-xdm0],
 	[Enable MPEG2 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG2DEC_XDM1],[1],
+  [AC_DEFINE([ENABLE_MPEG2DEC_XDM0],[1],
 			  [mpeg2 xDM 0.9 decoder is enabled])])
 if test "${enable_mpeg2dec_xdm2+set}" = set &&
-   test "${enable_mpeg2dec_xdm1+set}" = set ; then
+   test "${enable_mpeg2dec_xdm0+set}" = set ; then
 		AC_MSG_ERROR([MPEG2 decoder is enabled for more than one xDM API. Only one is allowed])
 fi
 
