@@ -38,6 +38,17 @@
  */
 int gst_ti_flush_fifo = 0;
 
+/* Function to replace BufferGfx_getFrameType (which has not been implemented yet on the latest DMAI revision -
+   1.20.00.06 -. This function should be deleted once BufferGfx_getFrameType is implemented )*/
+int gstti_bufferGFX_getFrameType(Buffer_Handle hBuf)
+{
+    Buffer_Attrs attributes;
+    
+    Buffer_getAttrs(hBuf, &attributes);
+    
+    return attributes.type;
+}
+
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC(gst_ticommonutils_debug);
 #define GST_CAT_DEFAULT gst_ticommonutils_debug

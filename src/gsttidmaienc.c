@@ -26,6 +26,7 @@
 /*
  * TODO LIST
  *
+ 
  *  * Add pad-alloc functionality
  *  * Reduce minimal input buffer requirements to 1 frame size and
  *    implement heuristics to break down the input tab into smaller chunks.
@@ -598,7 +599,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
-    if (dmaienc->outBufSize != 0) {
+    if (dmaienc->outBufSize == 0) {
         dmaienc->outBufSize = dmaienc->inBufSize * 3;
     }
     dmaienc->headWrap = dmaienc->outBufSize;
@@ -928,7 +929,8 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     /* DMAI set the buffer type on the input buffer, since only this one
      * is a GFX buffer
      */
-    if (BufferGfx_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
+  //  if (BufferGfx_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
+      if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
         GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
     } else {
         GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
