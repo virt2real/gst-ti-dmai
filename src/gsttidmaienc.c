@@ -253,7 +253,7 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
         g_param_spec_int("sizeOutputBuf",
             "Size of Ouput Buffer",
             "Size of the output buffer to allocate for encoded data",
-            0, G_MAXINT32, 3, G_PARAM_WRITABLE));
+            0, G_MAXINT32, 0, G_PARAM_WRITABLE));
 }
 
 /******************************************************************************

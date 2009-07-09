@@ -81,8 +81,6 @@ static gboolean gstti_videnc1_create (GstTIDmaienc *dmaienc)
     params.reconChromaFormat = XDM_YUV_420P;
 #endif
 #endif
-    params.rateControlPreset = IVIDEO_NONE;
-    params.maxBitRate = 2000000;
     params.maxWidth          = dmaienc->width;
     params.maxHeight         = dmaienc->height;
     dynParams.targetBitRate  = params.maxBitRate;
@@ -90,6 +88,9 @@ static gboolean gstti_videnc1_create (GstTIDmaienc *dmaienc)
     dynParams.inputHeight    = dmaienc->height;
 
     GST_DEBUG("opening video encoder \"%s\"\n", dmaienc->codecName);
+    GST_DEBUG("Encoder args: %d x %d, bitrate %ld, ratectl %d, Icromaformat %d, rcromaformat %d\n",
+        dmaienc->width,dmaienc->height,params.maxBitRate,(int)params.rateControlPreset,
+        (int)params.inputChromaFormat,(int)params.reconChromaFormat);
     dmaienc->hCodec =
         Venc1_create(dmaienc->hEngine, (Char*)dmaienc->codecName,
                     &params, &dynParams);
