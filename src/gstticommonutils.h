@@ -31,12 +31,13 @@
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
 
-#define dm355   0
-#define dm3446  1
-#define dm6467  2
-#define dm357   3
-#define omap35x 4
-#define dm365   5
+#define undefined 0
+#define dm355   1
+#define dm6446  2
+#define dm6467  3
+#define dm357   4
+#define omap35x 5
+#define dm365   6
 
 /* Type of decoders */
 enum dmai_codec_type
@@ -55,7 +56,7 @@ enum dmai_codec_type
 extern int gst_ti_flush_fifo;
 
 /* Function to replace DMAI's BufferGfx_getFrameType */
-extern int gstti_bufferGFX_getFrameType(Buffer_Handle hBuf);
+extern Int32 gstti_bufferGFX_getFrameType(Buffer_Handle hBuf);
 
 /* Function to calculate the display buffer size */
 gint gst_ti_calculate_display_bufSize (Buffer_Handle hDstBuf);

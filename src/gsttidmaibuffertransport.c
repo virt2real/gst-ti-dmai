@@ -138,6 +138,11 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
 {
     GST_LOG("begin finalize\n");
 
+    if (cbuf->release_cb){
+        GST_DEBUG("Calling release function");
+        cbuf->release_cb(cbuf->cb_data,cbuf);
+    }
+
     /* If the DMAI buffer is part of a BufTab, free it for re-use.  Otherwise,
      * destroy the buffer.
      */
@@ -153,10 +158,6 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
     /* If rendezvous handle is set then wake-up caller */
     if (cbuf->hRv) {
          Rendezvous_forceAndReset(cbuf->hRv);
-    }
-
-    if (cbuf->release_cb){
-        cbuf->release_cb(cbuf->cb_data,cbuf);
     }
 
     GST_LOG("end finalize\n");
@@ -210,7 +211,7 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
 
 void gst_tidmaibuffertransport_set_release_callback
     (GstTIDmaiBufferTransport *buf,
-	void (*release_cb)(gpointer,GstTIDmaiBufferTransport *buf), 
+	void (*release_cb)(gpointer,GstTIDmaiBufferTransport *buf),
 	gpointer data){
     buf->release_cb = release_cb;
     buf->cb_data = data;

@@ -26,7 +26,6 @@
 /*
  * TODO LIST
  *
- 
  *  * Add pad-alloc functionality
  *  * Reduce minimal input buffer requirements to 1 frame size and
  *    implement heuristics to break down the input tab into smaller chunks.
@@ -61,6 +60,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_tidmaienc_debug);
 /* Element property identifiers */
 enum
 {
+    PROP_0,
     PROP_ENGINE_NAME,     /* engineName     (string)  */
     PROP_CODEC_NAME,      /* codecName      (string)  */
     PROP_SIZE_OUTPUT_BUF, /* sizeOutputBuf  (int)     */
@@ -645,7 +645,11 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
         dmaienc->hCodec = NULL;
     }
 
-    // TODO, wait for free all downstream buffers?
+    /* Wait for free all downstream buffers */
+    while (dmaienc->head != dmaienc->tail){
+        GST_LOG("Waiting for downstream bufferst to be freed\n");
+        Rendezvous_meet(dmaienc->waitOnOutBuf);
+    }
 
     if (dmaienc->outBuf) {
         GST_DEBUG("freeing output buffer\n");
@@ -779,6 +783,12 @@ done:
 void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
 
+    GST_LOG("Release pointers: %p, %p, %p, %d",
+        buf,
+        Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)),
+        Buffer_getUserPtr(dmaienc->outBuf),
+        dmaienc->tail);
+
     if (Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) !=
         Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->tail){
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -795,11 +805,11 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
 
 gint outSpace(GstTIDmaienc *dmaienc){
     if (dmaienc->head == dmaienc->tail){
-        dmaienc->head = dmaienc->tail = 0;
         return dmaienc->outBufSize - dmaienc->head;
     } else if (dmaienc->head > dmaienc->tail){
         gint size = dmaienc->outBufSize - dmaienc->head;
         if (dmaienc->inBufSize > size){
+            GST_DEBUG("Wrapping the head");
             dmaienc->headWrap = dmaienc->head;
             dmaienc->head = 0;
             size = dmaienc->tail - dmaienc->head;
@@ -823,11 +833,12 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc){
         Rendezvous_meet(dmaienc->waitOnOutBuf);
     }
 
-    hBuf = Buffer_create(0,&Attrs);
+    hBuf = Buffer_create(dmaienc->inBufSize,&Attrs);
+    GST_DEBUG("Outbuf at %p, head at %d",Buffer_getUserPtr(dmaienc->outBuf),dmaienc->head);
     Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->head);
     Buffer_setNumBytesUsed(hBuf,0);
 
-    return NULL;
+    return hBuf;
 }
 
 /* Return a dmai buffer from the passed gstreamer buffer */
@@ -900,8 +911,8 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     /* Obtain a free output buffer for the decoded data */
-    hDstBuf = encode_buffer_get_free(dmaienc);
     hSrcBuf = get_raw_buffer(dmaienc,rawData);
+    hDstBuf = encode_buffer_get_free(dmaienc);
 
     if (!hSrcBuf || !hDstBuf){
         goto failure;
@@ -920,17 +931,17 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
          */
     outBuf = gst_tidmaibuffertransport_new(hDstBuf, dmaienc->waitOnOutBuf);
     gst_tidmaibuffertransport_set_release_callback(
-        (GstTIDmaiBufferTransport *)hDstBuf,release_cb,dmaienc);
+        (GstTIDmaiBufferTransport *)outBuf,release_cb,dmaienc);
     gst_buffer_copy_metadata(outBuf,rawData,
         GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
     gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
         Buffer_getNumBytesUsed(hDstBuf));
     gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));
+
     /* DMAI set the buffer type on the input buffer, since only this one
      * is a GFX buffer
      */
-  //  if (BufferGfx_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
-      if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
+    if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
         GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
     } else {
         GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
@@ -938,6 +949,7 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     gst_buffer_unref(rawData);
     rawData = NULL;
 
+    GST_DEBUG("Queing output buffer into output list");
     /* Queue the output buffer */
     pthread_mutex_lock(&dmaienc->listMutex);
     dmaienc->outList = g_list_append(dmaienc->outList,outBuf);
@@ -1017,10 +1029,12 @@ static void* gst_tidmaienc_output_thread(void *arg)
     /* Thread loop */
     while (TRUE) {
         /* Wait for signals */
+        GST_DEBUG("Output thread sleeping on cond");
         pthread_mutex_lock(&dmaienc->listMutex);
 cond_wait:
         pthread_cond_wait(&dmaienc->listCond,&dmaienc->listMutex);
 
+        GST_DEBUG("Output thread awaked from cond");
 eos:
         /* EOS and list empty? */
         if (dmaienc->eos && !dmaienc->outList){
@@ -1042,7 +1056,7 @@ eos:
             outBuf = (GstBuffer *)element->data;
 
             /* Push the transport buffer to the source pad */
-            GST_LOG("pushing display buffer to source pad\n");
+            GST_DEBUG("pushing display buffer to source pad\n");
 
             if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
                 GST_DEBUG("push to source pad failed\n");

@@ -74,7 +74,6 @@ static gboolean gstti_videnc1_create (GstTIDmaienc *dmaienc)
     /* Set up codec parameters depending on device */
 #if PLATFORM == dm6467
     params.inputChromaFormat = XDM_YUV_420P;
-    params.reconChromaFormat = XDM_CHROMA_NA;
 # else
     params.inputChromaFormat = XDM_YUV_422ILE;
 #if PLATFORM == dm355
@@ -83,14 +82,11 @@ static gboolean gstti_videnc1_create (GstTIDmaienc *dmaienc)
 #endif
     params.maxWidth          = dmaienc->width;
     params.maxHeight         = dmaienc->height;
-    dynParams.targetBitRate  = params.maxBitRate;
     dynParams.inputWidth     = dmaienc->width;
     dynParams.inputHeight    = dmaienc->height;
+    dynParams.targetBitRate  = params.maxBitRate;
 
     GST_DEBUG("opening video encoder \"%s\"\n", dmaienc->codecName);
-    GST_DEBUG("Encoder args: %d x %d, bitrate %ld, ratectl %d, Icromaformat %d, rcromaformat %d\n",
-        dmaienc->width,dmaienc->height,params.maxBitRate,(int)params.rateControlPreset,
-        (int)params.inputChromaFormat,(int)params.reconChromaFormat);
     dmaienc->hCodec =
         Venc1_create(dmaienc->hEngine, (Char*)dmaienc->codecName,
                     &params, &dynParams);
