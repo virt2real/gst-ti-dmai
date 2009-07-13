@@ -63,13 +63,13 @@ GstStaticPadTemplate gstti_mpeg4_sink_caps = GST_STATIC_PAD_TEMPLATE(
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS
     ("video/mpeg, "
-     "mpegversion=(int){ 2, 4 }, "  /* MPEG versions 2 and 4 */
+     "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
         "systemstream=(boolean)false, "
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ] ;"
      "video/x-divx, "               /* AVI containers save mpeg4 as divx... */
-         "divxversion=(int){ 4 }, "
+         "divxversion=(int) 4, "
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ] ;"
@@ -82,11 +82,11 @@ GstStaticPadTemplate gstti_mpeg4_src_caps = GST_STATIC_PAD_TEMPLATE(
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS
     ("video/mpeg, "
-     "mpegversion=(int){ 2, 4 }, "  /* MPEG versions 2 and 4 */
+        "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
         "systemstream=(boolean)false, "
-         "framerate=(fraction)[ 0, MAX ], "
-         "width=(int)[ 1, MAX ], "
-         "height=(int)[ 1, MAX ] ;"
+        "framerate=(fraction)[ 0, MAX ], "
+        "width=(int)[ 1, MAX ], "
+        "height=(int)[ 1, MAX ] ;"
     )
 );
 

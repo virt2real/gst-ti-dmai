@@ -105,7 +105,6 @@ struct gstti_encoder_ops {
     gboolean                (* codec_process)
                                 (GstTIDmaienc *, Buffer_Handle,
                                  Buffer_Handle);
-//    int                     (* codec_getMinOutputSize)(GstTIDmaienc *);
 };
 
 /* Data definition for each instance of decoder */

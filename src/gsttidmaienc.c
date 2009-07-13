@@ -676,6 +676,7 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
     GstTIDmaienc *dmaienc;
     GstStructure *capStruct;
     const gchar  *mime;
+    char * str = NULL;
     GstTIDmaiencClass *gclass;
     GstTIDmaiencData *encoder;
 
@@ -707,7 +708,24 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         if (!gst_structure_get_int(capStruct, "width", &dmaienc->width)) {
             dmaienc->width = 0;
         }
+
+        caps = gst_caps_make_writable(
+            gst_caps_copy(gst_pad_get_pad_template_caps(dmaienc->srcpad)));
+        capStruct = gst_caps_get_structure(caps, 0);
+        gst_structure_set(capStruct,"height",G_TYPE_INT,dmaienc->height,
+                                    "width",G_TYPE_INT,dmaienc->width,
+                                    "framerate", GST_TYPE_FRACTION,
+                                        dmaienc->framerateNum,dmaienc->framerateDen,
+                                    (char *)NULL);
+    } else {
+        // TODO Audio caps?
     }
+
+
+    GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(caps)));
+    g_free(str);
+    gst_pad_set_caps(dmaienc->srcpad, caps);
+    gst_caps_unref(caps);
 
 #if PLATFORM == dm6467
     dmaienc->colorSpace = ColorSpace_YUV422PSEMI;
@@ -937,6 +955,7 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
         Buffer_getNumBytesUsed(hDstBuf));
     gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));
+//    GST_DEBUG("Output caps are %s",gst_caps_from_string)
 
     /* DMAI set the buffer type on the input buffer, since only this one
      * is a GFX buffer
@@ -1056,7 +1075,7 @@ eos:
             outBuf = (GstBuffer *)element->data;
 
             /* Push the transport buffer to the source pad */
-            GST_DEBUG("pushing display buffer to source pad\n");
+            GST_DEBUG("pushing buffer to source pad\n");
 
             if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
                 GST_DEBUG("push to source pad failed\n");
