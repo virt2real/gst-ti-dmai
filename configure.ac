@@ -154,6 +154,7 @@ if test "x$preset" = "xomap35x" ; then
   	enable_h264enc_xdm1=1;
   	enable_jpegenc_xdm1=1;
   	enable_videosink=1;
+	enable_resizer=1;
   	with_platform=omap35x;
 fi
 
@@ -163,6 +164,7 @@ if test "x$preset" = "xdm355" ; then
   	enable_jpegdec_xdm1=1;
 	enable_mpeg4enc_xdm1=1;
   	enable_jpegenc_xdm1=1;
+	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm355;
 fi
@@ -174,6 +176,7 @@ if test "x$preset" = "xdm357" ; then
 	enable_mpeg4enc_xdm1=1;
   	enable_g711dec_xdm1=1;
   	enable_jpegenc_xdm1=1;
+	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm357;
 fi
@@ -186,6 +189,7 @@ if test "x$preset" = "xdm6446" ; then
   	enable_aacdec_xdm0=1;
   	enable_mp3dec_xdm0=1;
   	enable_g711dec_xdm0=1;
+	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm6446;
 fi
@@ -201,6 +205,7 @@ if test "x$preset" = "xdm6446_2" ; then
   	enable_mp3dec_xdm1=1;
   	enable_g711dec_xdm1=1;
 	enable_g711enc_xdm1=1;
+	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm6446;
 fi
@@ -211,6 +216,7 @@ if test "x$preset" = "xdm6467" ; then
   	enable_mpeg2dec_xdm2=1;
   	enable_aacdec_xdm1=1;
   	enable_g711dec_xdm1=1;
+	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm6467;
 fi
@@ -553,6 +559,12 @@ AC_ARG_ENABLE(videosink,
   [AC_DEFINE([ENABLE_VIDEOSINK],[1],
 			  [DMAI Video Sink is enabled])])
 
+AC_ARG_ENABLE(resizer,
+  [AS_HELP_STRING([--enable-resizer],
+	[Enable DMAI video resizer @<:@default=no@:>@])],
+  [AC_DEFINE([ENABLE_RESIZER],[1],
+			  [DMAI Video Resizer is enabled])])
+
 echo
 echo "The following elements will be built:"
 if test "${enable_h264dec_xdm2+set}" = set; then 
@@ -659,6 +671,9 @@ fi
 
 if test "${enable_videosink+set}" = set; then 
 	echo "DMAI Video Sink"
+fi
+if test "${enable_resizer+set}" = set; then 
+	echo "DMAI Video Resizer"
 fi
 
 echo

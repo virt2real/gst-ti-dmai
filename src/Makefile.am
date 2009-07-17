@@ -2,10 +2,10 @@
 plugin_LTLIBRARIES  = libgstticodecplugin.la
 
 # sources used to compile this plug-in
-libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttidmaibuffertransport.c\
+libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttidmaibuffertransport.c \
 gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c \
 gsttividdec2.c gsttisupport_mpeg4.c gsttisupport_h264.c  \
-gsttividenc1.c \
+gsttividenc1.c gsttividresize.c \
 gstticommonutils.c
 
 # gsttiauddec.c gsttiauddec1.c \

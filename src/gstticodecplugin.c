@@ -42,6 +42,8 @@
 #include "gsttidmaivideosink.h"
 #include "gsttisupport_h264.h"
 #include "gsttisupport_mpeg4.h"
+#include "gsttividresize.h"
+
 
 static GstStaticPadTemplate gstti_uyvy_src_caps = GST_STATIC_PAD_TEMPLATE(
     "src",
@@ -213,6 +215,12 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
 #ifdef ENABLE_VIDEOSINK
     if (!gst_element_register(TICodecPlugin, "TIDmaiVideoSink",
         GST_RANK_PRIMARY,GST_TYPE_TIDMAIVIDEOSINK))
+        return FALSE;
+#endif
+
+#ifdef ENABLE_RESIZER
+    if (!gst_element_register(TICodecPlugin, "TIDmaiResizer",
+        GST_RANK_PRIMARY,GST_TYPE_TIVIDRESIZE))
         return FALSE;
 #endif
 
