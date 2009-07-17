@@ -10,14 +10,19 @@
  * Original Author:
  *     Brijesh Singh, Texas Instruments, Inc.
  *
- * Note: Element pushes dmai transport buffer to the src. The downstream can 
+ * Contributor:
+ *      Diego Dompe, RidgeRun
+ *      Lissandro Mendez, RidgeRun
+ *
+ * Note: Element pushes dmai transport buffer to the src. The downstream can
  * use Dmai transport macro to get the DMAI buffer handle.
  *
  * This element supports only YUV422 and Y8C8 color space.
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2009 RidgeRun - http://www.ridgerun.com/
  *
- * This program is free software; you can redistribute it and/or modify 
+ * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
  *
@@ -99,7 +104,7 @@ static void
 static gboolean gst_tividresize_exit_resize(GstTIVidresize *vidresize);
 static void gst_tividresize_fixate_caps (GstBaseTransform *trans,
      GstPadDirection direction, GstCaps *caps, GstCaps *othercaps);
-static gboolean gst_tividresize_set_caps (GstBaseTransform *trans, 
+static gboolean gst_tividresize_set_caps (GstBaseTransform *trans,
     GstCaps *in, GstCaps *out);
 static gboolean gst_tividresize_parse_caps (GstCaps *cap, gint *width,
     gint *height, guint32 *fourcc);
@@ -110,7 +115,7 @@ static GstFlowReturn gst_tividresize_transform (GstBaseTransform *trans,
 static gboolean gst_tividresize_get_unit_size (GstBaseTransform *trans,
     GstCaps *caps, guint *size);
 ColorSpace_Type gst_tividresize_get_colorSpace (guint32 fourcc);
-static gboolean gst_tividresize_calcSize (gint width, gint height, 
+static gboolean gst_tividresize_calcSize (gint width, gint height,
     ColorSpace_Type colorSpace, guint *size);
 static void gst_tividresize_set_property(GObject *object, guint prop_id,
     const GValue *value, GParamSpec *pspec);
@@ -204,15 +209,15 @@ static void gst_tividresize_class_init(GstTIVidresizeClass *klass)
 
     gobject_class->finalize = (GObjectFinalizeFunc)gst_tividresize_exit_resize;
 
-    trans_class->transform_caps = 
+    trans_class->transform_caps =
         GST_DEBUG_FUNCPTR(gst_tividresize_transform_caps);
     trans_class->set_caps  = GST_DEBUG_FUNCPTR(gst_tividresize_set_caps);
     trans_class->transform = GST_DEBUG_FUNCPTR(gst_tividresize_transform);
     trans_class->fixate_caps = GST_DEBUG_FUNCPTR(gst_tividresize_fixate_caps);
-    trans_class->get_unit_size = 
+    trans_class->get_unit_size =
             GST_DEBUG_FUNCPTR(gst_tividresize_get_unit_size);
     trans_class->passthrough_on_same_caps = TRUE;
-    trans_class->prepare_output_buffer = 
+    trans_class->prepare_output_buffer =
         GST_DEBUG_FUNCPTR(gst_tividresize_prepare_output_buffer);
     parent_class = g_type_class_peek_parent (klass);
 
@@ -237,11 +242,11 @@ static GstFlowReturn gst_tividresize_prepare_output_buffer (GstBaseTransform
     if (vidresize->hResize == NULL) {
         return GST_FLOW_OK;
     }
-     
+
     GST_LOG("begin prepare buffer\n");
 
     hOutBuf = BufTab_getFreeBuf(vidresize->hOutBufTab);
-    
+
     if (hOutBuf == NULL) {
         GST_ERROR("failed to get free buffer\n");
         return GST_FLOW_ERROR;
@@ -252,12 +257,12 @@ static GstFlowReturn gst_tividresize_prepare_output_buffer (GstBaseTransform
      * buffer for re-use in this element when the source pad calls
      * gst_buffer_unref().
      */
-    *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL);
-    gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf), 
+    *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL);
+    gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
             Buffer_getSize(hOutBuf));
     gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));
 
-    GST_LOG("end prepare buffer\n");   
+    GST_LOG("end prepare buffer\n");
     return GST_FLOW_OK;
 }
 
@@ -285,16 +290,16 @@ static void gst_tividresize_set_property(GObject *object, guint prop_id,
 
     GST_LOG("end set_property\n");
 }
-       
+
 /******************************************************************************
- * gst_tividresize_calcSize 
+ * gst_tividresize_calcSize
  *    Calculate the size based on resolution and colorspace.
  *****************************************************************************/
-static gboolean gst_tividresize_calcSize (gint width, gint height, 
+static gboolean gst_tividresize_calcSize (gint width, gint height,
     ColorSpace_Type colorSpace, guint *size)
 {
     gint             lineLength;
-    
+
     GST_LOG("begin calcSize \n");
 
     lineLength = BufferGfx_calcLineLength(width, colorSpace);
@@ -319,7 +324,7 @@ static gboolean gst_tividresize_calcSize (gint width, gint height,
 /******************************************************************************
  * gst_tividresize_get_unit_size
  *   get the size in bytes of one unit for the given caps
- *****************************************************************************/ 
+ *****************************************************************************/
 static gboolean gst_tividresize_get_unit_size (GstBaseTransform *trans,
     GstCaps *caps, guint *size)
 {
@@ -328,7 +333,7 @@ static gboolean gst_tividresize_get_unit_size (GstBaseTransform *trans,
     ColorSpace_Type colorSpace;
 
     GST_LOG("begin get_unit_size\n");
- 
+
     if (!gst_tividresize_parse_caps(caps, &width, &height, &fourcc)) {
         GST_ERROR("Failed to get resolution\n");
         return FALSE;
@@ -340,9 +345,9 @@ static gboolean gst_tividresize_get_unit_size (GstBaseTransform *trans,
         GST_ERROR("Failed to calculate output size\n");
         return FALSE;
     }
-  
-    GST_LOG("end get_unit_size\n"); 
-    return TRUE; 
+
+    GST_LOG("end get_unit_size\n");
+    return TRUE;
 }
 
 /******************************************************************************
@@ -354,7 +359,7 @@ static gboolean gst_tividresize_execute_resizer (GstTIVidresize *vidresize,
 {
     Buffer_Handle   hDstBuf;
     BufferGfx_Attrs gfxAttrs   = BufferGfx_Attrs_DEFAULT;
-   
+
     /* Get the output buffer pointer */
     hDstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(outBuf);
 
@@ -363,7 +368,7 @@ static gboolean gst_tividresize_execute_resizer (GstTIVidresize *vidresize,
     if (vidresize->hRszInBuf == NULL) {
 
         if (vidresize->contiguousInputFrame) {
-            /* If element is configured to recieve contiguous input buffer 
+            /* If element is configured to recieve contiguous input buffer
              * then we will create reference buffer.
              */
             gfxAttrs.bAttrs.reference  = TRUE;
@@ -373,7 +378,7 @@ static gboolean gst_tividresize_execute_resizer (GstTIVidresize *vidresize,
         gfxAttrs.dim.height     = vidresize->srcHeight;
         gfxAttrs.dim.lineLength = BufferGfx_calcLineLength(
                                   gfxAttrs.dim.width, gfxAttrs.colorSpace);
-        vidresize->hRszInBuf = Buffer_create(GST_BUFFER_SIZE(inBuf), 
+        vidresize->hRszInBuf = Buffer_create(GST_BUFFER_SIZE(inBuf),
                                  BufferGfx_getBufferAttrs(&gfxAttrs));
         if (vidresize->hRszInBuf == NULL) {
             GST_ERROR("failed to create resizer input buffer\n");
@@ -381,7 +386,7 @@ static gboolean gst_tividresize_execute_resizer (GstTIVidresize *vidresize,
         }
     }
 
-    /* If element is configured to recieve contiguous input buffer then 
+    /* If element is configured to recieve contiguous input buffer then
      * we do not need to copy the buffer in cmem memory.
      */
     if (vidresize->contiguousInputFrame) {
@@ -392,7 +397,7 @@ static gboolean gst_tividresize_execute_resizer (GstTIVidresize *vidresize,
     else {
         /* Copy the input buffer in contiguous buffer */
         BufferGfx_resetDimensions(vidresize->hRszInBuf);
-        memcpy(Buffer_getUserPtr(vidresize->hRszInBuf), 
+        memcpy(Buffer_getUserPtr(vidresize->hRszInBuf),
             GST_BUFFER_DATA(inBuf), GST_BUFFER_SIZE(inBuf));
         Buffer_setNumBytesUsed(vidresize->hRszInBuf, GST_BUFFER_SIZE(inBuf));
     }
@@ -405,17 +410,17 @@ static gboolean gst_tividresize_execute_resizer (GstTIVidresize *vidresize,
     }
 
     /* Execute resizer */
-    GST_LOG("executing resizer\n");      
+    GST_LOG("executing resizer\n");
     if (Resize_execute(vidresize->hResize,vidresize->hRszInBuf, hDstBuf) < 0) {
         GST_ERROR("failed to execute resizer\n");
         return FALSE;
     }
-    
+
     return TRUE;
 }
 
 /******************************************************************************
- * gst_tividresize_transform 
+ * gst_tividresize_transform
  *    Transforms one incoming buffer to one outgoing buffer.
  *****************************************************************************/
 static GstFlowReturn gst_tividresize_transform (GstBaseTransform *trans,
@@ -438,7 +443,7 @@ static GstFlowReturn gst_tividresize_transform (GstBaseTransform *trans,
 
 /******************************************************************************
  * gst_tividresize_transform_caps
- *   Given the pad in this direction and the given caps, what caps are allowed 
+ *   Given the pad in this direction and the given caps, what caps are allowed
  *   on the other pad in this element
  *****************************************************************************/
 static GstCaps * gst_tividresize_transform_caps (GstBaseTransform *trans,
@@ -503,7 +508,7 @@ static gboolean gst_tividresize_parse_caps (GstCaps *cap, gint *width,
 {
     GstStructure    *structure;
     structure = gst_caps_get_structure(cap, 0);
-    
+
     GST_LOG("begin parse caps\n");
 
     if (!gst_structure_get_int(structure, "width", width)) {
@@ -515,14 +520,14 @@ static gboolean gst_tividresize_parse_caps (GstCaps *cap, gint *width,
         GST_ERROR("Failed to get height \n");
         return FALSE;
     }
-    
+
     if (!gst_structure_get_fourcc(structure, "format", format)) {
         GST_ERROR("failed to get fourcc from cap\n");
     }
 
     GST_LOG("end parse caps\n");
-   
-    return TRUE; 
+
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -531,7 +536,7 @@ static gboolean gst_tividresize_parse_caps (GstCaps *cap, gint *width,
 ColorSpace_Type gst_tividresize_get_colorSpace (guint32 fourcc)
 {
     switch (fourcc) {
-        case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):            
+        case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
             return ColorSpace_UYVY;
         case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
             return ColorSpace_YUV422PSEMI;
@@ -544,7 +549,7 @@ ColorSpace_Type gst_tividresize_get_colorSpace (guint32 fourcc)
 /******************************************************************************
  * gst_tividresize_set_caps
  *****************************************************************************/
-static gboolean gst_tividresize_set_caps (GstBaseTransform *trans, 
+static gboolean gst_tividresize_set_caps (GstBaseTransform *trans,
     GstCaps *in, GstCaps *out)
 {
     GstTIVidresize *vidresize = GST_TIVIDRESIZE(trans);
@@ -573,7 +578,7 @@ static gboolean gst_tividresize_set_caps (GstBaseTransform *trans,
     vidresize->colorSpace           = gst_tividresize_get_colorSpace(fourcc);
 
     /* calculate output buffer size */
-    gst_tividresize_calcSize(vidresize->dstWidth,vidresize->dstHeight, 
+    gst_tividresize_calcSize(vidresize->dstWidth,vidresize->dstHeight,
         vidresize->colorSpace, &outBufSize);
 
     /* Create output buffer */
@@ -581,10 +586,10 @@ static gboolean gst_tividresize_set_caps (GstBaseTransform *trans,
     gfxAttrs.colorSpace = vidresize->colorSpace;
     gfxAttrs.dim.width  = vidresize->dstWidth;
     gfxAttrs.dim.height = vidresize->dstHeight;
-    gfxAttrs.dim.lineLength = BufferGfx_calcLineLength(vidresize->dstWidth, 
+    gfxAttrs.dim.lineLength = BufferGfx_calcLineLength(vidresize->dstWidth,
                                 vidresize->colorSpace);
     gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE;
-    vidresize->hOutBufTab = BufTab_create(4, outBufSize, 
+    vidresize->hOutBufTab = BufTab_create(4, outBufSize,
                             BufferGfx_getBufferAttrs(&gfxAttrs));
     if (vidresize->hOutBufTab == NULL) {
         GST_ERROR("failed to allocate memory for output buffer\n");
@@ -598,7 +603,7 @@ static gboolean gst_tividresize_set_caps (GstBaseTransform *trans,
         vidresize->contiguousInputFrame = FALSE;
     }
 
-    GST_LOG("Resize from=%dx%d -> to=%dx%d\n", vidresize->srcWidth, 
+    GST_LOG("Resize from=%dx%d -> to=%dx%d\n", vidresize->srcWidth,
         vidresize->srcHeight, vidresize->dstWidth, vidresize->dstHeight);
 
     /* Open resize module */
@@ -615,7 +620,7 @@ static gboolean gst_tividresize_set_caps (GstBaseTransform *trans,
 }
 
 /******************************************************************************
- * gst_video_scale_fixate_caps 
+ * gst_video_scale_fixate_caps
  *****************************************************************************/
 static void gst_tividresize_fixate_caps (GstBaseTransform *trans,
      GstPadDirection direction, GstCaps *caps, GstCaps *othercaps)
@@ -634,7 +639,7 @@ static void gst_tividresize_fixate_caps (GstBaseTransform *trans,
     /* get the sink dimension */
     if (!gst_structure_get_int(ins, "width", &srcWidth)) {
         if (gst_structure_get_int(ins, "height", &srcHeight)) {
-            GST_LOG("dimensions already set to %dx%d, not fixating", 
+            GST_LOG("dimensions already set to %dx%d, not fixating",
                     srcWidth, srcHeight);
         }
         return;
@@ -643,7 +648,7 @@ static void gst_tividresize_fixate_caps (GstBaseTransform *trans,
     /* get the source dimension */
     if (gst_structure_get_int(outs, "width", &dstWidth)) {
         if (gst_structure_get_int(outs, "height", &dstHeight)) {
-            GST_LOG("dimensions already set to %dx%d, not fixating", 
+            GST_LOG("dimensions already set to %dx%d, not fixating",
                     srcWidth, dstHeight);
         }
         return;
@@ -672,7 +677,7 @@ static gboolean gst_tividresize_exit_resize(GstTIVidresize *vidresize)
         BufTab_delete(vidresize->hOutBufTab);
         vidresize->hRszInBuf = NULL;
     }
-    
+
     GST_LOG("end exit_video\n");
     return TRUE;
 }
