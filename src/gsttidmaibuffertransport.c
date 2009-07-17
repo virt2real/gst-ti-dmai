@@ -36,7 +36,6 @@
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
 
 #include "gsttidmaibuffertransport.h"
 
@@ -124,7 +123,10 @@ static void gst_tidmaibuffertransport_init(GTypeInstance *instance,
     GST_LOG("begin init\n");
 
     buf->dmaiBuffer = NULL;
-    buf->hRv        = NULL;
+    buf->cond       = NULL;
+    buf->condMutex  = NULL;
+    buf->release_cb = NULL;
+    buf->cb_data = NULL;
 
     GST_LOG("end init\n");
 }
@@ -139,13 +141,14 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
     GST_LOG("begin finalize\n");
 
     if (cbuf->release_cb){
-        GST_DEBUG("Calling release function");
+        GST_LOG("Calling release function");
         cbuf->release_cb(cbuf->cb_data,cbuf);
     }
 
     /* If the DMAI buffer is part of a BufTab, free it for re-use.  Otherwise,
      * destroy the buffer.
      */
+    if (cbuf->condMutex) pthread_mutex_lock(cbuf->condMutex);
     if (Buffer_getBufTab(cbuf->dmaiBuffer) != NULL) {
         GST_LOG("clearing GStreamer useMask bit so buffer can be reused\n");
         Buffer_freeUseMask(cbuf->dmaiBuffer,
@@ -154,10 +157,12 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
         GST_LOG("calling Buffer_delete()\n");
         Buffer_delete(cbuf->dmaiBuffer);
     }
+    if (cbuf->condMutex) pthread_mutex_unlock(cbuf->condMutex);
 
-    /* If rendezvous handle is set then wake-up caller */
-    if (cbuf->hRv) {
-         Rendezvous_forceAndReset(cbuf->hRv);
+    /* If conditional is set then wake-up caller */
+    if (cbuf->cond) {
+         GST_DEBUG("Broadcast the free buffer");
+         pthread_cond_broadcast(cbuf->cond);
     }
 
     GST_LOG("end finalize\n");
@@ -168,11 +173,11 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
  * gst_tidmaibuffertransport_new
  *    Create a new DMAI buffer transport object.
  *
- * Note: If rendenzvous handle is set then Rendenzvous_force will be called for
+ * Note: If conditional is set then pthread_cond_broadcast will be called for
  *       this handle during finalize method.
  ******************************************************************************/
 GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
-     Rendezvous_Handle hRv)
+    pthread_cond_t *cond,pthread_mutex_t *condMutex)
 {
     GstTIDmaiBufferTransport *buf;
 
@@ -192,9 +197,8 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
     }
 
     buf->dmaiBuffer = hBuf;
-    buf->hRv = hRv;
-    buf->release_cb = NULL;
-    buf->cb_data = NULL;
+    buf->cond       = cond;
+    buf->condMutex  = condMutex;
 
     GST_LOG("end new\n");
 
@@ -203,10 +207,7 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
 
 /******************************************************************************
  * gst_tidmaibuffertransport_set_release_callback
- *    Create a new DMAI buffer transport object.
- *
- * Note: If rendenzvous handle is set then Rendenzvous_force will be called for
- *       this handle during finalize method.
+ *    Set a release callback function
  ******************************************************************************/
 
 void gst_tidmaibuffertransport_set_release_callback

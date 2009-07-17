@@ -25,8 +25,6 @@
 
 #include <gst/gst.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
-
 
 typedef GstBuffer * (* parser_function) (GstBuffer *, void *);
 typedef GstBuffer * (* parser_drain) (void *);
@@ -92,7 +90,8 @@ struct gstti_parser_ops {
  */
 
 struct gstti_common_parser_data{
-    Rendezvous_Handle   waitOnInBufTab;
+    pthread_mutex_t     *inTabMutex;
+    pthread_cond_t      *waitOnInBufTab;
     BufTab_Handle       hInBufTab;
 };
 

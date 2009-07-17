@@ -36,7 +36,6 @@
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/Fifo.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
 
 G_BEGIN_DECLS
 
@@ -74,8 +73,10 @@ struct _GstTIDmaidec
     gboolean            eos;
 
     /* Blocking Conditions to Throttle I/O */
-    Rendezvous_Handle   waitOnInBufTab;
-    Rendezvous_Handle   waitOnOutBufTab;
+    pthread_cond_t      waitOnInBufTab;
+    pthread_mutex_t     inTabMutex;
+    pthread_cond_t      waitOnOutBufTab;
+    pthread_mutex_t     outTabMutex;
     UInt16              outputUseMask;
 
     /* Framerate (Num/Den) */

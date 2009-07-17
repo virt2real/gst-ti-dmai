@@ -333,8 +333,6 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->outputThread	    = NULL;
     dmaidec->outList         = NULL;
-    dmaidec->waitOnInBufTab 	= NULL;
-    dmaidec->waitOnOutBufTab 	= NULL;
     dmaidec->outputUseMask      = 0;
 
     dmaidec->framerateNum       = 0;
@@ -347,9 +345,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->numOutputBufs      = 0UL;
     dmaidec->numInputBufs       = 0UL;
-    dmaidec->hOutBufTab         = NULL;
     dmaidec->numInputBufs       = 0UL;
-    dmaidec->hInBufTab          = NULL;
     dmaidec->metaTab            = NULL;
 
     memset(&dmaidec->parser_common,0,sizeof(struct gstti_common_parser_data));
@@ -491,7 +487,6 @@ static GstStateChangeReturn gst_tidmaidec_change_state(GstElement *element,
  ******************************************************************************/
 static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
 {
-    Rendezvous_Attrs       rzvAttrs  = Rendezvous_Attrs_DEFAULT;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
     int i;
@@ -548,8 +543,10 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     }
 
     /* Initialize rendezvous objects for making threads wait on conditions */
-    dmaidec->waitOnInBufTab     = Rendezvous_create(3, &rzvAttrs);
-    dmaidec->waitOnOutBufTab    = Rendezvous_create(2, &rzvAttrs);
+    pthread_cond_init(&dmaidec->waitOnInBufTab,NULL);
+    pthread_cond_init(&dmaidec->waitOnOutBufTab,NULL);
+    pthread_mutex_init(&dmaidec->outTabMutex, NULL);
+    pthread_mutex_init(&dmaidec->inTabMutex, NULL);
 
     /* Status variables */
     dmaidec->flushing = FALSE;
@@ -558,7 +555,8 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     dmaidec->current_timestamp  = 0;
 
     /* Setup private data */
-    dmaidec->parser_common.waitOnInBufTab = dmaidec->waitOnInBufTab;
+    dmaidec->parser_common.waitOnInBufTab = &dmaidec->waitOnInBufTab;
+    dmaidec->parser_common.inTabMutex = &dmaidec->inTabMutex;
 
     /* Set up the output list */
     dmaidec->outList = NULL;
@@ -621,16 +619,6 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     if (dmaidec->outList) {
         g_list_free(dmaidec->outList);
         dmaidec->outList = NULL;
-    }
-
-    if (dmaidec->waitOnInBufTab) {
-        Rendezvous_delete(dmaidec->waitOnInBufTab);
-        dmaidec->waitOnInBufTab = NULL;
-    }
-
-    if (dmaidec->waitOnOutBufTab) {
-        Rendezvous_delete(dmaidec->waitOnOutBufTab);
-        dmaidec->waitOnOutBufTab = NULL;
     }
 
     memset(&dmaidec->parser_common,0,sizeof(struct gstti_common_parser_data));
@@ -1046,21 +1034,24 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
 
     /* Obtain a free output buffer for the decoded data */
+    pthread_mutex_lock(&dmaidec->outTabMutex);
     hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
     if (hDstBuf == NULL) {
         GST_LOG("Failed to get free buffer, waiting on bufTab\n");
-        Rendezvous_meet(dmaidec->waitOnOutBufTab);
+        pthread_cond_wait(&dmaidec->waitOnOutBufTab,&dmaidec->outTabMutex);
 
         hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
 
         if (hDstBuf == NULL) {
             GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                 ("failed to get a free contiguous buffer from BufTab"));
+            pthread_mutex_unlock(&dmaidec->outTabMutex);
             goto failure;
         }
     }
+    pthread_mutex_unlock(&dmaidec->outTabMutex);
 
-//    if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed))
+    if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed))
         goto failure;
 
     if (!gst_tidmaidec_clip_buffer(dmaidec,encData)){
@@ -1069,6 +1060,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
 
     gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
+
     gst_buffer_unref(encData);
     encData = NULL;
 
@@ -1076,6 +1068,13 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
      * different one than the one we passed it.
      */
     hDstBuf = decoder->dops->codec_get_data(dmaidec);
+
+    /* Release buffers no longer in use by the codec */
+    hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
+    while (hFreeBuf) {
+        Buffer_freeUseMask(hFreeBuf, gst_tidmaidec_CODEC_FREE);
+        hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
+    }
 
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {
@@ -1100,7 +1099,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * gst_buffer_unref().
          */
         outBuf = gst_tidmaibuffertransport_new(hDstBuf,
-            dmaidec->waitOnOutBufTab);
+            &dmaidec->waitOnOutBufTab,&dmaidec->outTabMutex);
         gst_buffer_copy_metadata(outBuf,&dmaidec->metaTab[Buffer_getId(hDstBuf)],
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
@@ -1116,6 +1115,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         }
 
         /* Queue the output buffer */
+        GST_DEBUG("Pushing buffer %p to output queue",hDstBuf);
         pthread_mutex_lock(&dmaidec->listMutex);
         dmaidec->outList = g_list_append(dmaidec->outList,outBuf);
         pthread_mutex_unlock(&dmaidec->listMutex);
@@ -1123,13 +1123,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         pthread_cond_signal(&dmaidec->listCond);
 
         hDstBuf = decoder->dops->codec_get_data(dmaidec);
-    }
-
-    /* Release buffers no longer in use by the codec */
-    hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
-    while (hFreeBuf) {
-        Buffer_freeUseMask(hFreeBuf, gst_tidmaidec_CODEC_FREE);
-        hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
     }
 
 codec_flushed:
@@ -1213,11 +1206,14 @@ static void* gst_tidmaidec_output_thread(void *arg)
         /* Wait for signals */
         pthread_mutex_lock(&dmaidec->listMutex);
 cond_wait:
+        GST_LOG("Output thread sleeping on cond");
         pthread_cond_wait(&dmaidec->listCond,&dmaidec->listMutex);
 
+        GST_LOG("Output thread awaked from cond");
 eos:
         /* EOS and list empty? */
         if (dmaidec->eos && !dmaidec->outList){
+            GST_DEBUG("Sending EOS down the pipe");
             gst_pad_push_event(dmaidec->srcpad,gst_event_new_eos());
             dmaidec->eos = FALSE;
             if (!dmaidec->shutdown)
@@ -1246,6 +1242,7 @@ eos:
                 }
             }
 
+            GST_DEBUG("Test point");
             /* Get next element on list */
             pthread_mutex_lock(&dmaidec->listMutex);
             dmaidec->outList = g_list_delete_link(dmaidec->outList,element);

@@ -191,12 +191,14 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
      * Do we need an output buffer?
      */
     if (!priv->outbuf){
+        pthread_mutex_lock(priv->common->inTabMutex);
         priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
         if (!priv->outbuf){
-            Rendezvous_meet(priv->common->waitOnInBufTab);
+            pthread_cond_wait(priv->common->waitOnInBufTab,priv->common->inTabMutex);
             /* The inBufTab may have been destroyed in case of error */
             if (!priv->common->hInBufTab){
                 GST_DEBUG("Input buffer tab vanished on error");
+                pthread_mutex_unlock(priv->common->inTabMutex);
                 return NULL;
             }
 
@@ -207,6 +209,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
             if (priv->flushing){
                 GST_DEBUG("Parser dropping incomming buffer due flushing");
                 gst_buffer_unref(buf);
+                pthread_mutex_unlock(priv->common->inTabMutex);
                 return NULL;
             }
             priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
@@ -217,6 +220,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
                 return NULL;
             }
         }
+        pthread_mutex_unlock(priv->common->inTabMutex);
         priv->out_offset = 0;
     }
 
@@ -283,7 +287,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
         Buffer_setNumBytesUsed(priv->outbuf, didx);
 
         outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-            priv->common->waitOnInBufTab);
+            priv->common->waitOnInBufTab,priv->common->inTabMutex);
         priv->outbuf = NULL;
         priv->current_offset = GST_BUFFER_SIZE(buf);
     } else {
@@ -346,7 +350,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
                 Buffer_setNumBytesUsed(priv->outbuf, didx);
 
                 outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-                    priv->common->waitOnInBufTab);
+                    priv->common->waitOnInBufTab,priv->common->inTabMutex);
                 priv->outbuf = NULL;
             } else {
                 /* We didn't find start of next frame */
@@ -391,7 +395,7 @@ static GstBuffer *h264_drain(void *private){
         Buffer_setNumBytesUsed(priv->outbuf, priv->out_offset);
 
         outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-            priv->common->waitOnInBufTab);
+            priv->common->waitOnInBufTab,priv->common->inTabMutex);
         priv->outbuf = NULL;
         GST_BUFFER_SIZE(outbuf) = priv->out_offset;
         gst_buffer_unref(priv->current);
@@ -401,12 +405,14 @@ static GstBuffer *h264_drain(void *private){
         /*
          * If we don't have nothing accumulated, return a zero size buffer
          */
+        pthread_mutex_lock(priv->common->inTabMutex);
         houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
         if (!houtbuf){
-            Rendezvous_meet(priv->common->waitOnInBufTab);
+            pthread_cond_wait(priv->common->waitOnInBufTab,priv->common->inTabMutex);
             /* The inBufTab may have been destroyed in case of error */
             if (!priv->common->hInBufTab){
                 GST_DEBUG("Input buffer tab vanished on error");
+                pthread_mutex_unlock(priv->common->inTabMutex);
                 return NULL;
             }
 
@@ -418,10 +424,12 @@ static GstBuffer *h264_drain(void *private){
                 return NULL;
             }
         }
+        pthread_mutex_unlock(priv->common->inTabMutex);
 
         Buffer_setNumBytesUsed(houtbuf,1);
         outbuf = (GstBuffer*)
-            gst_tidmaibuffertransport_new(houtbuf,priv->common->waitOnInBufTab);
+            gst_tidmaibuffertransport_new(houtbuf,priv->common->waitOnInBufTab,
+                priv->common->inTabMutex);
         GST_BUFFER_SIZE(outbuf) = 0;
 
         GST_DEBUG("Parser drained");
@@ -449,7 +457,7 @@ static void h264_flush_start(void *private){
     }
 
     if (priv->common->waitOnInBufTab){
-        Rendezvous_forceAndReset(priv->common->waitOnInBufTab);
+        pthread_cond_broadcast(priv->common->waitOnInBufTab);
     }
     GST_DEBUG("Parser flushed");
     return;

@@ -27,7 +27,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
-#include "gsttiparsers.h"
+#include <pthread.h>
 #include "gstticommonutils.h"
 
 #include <xdc/std.h>
@@ -37,7 +37,6 @@
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/Fifo.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
 #include <ti/sdo/dmai/ColorSpace.h>
 
 G_BEGIN_DECLS
@@ -80,7 +79,8 @@ struct _GstTIDmaienc
     gint                head;
     gint                tail;
     gint                headWrap;
-    Rendezvous_Handle   waitOnOutBuf;
+    pthread_cond_t      waitOnOutBuf;
+    pthread_mutex_t     outBufMutex;
 
     /* Capabilities */
     gint                framerateNum;
