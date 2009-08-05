@@ -874,7 +874,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
             break;
         default:
             GST_WARNING("unknown format received in NEWSEGMENT");
-            gst_event_unref (event);
+            ret = gst_pad_push_event(dmaidec->srcpad, event);
             goto done;
         }
 
