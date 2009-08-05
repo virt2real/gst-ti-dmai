@@ -3,7 +3,7 @@ plugin_LTLIBRARIES  = libgstticodecplugin.la
 
 # sources used to compile this plug-in
 libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttidmaibuffertransport.c \
-gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c \
+gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c gsttidmaiaccel.c \
 gsttividdec2.c gsttisupport_mpeg4.c gsttisupport_h264.c  \
 gsttividenc1.c gsttividresize.c \
 gstticommonutils.c
@@ -29,7 +29,7 @@ libgstticodecplugin_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) \
 # headers we need but don't want installed
 noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h gsttiparsers.h \
 gsttisupport_h264.h gsttisupport_mpeg4.h gsttidmaidec.h gsttidmaienc.h \
-gsttithreadprops.h
+gsttidmaiaccel.h
 
 #gsttiauddec.h gsttiauddec1.h gsttividdec.h  \
 #gsttiimgenc1.h gsttiimgenc.h gsttiimgdec1.h gsttiimgdec.h \

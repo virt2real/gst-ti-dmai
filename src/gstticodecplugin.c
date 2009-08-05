@@ -43,6 +43,7 @@
 #include "gsttisupport_h264.h"
 #include "gsttisupport_mpeg4.h"
 #include "gsttividresize.h"
+#include "gsttidmaiaccel.h"
 
 
 static GstStaticPadTemplate gstti_uyvy_src_caps = GST_STATIC_PAD_TEMPLATE(
@@ -211,6 +212,10 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
         g_warning("Failed to register one encoder, aborting");
         return FALSE;
     }
+
+    if (!gst_element_register(TICodecPlugin, "dmaiaccel",
+        GST_RANK_PRIMARY,GST_TYPE_TIDMAIACCEL))
+        return FALSE;
 
 #ifdef ENABLE_VIDEOSINK
     if (!gst_element_register(TICodecPlugin, "TIDmaiVideoSink",

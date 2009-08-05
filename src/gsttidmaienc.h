@@ -62,14 +62,6 @@ struct _GstTIDmaienc
     Engine_Handle    	hEngine;
     gpointer         	hCodec;
 
-    /* Output thread */
-    pthread_t           outputThread;
-    GList               *outList;
-    pthread_mutex_t     listMutex;
-    pthread_cond_t      listCond;
-    gboolean            shutdown;
-    gboolean            eos;
-
     /* Buffer management */
     GstAdapter          *adapter;
     gint                outBufSize;

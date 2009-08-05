@@ -51,7 +51,6 @@
 
 #include "gsttidmaienc.h"
 #include "gsttidmaibuffertransport.h"
-#include "gsttithreadprops.h"
 #include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
@@ -93,8 +92,6 @@ static GstFlowReturn
  gst_tidmaienc_chain(GstPad *pad, GstBuffer *buf);
 static GstStateChangeReturn
  gst_tidmaienc_change_state(GstElement *element, GstStateChange transition);
-static void*
- gst_tidmaienc_output_thread(void *arg);
 static gboolean
  gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc);
 static gboolean
@@ -307,10 +304,6 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
 
     dmaienc->hEngine            = NULL;
     dmaienc->hCodec             = NULL;
-    dmaienc->shutdown           = FALSE;
-
-    dmaienc->outputThread	    = NULL;
-    dmaienc->outList            = NULL;
 
     dmaienc->adapter            = NULL;
     dmaienc->framerateNum       = 0;
@@ -498,24 +491,8 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
     pthread_mutex_init(&dmaienc->outBufMutex,NULL);
 
     /* Status variables */
-    dmaienc->shutdown = FALSE;
-    dmaienc->eos = FALSE;
     dmaienc->head = 0;
     dmaienc->tail = 0;
-
-    /* Set up the output list */
-    dmaienc->outList = NULL;
-    pthread_mutex_init(&dmaienc->listMutex, NULL);
-    pthread_cond_init(&dmaienc->listCond,NULL);
-
-    /* Create output thread */
-    if (pthread_create(&dmaienc->outputThread, NULL,
-        gst_tidmaienc_output_thread, (void*)dmaienc)) {
-        GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
-            ("failed to create output thread"));
-        gst_tidmaienc_exit_encoder(dmaienc);
-        return FALSE;
-    }
 
     GST_DEBUG("end init_encoder\n");
     return TRUE;
@@ -528,7 +505,6 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
  ******************************************************************************/
 static gboolean gst_tidmaienc_exit_encoder(GstTIDmaienc *dmaienc)
 {
-    void*    thread_ret;
     GstTIDmaiencClass *gclass;
     GstTIDmaiencData *encoder;
 
@@ -540,25 +516,6 @@ static gboolean gst_tidmaienc_exit_encoder(GstTIDmaienc *dmaienc)
 
     /* Release the codec */
     gst_tidmaienc_deconfigure_codec(dmaienc);
-
-    /* Shut down the output thread if required*/
-    if (dmaienc->outputThread){
-        dmaienc->shutdown = TRUE;
-
-        pthread_cond_signal(&dmaienc->listCond);
-
-        if (pthread_join(dmaienc->outputThread, &thread_ret) != 0) {
-            GST_DEBUG("output thread exited with an error condition\n");
-        }
-        dmaienc->outputThread = NULL;
-    }
-
-    GST_DEBUG("Output thread is shutdown now");
-
-    if (dmaienc->outList) {
-        g_list_free(dmaienc->outList);
-        dmaienc->outList = NULL;
-    }
 
     if (dmaienc->adapter){
         gst_adapter_clear(dmaienc->adapter);
@@ -766,22 +723,6 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
         GST_EVENT_TYPE_NAME(event));
 
     switch (GST_EVENT_TYPE(event)) {
-    case GST_EVENT_EOS:
-        /* end-of-stream: process any remaining encoded frame data */
-        GST_DEBUG("EOS: draining remaining encoded data\n");
-
-        if (!dmaienc->outputThread){
-            ret = gst_pad_push_event(dmaienc->srcpad, event);
-        } else {
-            /* Let the output thread send the EOS */
-            dmaienc->eos = TRUE;
-            pthread_cond_signal(&dmaienc->listCond);
-
-            gst_event_unref(event);
-            ret = TRUE;
-        }
-
-        goto done;
     case GST_EVENT_FLUSH_START:
         /* Flush the adapter */
         gst_adapter_clear(dmaienc->adapter);
@@ -918,7 +859,7 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
 
 /******************************************************************************
  * encode
- *  This function encodes a frame and adds the encoded data to the output list
+ *  This function encodes a frame and push the buffer downstream
  ******************************************************************************/
 static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     GstTIDmaiencClass      *gclass;
@@ -970,13 +911,9 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     gst_buffer_unref(rawData);
     rawData = NULL;
 
-    GST_LOG("Queing output buffer into output list");
-    /* Queue the output buffer */
-    pthread_mutex_lock(&dmaienc->listMutex);
-    dmaienc->outList = g_list_append(dmaienc->outList,outBuf);
-    pthread_mutex_unlock(&dmaienc->listMutex);
-
-    pthread_cond_signal(&dmaienc->listCond);
+    if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
+        GST_DEBUG("push to source pad failed\n");
+    }
 
     return GST_FLOW_OK;
 
@@ -993,7 +930,7 @@ failure:
  *    This is the main processing routine.  This function receives a buffer
  *    from the sink pad, and pass it to the parser, who is responsible to either
  *    buffer them until it has a full frame. If the parser returns a full frame
- *    we push a gsttidmaibuffer to the encoder thread.
+ *    we push a gsttidmaibuffer to the encoder function.
  ******************************************************************************/
 static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 {
@@ -1014,93 +951,20 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
         } else {
             buf = NULL;
         }
+    } else {
+        GST_INFO("Using accelerated buffer\n");
     }
 
     if (buf){
         if (encode(dmaienc, buf) != GST_FLOW_OK) {
            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-               ("Failed to send buffer to output thread"));
+               ("Failed to encode buffer"));
            gst_buffer_unref(buf);
            return GST_FLOW_UNEXPECTED;
        }
     }
 
     return GST_FLOW_OK;
-}
-
-
-/******************************************************************************
- * gst_tidmaienc_output_thread
- * Push an output buffer into the src pad
- ******************************************************************************/
-static void* gst_tidmaienc_output_thread(void *arg)
-{
-    GstTIDmaienc           *dmaienc = (GstTIDmaienc *)gst_object_ref(arg);
-    GstTIDmaiencClass      *gclass;
-    GstTIDmaiencData       *encoder;
-    GList *element;
-    GstBuffer     *outBuf;
-
-    GST_DEBUG("init output_thread \n");
-
-    gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
-    encoder = (GstTIDmaiencData *)
-       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
-
-    /* Thread loop */
-    while (TRUE) {
-        /* Wait for signals */
-        GST_LOG("Output thread sleeping on cond");
-        pthread_mutex_lock(&dmaienc->listMutex);
-cond_wait:
-        pthread_cond_wait(&dmaienc->listCond,&dmaienc->listMutex);
-
-        GST_LOG("Output thread awaked from cond");
-eos:
-        /* EOS and list empty? */
-        if (dmaienc->eos && !dmaienc->outList){
-            gst_pad_push_event(dmaienc->srcpad,gst_event_new_eos());
-            dmaienc->eos = FALSE;
-            if (!dmaienc->shutdown)
-                goto cond_wait;
-        }
-
-        if (dmaienc->shutdown){
-            pthread_mutex_unlock(&dmaienc->listMutex);
-            goto thread_exit;
-        }
-
-        element = g_list_first(dmaienc->outList);
-        pthread_mutex_unlock(&dmaienc->listMutex);
-
-        while (TRUE){
-            outBuf = (GstBuffer *)element->data;
-
-            /* Push the transport buffer to the source pad */
-            GST_LOG("pushing buffer to source pad\n");
-
-            if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
-                GST_DEBUG("push to source pad failed\n");
-            }
-
-            /* Get next element on list */
-            pthread_mutex_lock(&dmaienc->listMutex);
-            dmaienc->outList = g_list_delete_link(dmaienc->outList,element);
-            element = g_list_first(dmaienc->outList);
-            if (element == NULL){
-                if (dmaienc->eos) {
-                    goto eos;
-                } else {
-                    goto cond_wait;
-                }
-            }
-            pthread_mutex_unlock(&dmaienc->listMutex);
-        }
-    }
-
-thread_exit:
-    GST_DEBUG("exit output_thread\n");
-    return 0;
 }
 
 

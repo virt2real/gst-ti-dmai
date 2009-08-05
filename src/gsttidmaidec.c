@@ -51,7 +51,6 @@
 
 #include "gsttidmaidec.h"
 #include "gsttidmaibuffertransport.h"
-#include "gsttithreadprops.h"
 #include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
