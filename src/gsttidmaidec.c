@@ -338,8 +338,8 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->framerateDen       = 0;
     dmaidec->height		        = 0;
     dmaidec->width		        = 0;
-    dmaidec->segment_start      = 0;
-    dmaidec->segment_stop       = 0;
+    dmaidec->segment_start      = GST_CLOCK_TIME_NONE;
+    dmaidec->segment_stop       = GST_CLOCK_TIME_NONE;
     dmaidec->current_timestamp  = 0;
 
     dmaidec->numOutputBufs      = 0UL;
@@ -864,11 +864,11 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
         gint64 time;
         gdouble rate, arate;
 
-        gst_event_parse_new_segment_full (event, &update, &rate, &arate, &fmt,
-            &dmaidec->segment_start, &dmaidec->segment_stop, &time);
-
         switch (fmt) {
         case GST_FORMAT_TIME:
+            gst_event_parse_new_segment_full (event, &update, &rate, &arate, &fmt,
+                &dmaidec->segment_start, &dmaidec->segment_stop, &time);
+
         case GST_FORMAT_BYTES:
             /* We handle in time or bytes format, so this is OK */
             break;
@@ -986,11 +986,20 @@ static gboolean gst_tidmaidec_query(GstPad * pad, GstQuery * query){
 
 
 /******************************************************************************
- * This function returns TRUE if the frame should be displayed, or FALSE
- * if the frame should be clipped.
+ * This function returns TRUE if the frame should be clipped, or FALSE
+ * if the frame should be displayed.
  ******************************************************************************/
-static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,GstBuffer * buf){
-    return TRUE;
+static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,gint64 timestamp){
+    if (GST_CLOCK_TIME_IS_VALID(dmaidec->segment_start) &&
+        GST_CLOCK_TIME_IS_VALID(dmaidec->segment_stop) &&
+        (timestamp < dmaidec->segment_start ||
+        timestamp > dmaidec->segment_stop)){
+        GST_DEBUG("Timestamp %llu is outside of segment boundaries [%llu %llu] , clipping",
+            timestamp,dmaidec->segment_start,dmaidec->segment_stop);
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 
@@ -1050,15 +1059,22 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
     pthread_mutex_unlock(&dmaidec->outTabMutex);
 
-    if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed))
-        goto failure;
-
-    if (!gst_tidmaidec_clip_buffer(dmaidec,encData)){
-
+    /* If we don't have a valid time stamp, give one to the buffer
+     * We use timestamps as a way to identify stale buffers later,
+     * so we need everybody to have a timestamp, even a fake one
+     */
+    if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData))) {
+        GST_BUFFER_TIMESTAMP(encData) = dmaidec->current_timestamp;
+        GST_BUFFER_DURATION(encData)  =
+            gst_tidmaidec_frame_duration(dmaidec);
+        dmaidec->current_timestamp += GST_BUFFER_DURATION(encData);
     }
 
     gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
+
+    if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed))
+        goto failure;
 
     gst_buffer_unref(encData);
     encData = NULL;
@@ -1077,11 +1093,29 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
 
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {
-        if (dmaidec->flushing) {
+        gboolean clip = FALSE;
+
+        if (GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)])
+            != GST_CLOCK_TIME_NONE) {
+            if (gst_tidmaidec_clip_buffer(dmaidec,
+                GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]))){
+                clip = TRUE;
+                GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
+                    GST_CLOCK_TIME_NONE;
+            }
+        } else {
+            GST_ERROR("No valid timestamp found for output buffer");
+            clip = TRUE;
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
+                GST_CLOCK_TIME_NONE;
+        }
+
+        if (dmaidec->flushing || clip) {
             GST_DEBUG("Flushing decoded frames\n");
             Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
                 dmaidec->outputUseMask);
             hDstBuf = decoder->dops->codec_get_data(dmaidec);
+
             continue;
         }
 
@@ -1104,14 +1138,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
             gst_ti_calculate_display_bufSize(hDstBuf));
         gst_buffer_set_caps(outBuf, dmaidec->outCaps);
-
-        /* If we don't have a valid time stamp, give one to the buffer */
-        if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(outBuf))) {
-            GST_BUFFER_TIMESTAMP(outBuf) = dmaidec->current_timestamp;
-            GST_BUFFER_DURATION(outBuf)  =
-                gst_tidmaidec_frame_duration(dmaidec);
-            dmaidec->current_timestamp += GST_BUFFER_DURATION(outBuf);
-        }
 
         /* Queue the output buffer */
         GST_DEBUG("Pushing buffer %p to output queue",hDstBuf);

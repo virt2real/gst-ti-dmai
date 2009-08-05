@@ -140,10 +140,8 @@ static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
     GST_DEBUG("invoking the video decoder, with %ld bytes (%p, %p)\n",originalBufferSize,
         Buffer_getUserPtr(hEncData),Buffer_getUserPtr(hDstBuf));
     ret = Vdec2_process(dmaidec->hCodec, hEncData, hDstBuf);
-    GST_DEBUG("test point");
     encDataConsumed = (codecFlushed) ? 0 :
         Buffer_getNumBytesUsed(hEncData);
-    GST_DEBUG("test point");
 
     if (ret < 0) {
         GST_ELEMENT_ERROR(dmaidec,STREAM,DECODE,(NULL),
