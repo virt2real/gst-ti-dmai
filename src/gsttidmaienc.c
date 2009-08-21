@@ -9,6 +9,9 @@
  * Code Refactoring by:
  *     Diego Dompe, RidgeRun
  *
+ * Contributor:
+ *     Cristina Murillo, RidgeRun
+ *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
  *
@@ -174,10 +177,10 @@ static void gst_tidmaienc_base_init(gpointer gclass)
     g_assert (encoder->streamtype != NULL);
     g_assert (encoder->srcTemplateCaps != NULL);
     g_assert (encoder->sinkTemplateCaps != NULL);
-    g_assert (encoder->dops != NULL);
-    g_assert (encoder->dops->codec_type != 0);
+    g_assert (encoder->eops != NULL);
+    g_assert (encoder->eops->codec_type != 0);
 
-    switch (encoder->dops->codec_type){
+    switch (encoder->eops->codec_type){
     case VIDEO:
         codec_type = g_strdup("Video");
         break;
@@ -194,7 +197,7 @@ static void gst_tidmaienc_base_init(gpointer gclass)
 
     codec_name = g_ascii_strup(encoder->streamtype,strlen(encoder->streamtype));
     details.longname = g_strdup_printf ("DMAI %s %s Encoder",
-                            encoder->dops->xdmversion,
+                            encoder->eops->xdmversion,
                             codec_name);
     details.klass = g_strdup_printf ("Codec/Encoder/%s",codec_type);
     details.description = g_strdup_printf ("DMAI %s encoder",codec_name);
@@ -306,16 +309,29 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->hCodec             = NULL;
 
     dmaienc->adapter            = NULL;
-    dmaienc->framerateNum       = 0;
-    dmaienc->framerateDen       = 0;
-    dmaienc->height		        = 0;
-    dmaienc->width		        = 0;
+
     dmaienc->head               = 0;
     dmaienc->headWrap           = 0;
     dmaienc->tail               = 0;
 
     dmaienc->outBuf             = NULL;
-    dmaienc->inBuf          = NULL;
+    dmaienc->inBuf              = NULL;
+
+    dmaienc->require_configure = TRUE;
+
+    /* Initialize TIDmaienc video state */
+
+    dmaienc->framerateNum       = 0;
+    dmaienc->framerateDen       = 0;
+    dmaienc->height	        = 0;
+    dmaienc->width	        = 0;
+
+    /*Initialize TIDmaienc audio state */
+
+    dmaienc->channels           = 0;
+    dmaienc->depth              = 0;
+    dmaienc->awidth             = 0;
+    dmaienc->rate               = 0;
 }
 
 
@@ -557,7 +573,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     dmaienc->headWrap = dmaienc->outBufSize;
 
     /* Create codec output buffers */
-    if (encoder->dops->codec_type == VIDEO) {
+    if (encoder->eops->codec_type == VIDEO) {
         GST_DEBUG("creating output buffer \n");
 
         dmaienc->outBuf = Buffer_create(dmaienc->outBufSize, &Attrs);
@@ -574,7 +590,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     GST_DEBUG("Output buffer handler: %p\n",dmaienc->outBuf);
 
     /* Initialize the rest of the codec */
-    return encoder->dops->codec_create(dmaienc);
+    return encoder->eops->codec_create(dmaienc);
 }
 
 
@@ -592,9 +608,11 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
+    dmaienc->require_configure = TRUE;
+
     if (dmaienc->hCodec) {
         GST_LOG("closing video encoder\n");
-        encoder->dops->codec_destroy(dmaienc);
+        encoder->eops->codec_destroy(dmaienc);
         dmaienc->hCodec = NULL;
     }
 
@@ -672,29 +690,59 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     "framerate", GST_TYPE_FRACTION,
                                         dmaienc->framerateNum,dmaienc->framerateDen,
                                     (char *)NULL);
-    } else {
-        // TODO Audio caps?
+#if PLATFORM == dm6467
+        dmaienc->colorSpace = ColorSpace_YUV422PSEMI;
+#else
+        dmaienc->colorSpace = ColorSpace_UYVY;
+#endif
+
+        dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
+            dmaienc->colorSpace) * dmaienc->height;
+
+    /* Generic Audio Properties */
+    } else if(!strncmp(mime, "audio/", 6)){
+
+        if (!gst_structure_get_int(capStruct, "channels", &dmaienc->channels)){
+            dmaienc->channels = 0;
+        }
+
+        if (!gst_structure_get_int(capStruct, "width", &dmaienc->awidth)){
+            dmaienc->awidth = 0;
+        }
+
+        if (!gst_structure_get_int(capStruct, "depth", &dmaienc->depth)){
+            dmaienc->depth = 0;
+        }
+
+        if (!gst_structure_get_int(capStruct, "rate", &dmaienc->rate)){
+            dmaienc->rate = 0;
+        }
+
+        caps = gst_caps_make_writable(
+            gst_caps_copy(gst_pad_get_pad_template_caps(dmaienc->srcpad)));
+
+        /* gst_pad_get_pad_template_caps: gets the capabilities of 
+         * dmaienc->srcpad, then creates a copy and makes it writable 
+         */
+        capStruct = gst_caps_get_structure(caps, 0);
+
+        gst_structure_set(capStruct,"channels",G_TYPE_INT,dmaienc->channels,
+                                    "rate",G_TYPE_INT,dmaienc->rate,
+                                    (char *)NULL);
+
+        dmaienc->inBufSize = 0;
     }
 
+    else { //Add support for images
+
+    }
 
     GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(caps)));
     g_free(str);
     gst_pad_set_caps(dmaienc->srcpad, caps);
     gst_caps_unref(caps);
 
-#if PLATFORM == dm6467
-    dmaienc->colorSpace = ColorSpace_YUV422PSEMI;
-#else
-    dmaienc->colorSpace = ColorSpace_UYVY;
-#endif
-
-    dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
-        dmaienc->colorSpace) * dmaienc->height;
-
-    if (!gst_tidmaienc_configure_codec(dmaienc)) {
-        gst_object_unref(dmaienc);
-        return FALSE;
-    }
+    gst_tidmaienc_deconfigure_codec(dmaienc);
 
     gst_object_unref(dmaienc);
 
@@ -802,43 +850,66 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc){
 
 /* Return a dmai buffer from the passed gstreamer buffer */
 Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
+    GstTIDmaiencClass      *gclass;
+    GstTIDmaiencData       *encoder;
+
+    gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
+    encoder = (GstTIDmaiencData *)
+       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
+
     if (GST_IS_TIDMAIBUFFERTRANSPORT(buf)){
-        if (Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
-            == Buffer_Type_GRAPHICS){
-            /* Easy: we got a gfx buffer from upstream */
-            return GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
-        } else {
-            /* Still easy: got a DMAI transport, just not of gfx type... */
-            Buffer_Handle hBuf;
-            BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
+        switch (encoder->eops->codec_type) {
+            case VIDEO:
+                if (Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
+                    == Buffer_Type_GRAPHICS){
+                    /* Easy: we got a gfx buffer from upstream */
+                    return GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
+                } else {
+                    /* Still easy: got a DMAI transport, just not of gfx type... */
+                    Buffer_Handle hBuf;
+                    BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
 
-            gfxAttrs.bAttrs.reference   = TRUE;
-            gfxAttrs.dim.width          = dmaienc->width;
-            gfxAttrs.dim.height         = dmaienc->height;
-            gfxAttrs.colorSpace         = dmaienc->colorSpace;
-            gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(dmaienc->width,
-                                                dmaienc->colorSpace);
+                    gfxAttrs.bAttrs.reference   = TRUE;
+                    gfxAttrs.dim.width          = dmaienc->width;
+                    gfxAttrs.dim.height         = dmaienc->height;
+                    gfxAttrs.colorSpace         = dmaienc->colorSpace;
+                    gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(dmaienc->width,
+                                                    dmaienc->colorSpace);
 
-            hBuf = Buffer_create(dmaienc->inBufSize, &gfxAttrs.bAttrs);
-            Buffer_setUserPtr(hBuf,
-                Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)));
-            Buffer_setNumBytesUsed(hBuf,dmaienc->inBufSize);
+                    hBuf = Buffer_create(dmaienc->inBufSize, &gfxAttrs.bAttrs);
+                    Buffer_setUserPtr(hBuf,
+                        Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)));
+                    Buffer_setNumBytesUsed(hBuf,dmaienc->inBufSize);
 
-            return hBuf;
+                    return hBuf;
+                }
+                break;
+            default:
+                return GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
         }
     } else {
-        /* Slow path: Copy the data into gfx buffer */
         BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
+        Buffer_Attrs Attrs    = Buffer_Attrs_DEFAULT;
+        Buffer_Attrs *attrs;
 
-        gfxAttrs.dim.width          = dmaienc->width;
-        gfxAttrs.dim.height         = dmaienc->height;
-        gfxAttrs.colorSpace         = dmaienc->colorSpace;
-        gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(dmaienc->width,
-                                            dmaienc->colorSpace);
+        switch (encoder->eops->codec_type) {
+            case VIDEO:
+                /* Slow path: Copy the data into gfx buffer */
 
+                gfxAttrs.dim.width          = dmaienc->width;
+                gfxAttrs.dim.height         = dmaienc->height;
+                gfxAttrs.colorSpace         = dmaienc->colorSpace;
+                gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(dmaienc->width,
+                                                dmaienc->colorSpace);
+
+                attrs = &gfxAttrs.bAttrs;
+                break;
+            default:
+                attrs= &Attrs;
+        }
         /* Allocate a Buffer tab and copy the data there */
         if (!dmaienc->inBuf){
-            dmaienc->inBuf = Buffer_create(dmaienc->inBufSize,&gfxAttrs.bAttrs);
+            dmaienc->inBuf = Buffer_create(dmaienc->inBufSize,attrs);
 
             if (dmaienc->inBuf == NULL) {
                 GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -879,7 +950,7 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
         goto failure;
     }
 
-    if (!encoder->dops->codec_process(dmaienc,hSrcBuf,hDstBuf)){
+    if (!encoder->eops->codec_process(dmaienc,hSrcBuf,hDstBuf)){
         goto failure;
     }
 
@@ -941,6 +1012,24 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
+
+    if (dmaienc->inBufSize == 0){
+        dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
+    }
+
+    if (dmaienc->require_configure){
+        dmaienc->require_configure = FALSE;
+        if (!gst_tidmaienc_configure_codec(dmaienc)) {
+            return GST_FLOW_UNEXPECTED;
+        }
+    }
+
+    if (GST_BUFFER_SIZE(buf) > dmaienc->inBufSize){
+        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+           ("Failed to encode buffer, received input buffer with size bigger than allocated memory"));
+        gst_buffer_unref(buf);
+        return GST_FLOW_UNEXPECTED;
+    }
 
     if (!GST_IS_TIDMAIBUFFERTRANSPORT(buf) ||
         Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))

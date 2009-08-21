@@ -7,6 +7,7 @@
  *     Don Darling, Texas Instruments, Inc.
  * Contributor:
  *      Diego Dompe, RidgeRun Engineering
+ *      Cristina Murillo, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
@@ -42,9 +43,48 @@
 #include "gsttidmaivideosink.h"
 #include "gsttisupport_h264.h"
 #include "gsttisupport_mpeg4.h"
+#include "gsttisupport_aac.h"
+#include "gsttisupport_mp3.h"
+#include "gsttisupport_wma.h"
 #include "gsttividresize.h"
 #include "gsttidmaiaccel.h"
 
+
+
+/* Setting the audio caps */
+/*
+static GstStaticPadTemplate gstti_pcm_src_caps = GST_STATIC_PAD_TEMPLATE(
+    "src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS
+    ("audio/x-raw-int, "
+         "width = (int) 16, "
+         "depth = (int) 16, "
+         "endianness = (int) BYTE_ORDER, "
+         "channels = (int) { 1, 8 }, "
+         "rate = (int) [ 8000, 96000 ]"
+    )
+);
+*/
+
+static GstStaticPadTemplate gstti_pcm_sink_caps = GST_STATIC_PAD_TEMPLATE(
+    "sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS
+    ("audio/x-raw-int, "
+         "width = (int) 16, "
+         "depth = (int) 16, "
+         "endianness = (int) BYTE_ORDER, "
+         "channels = (int) { 1, 8 }, "
+         "rate = (int) [ 8000, 96000 ]"
+    )
+);
+
+
+
+/* Setting the video caps */
 
 static GstStaticPadTemplate gstti_uyvy_src_caps = GST_STATIC_PAD_TEMPLATE(
     "src",
@@ -86,6 +126,10 @@ extern struct gstti_decoder_ops gstti_viddec0_ops;
 extern struct gstti_encoder_ops gstti_videnc1_ops;
 extern struct gstti_encoder_ops gstti_videnc0_ops;
 
+extern struct gstti_encoder_ops gstti_audenc0_ops;
+extern struct gstti_encoder_ops gstti_audenc1_ops;
+
+
 #if PLATFORM == dm357
 # ifndef DECODEENGINE
 #  define DECODEENGINE "hmjcp"
@@ -101,6 +145,8 @@ extern struct gstti_encoder_ops gstti_videnc0_ops;
 #  define ENCODEENGINE "encode"
 # endif
 #endif
+
+/* Video decoders */
 
 GstTIDmaidecData decoders[] = {
 #ifdef ENABLE_H264DEC_XDM2
@@ -145,8 +191,38 @@ GstTIDmaidecData decoders[] = {
         .parser = &gstti_mpeg4_parser,
     },
 #endif
+
+/* Audio decoders */
+
+/*
+#ifdef ENABLE_AACDEC_XDM1
+    {
+        .streamtype = "aac",
+        .sinkTemplateCaps = &gstti_aac_sink_caps,
+        .srcTemplateCaps = &gstti_pcm_src_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "aachedec",
+        .dops = &gstti_auddec1_ops,
+        .parser = &gstti_aac_parser,
+    },
+#elif defined(ENABLE_AAC4DEC_XDM0)
+    {
+        .streamtype = "aac",
+        .sinkTemplateCaps = &gstti_aac_sink_caps,
+        .srcTemplateCaps = &gstti_pcm_src_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "aachedec",
+        .dops = &gstti_auddec0_ops,
+        .parser = &gstti_aac_parser,
+    },
+#endif
+#endif*/
+
     { .streamtype = NULL },
 };
+
+
+/* Video encoders */
 
 GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_H264ENC_XDM1
@@ -156,7 +232,7 @@ GstTIDmaiencData encoders[] = {
         .srcTemplateCaps = &gstti_h264_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
-        .dops = &gstti_videnc1_ops,
+        .eops = &gstti_videnc1_ops,
     },
 #elif defined(ENABLE_H264ENC_XDM0)
     {
@@ -165,7 +241,7 @@ GstTIDmaiencData encoders[] = {
         .srcTemplateCaps = &gstti_h264_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
-        .dops = &gstti_videnc0_ops,
+        .eops = &gstti_videnc0_ops,
     },
 #endif
 #ifdef ENABLE_MPEG4ENC_XDM1
@@ -175,7 +251,7 @@ GstTIDmaiencData encoders[] = {
         .srcTemplateCaps = &gstti_mpeg4_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
-        .dops = &gstti_videnc1_ops,
+        .eops = &gstti_videnc1_ops,
     },
 #elif defined(ENABLE_MPEG4ENC_XDM0)
     {
@@ -184,7 +260,67 @@ GstTIDmaiencData encoders[] = {
         .srcTemplateCaps = &gstti_mpeg4_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
-        .dops = &gstti_videnc0_ops,
+        .eops = &gstti_videnc0_ops,
+    },
+#endif
+
+/* Audio encoders */
+
+#ifdef ENABLE_AACENC_XDM1
+    {
+        .streamtype = "aac",
+        .sinkTemplateCaps = &gstti_pcm_sink_caps,
+        .srcTemplateCaps = &gstti_aac_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "aacenc",
+        .eops = &gstti_audenc1_ops,
+    },
+#elif defined(ENABLE_AACENC_XDM0)
+    {
+        .streamtype = "aac",
+        .sinkTemplateCaps = &gstti_pcm_sink_caps,
+        .srcTemplateCaps = &gstti_aac_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "aacenc",
+        .eops = &gstti_audenc0_ops,
+    },
+#endif
+#ifdef ENABLE_WMAENC_XDM1
+    {
+        .streamtype = "wma",
+        .sinkTemplateCaps = &gstti_pcm_sink_caps,
+        .srcTemplateCaps = &gstti_wma_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "wmaenc",
+        .eops = &gstti_audenc1_ops,
+    },
+#elif defined(ENABLE_WMAENC_XDM0)
+    {
+        .streamtype = "wma",
+        .sinkTemplateCaps = &gstti_pcm_sink_caps,
+        .srcTemplateCaps = &gstti_wma_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "wmaenc",
+        .eops = &gstti_audenc0_ops,
+    },
+#endif
+#ifdef ENABLE_MP3ENC_XDM1
+    {
+        .streamtype = "mp3",
+        .sinkTemplateCaps = &gstti_pcm_sink_caps,
+        .srcTemplateCaps = &gstti_mp3_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "mp3enc",
+        .eops = &gstti_audenc1_ops,
+    },
+#elif defined(ENABLE_MP3ENC_XDM0)
+    {
+        .streamtype = "mp3",
+        .sinkTemplateCaps = &gstti_pcm_sink_caps,
+        .srcTemplateCaps = &gstti_mp3_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "mp3enc",
+        .eops = &gstti_audenc0_ops,
     },
 #endif
     { .streamtype = NULL },

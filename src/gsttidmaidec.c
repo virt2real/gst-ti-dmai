@@ -803,24 +803,30 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
 
     GST_INFO("requested sink caps:  %s", gst_caps_to_string(caps));
 
-    /* Generic Video Properties */
-    if (!strncmp(mime, "video/", 6)) {
-        gint  framerateNum;
-        gint  framerateDen;
+    if (decoder->dops->codec_type == VIDEO){
+        /* Generic Video Properties */
+        if (!strncmp(mime, "video/", 6)) {
+            gint  framerateNum;
+            gint  framerateDen;
 
-        if (gst_structure_get_fraction(capStruct, "framerate", &framerateNum,
+            if (gst_structure_get_fraction(capStruct, "framerate", &framerateNum,
             &framerateDen)) {
-            dmaidec->framerateNum = framerateNum;
-            dmaidec->framerateDen = framerateDen;
-        }
+                dmaidec->framerateNum = framerateNum;
+                dmaidec->framerateDen = framerateDen;
+            }
 
-        if (!gst_structure_get_int(capStruct, "height", &dmaidec->height)) {
-            dmaidec->height = 0;
-        }
+            if (!gst_structure_get_int(capStruct, "height", &dmaidec->height)) {
+                dmaidec->height = 0;
+            }
 
-        if (!gst_structure_get_int(capStruct, "width", &dmaidec->width)) {
-            dmaidec->width = 0;
+            if (!gst_structure_get_int(capStruct, "width", &dmaidec->width)) {
+                dmaidec->width = 0;
+            }
         }
+    } if (decoder->dops->codec_type == AUDIO){
+
+    } else {
+        return FALSE;
     }
 
     if (!gst_tidmaidec_configure_codec(dmaidec)) {

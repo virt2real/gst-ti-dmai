@@ -135,7 +135,9 @@ dnl Define presets
 AC_ARG_WITH(preset,
   [AS_HELP_STRING([--with-preset=<preset>],
 	[Select a preset (autoselects the platform and plugins):                                       
-		dm355 (dvsdk 1.30), dm357 (dvsdk 2.00), dm6446 (dvsdk 1.30), dm6446_2 (dvsdk 2.00),                                       
+		dm355 (dvsdk 1.30 or 2.00), dm355s (dvsdk2.0 + DM355s codecs),
+		dm357 (dvsdk 2.00),
+		dm6446 (dvsdk 1.30), dm6446_2 (dvsdk 2.00),                                       
 		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00)
 	])],
 	[preset=$withval]
@@ -167,6 +169,24 @@ if test "x$preset" = "xdm355" ; then
 	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm355;
+fi
+
+if test "x$preset" = "xdm355s" ; then
+	AC_MSG_NOTICE(The following preset has been selected: $preset);
+	enable_mpeg4dec_xdm2=1;
+  	enable_jpegdec_xdm1=1;
+	enable_mpeg4enc_xdm1=1;
+  	enable_jpegenc_xdm1=1;
+  	enable_aacenc_xdm1=1;
+  	enable_mp3enc_xdm1=1;
+  	enable_wmaenc_xdm1=1;
+  	enable_aacdec_xdm1=1;
+  	enable_mp3dec_xdm1=1;
+  	enable_wmaenc_xdm1=1;
+	enable_resizer=1;
+  	enable_videosink=1;
+  	with_platform=dm355;
+  	with_xdc_config_basename=gstticodecplugin_dm355s;
 fi
 
 if test "x$preset" = "xdm357" ; then

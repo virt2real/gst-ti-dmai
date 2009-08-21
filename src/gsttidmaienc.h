@@ -5,6 +5,7 @@
  *     Don Darling, Texas Instruments, Inc.
  * Contributor:
  *     Diego Dompe, RidgeRun
+ *     Cristina Murillo, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
@@ -73,8 +74,15 @@ struct _GstTIDmaienc
     gint                headWrap;
     pthread_cond_t      waitOnOutBuf;
     pthread_mutex_t     outBufMutex;
+    gboolean            require_configure;
 
-    /* Capabilities */
+    /* Audio Capabilities */
+    gint		channels;
+    gint		depth;
+    gint		awidth;
+    gint		rate;
+
+    /* Video Capabilities */
     gint                framerateNum;
     gint                framerateDen;
     gint                height;
@@ -107,7 +115,7 @@ struct _GstTIDmaiencData
     GstStaticPadTemplate            *sinkTemplateCaps;
     const gchar                     *engineName;
     const gchar                     *codecName;
-    struct gstti_encoder_ops        *dops;
+    struct gstti_encoder_ops        *eops;
 };
 
 /* Function to initialize the decoders */
