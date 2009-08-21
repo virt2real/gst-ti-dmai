@@ -88,7 +88,7 @@ static gboolean gstti_audenc1_create (GstTIDmaienc *dmaienc)
     GST_DEBUG_CATEGORY_INIT(gst_tiaudenc_debug, "TIAudenc1", 0,
         "DMAI Audio1 Encoder");
 
-    params.sampleRate = dmaienc->rate;
+    params.sampleRate = dynParams.sampleRate = dmaienc->rate;
     switch (dmaienc->channels){
         case (1):
             params.channelMode = IAUDIO_1_0;
@@ -101,7 +101,9 @@ static gboolean gstti_audenc1_create (GstTIDmaienc *dmaienc)
                 ("Unsupported number of channels: %d\n", dmaienc->channels));
             return FALSE;
     }
+    dynParams.channelMode = params.channelMode;
     params.inputBitsPerSample = dmaienc->awidth;
+    params.bitRate = dynParams.bitRate = 8000;
 
     GST_DEBUG("opening audio encoder \"%s\"\n", dmaienc->codecName);
     dmaienc->hCodec =

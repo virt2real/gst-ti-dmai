@@ -571,16 +571,11 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
         dmaienc->outBufSize = dmaienc->inBufSize * 3;
     }
     dmaienc->headWrap = dmaienc->outBufSize;
+    GST_DEBUG("Output bufer size %d, Input buffer size %d\n",dmaienc->outBufSize,dmaienc->inBufSize);
 
     /* Create codec output buffers */
-    if (encoder->eops->codec_type == VIDEO) {
-        GST_DEBUG("creating output buffer \n");
-
-        dmaienc->outBuf = Buffer_create(dmaienc->outBufSize, &Attrs);
-    } else {
-//TODO
-        dmaienc->outBufSize = 0; // Audio case?
-    }
+    GST_DEBUG("creating output buffer \n");
+    dmaienc->outBuf = Buffer_create(dmaienc->outBufSize, &Attrs);
 
     if (dmaienc->outBuf == NULL) {
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -1015,6 +1010,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 
     if (dmaienc->inBufSize == 0){
         dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
+        GST_DEBUG("Input buffer size set to %d\n",dmaienc->inBufSize);
     }
 
     if (dmaienc->require_configure){
