@@ -102,8 +102,8 @@ static gboolean gstti_audenc1_create (GstTIDmaienc *dmaienc)
             return FALSE;
     }
     dynParams.channelMode = params.channelMode;
-    params.inputBitsPerSample = dmaienc->awidth;
-    params.bitRate = dynParams.bitRate = 8000;
+    params.inputBitsPerSample = dynParams.inputBitsPerSample = dmaienc->awidth;
+    params.bitRate = dynParams.bitRate = 128000;
 
     GST_DEBUG("opening audio encoder \"%s\"\n", dmaienc->codecName);
     dmaienc->hCodec =
@@ -187,7 +187,7 @@ static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
 
     if (ret < 0) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,ENCODE,(NULL),
-            ("failed to encode audio buffer"));
+            ("failed to encode audio buffer: error %d",ret));
         return FALSE;
     }
 

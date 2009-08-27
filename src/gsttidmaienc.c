@@ -354,6 +354,7 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->depth              = 0;
     dmaienc->awidth             = 0;
     dmaienc->rate               = 0;
+    dmaienc->basets             = GST_CLOCK_TIME_NONE;
 }
 
 
@@ -731,9 +732,8 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
 
         dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
             dmaienc->colorSpace) * dmaienc->height;
-
-    /* Generic Audio Properties */
     } else if(!strncmp(mime, "audio/", 6)){
+        /* Generic Audio Properties */
 
         if (!gst_structure_get_int(capStruct, "channels", &dmaienc->channels)){
             dmaienc->channels = 0;
@@ -1059,7 +1059,12 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 
     /* On audio paths we don't know the input buffer size until it arrives */
     if (dmaienc->inBufSize == 0){
-        dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
+        if (encoder->eops->codec_type == AUDIO) {
+            /* For audio we take 4 times the input buffer size */
+            dmaienc->inBufSize = GST_BUFFER_SIZE(buf) << 2;
+        } else {
+            dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
+        }
         GST_DEBUG("Input buffer size set to %d\n",dmaienc->inBufSize);
     }
 
@@ -1081,9 +1086,24 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     if (!GST_IS_TIDMAIBUFFERTRANSPORT(buf) ||
         Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
           != Buffer_Type_GRAPHICS){
+        if (encoder->eops->codec_type == AUDIO) {
+            if (!GST_CLOCK_TIME_IS_VALID(dmaienc->basets)){
+                dmaienc->basets = GST_BUFFER_TIMESTAMP(buf);
+                dmaienc->duration = 0;
+            }
+            dmaienc->duration += GST_BUFFER_DURATION(buf);
+        }
+
         gst_adapter_push(dmaienc->adapter,buf);
+
         if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
             buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->inBufSize);
+
+            if (encoder->eops->codec_type == AUDIO) {
+                GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
+                GST_BUFFER_DURATION(buf) = dmaienc->duration;
+                dmaienc->basets = GST_CLOCK_TIME_NONE;
+            }
         } else {
             buf = NULL;
         }
@@ -1122,7 +1142,6 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
                     " :\nDSP load is %d %%, %u bytes per second\n",
                     GST_TIME_ARGS(time),load,dmaienc->counter);
             }
-            dmaienc->lastLoadstamp = time;
             dmaienc->counter = 0;
 
             Server_getNumMemSegs(dmaienc->hDsp,&nsegs);
@@ -1137,6 +1156,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
             }
 
             GST_ELEMENT_INFO(dmaienc,STREAM,ENCODE,(NULL),("%s",info));
+            dmaienc->lastLoadstamp = time;
         }
     }
 

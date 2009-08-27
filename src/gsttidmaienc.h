@@ -84,6 +84,7 @@ struct _GstTIDmaienc
     gint	         	depth;
     gint	           	awidth;
     gint	           	rate;
+    GstClockTime        basets,duration;
 
     /* Video Capabilities */
     gint                framerateNum;
