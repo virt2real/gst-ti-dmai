@@ -23,9 +23,8 @@
 
 #include <gst/gst.h>
 
-/* Caps templates for aac */
-extern GstStaticPadTemplate gstti_aac_sink_caps;
-extern GstStaticPadTemplate gstti_aac_src_caps;
+/* Caps for aac */
+extern GstStaticCaps gstti_aac_caps;
 
 #endif /* __GSTTI_SUPPORT_AAC_H__ */
 

@@ -23,9 +23,8 @@
 
 #include <gst/gst.h>
 
-/* Caps templates for mp3 */
-extern GstStaticPadTemplate gstti_mp3_sink_caps;
-extern GstStaticPadTemplate gstti_mp3_src_caps;
+/* Caps for mp3 */
+extern GstStaticCaps gstti_mp3_caps;
 
 #endif /* __GSTTI_SUPPORT_MP3_H__ */
 

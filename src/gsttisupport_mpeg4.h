@@ -20,13 +20,12 @@
 
 #include <gst/gst.h>
 
-/* Caps templates for mpeg4 */
-extern GstStaticPadTemplate gstti_mpeg4_sink_caps;
-extern GstStaticPadTemplate gstti_mpeg4_src_caps;
+/* Caps for mpeg4 */
+extern GstStaticCaps gstti_mpeg4_src_caps;
+extern GstStaticCaps gstti_mpeg4_sink_caps;
 
 /* MPEG4 Parser */
 struct gstti_mpeg4_parser_private {
-    struct gstti_common_parser_data *common;
     gboolean            firstBuffer;
     GstBuffer           *header;
     Buffer_Handle       outbuf;

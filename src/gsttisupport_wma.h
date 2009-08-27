@@ -23,9 +23,8 @@
 
 #include <gst/gst.h>
 
-/* Caps templates for wma */
-extern GstStaticPadTemplate gstti_wma_sink_caps;
-extern GstStaticPadTemplate gstti_wma_src_caps;
+/* Caps for wma */
+extern GstStaticCaps gstti_wma_caps;
 
 #endif /* __GSTTI_SUPPORT_WMA_H__ */
 

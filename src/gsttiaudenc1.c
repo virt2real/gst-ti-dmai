@@ -177,7 +177,7 @@ static void gstti_audenc0_destroy (GstTIDmaienc *dmaienc)
  ******************************************************************************/
 static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
-    
+
     Int ret;
 
     /* Invoke the audio encoder */
@@ -186,7 +186,7 @@ static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     ret = Aenc1_process(dmaienc->hCodec, hSrcBuf, hDstBuf);
 
     if (ret < 0) {
-        GST_ELEMENT_ERROR(dmaienc,STREAM,DECODE,(NULL),
+        GST_ELEMENT_ERROR(dmaienc,STREAM,ENCODE,(NULL),
             ("failed to encode audio buffer"));
         return FALSE;
     }
@@ -200,7 +200,7 @@ static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
  ******************************************************************************/
 static gboolean gstti_audenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
-    
+
     Int ret;
 
     /* Invoke the audio encoder */
@@ -209,7 +209,7 @@ static gboolean gstti_audenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     ret = Aenc_process(dmaienc->hCodec, hSrcBuf, hDstBuf);
 
     if (ret < 0) {
-        GST_ELEMENT_ERROR(dmaienc,STREAM,DECODE,(NULL),
+        GST_ELEMENT_ERROR(dmaienc,STREAM,ENCODE,(NULL),
             ("failed to encode audio buffer"));
         return FALSE;
     }

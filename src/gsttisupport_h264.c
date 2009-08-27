@@ -64,33 +64,16 @@ static GstBuffer* gst_h264_get_nal_prefix_code (void);
 
 static gboolean  h264_init(void *);
 static gboolean  h264_clean(void *);
-static GstBuffer *h264_parse(GstBuffer *, void *);
-static GstBuffer *h264_drain(void *);
+static GstBuffer *h264_parse(GstBuffer *, void *,BufTab_Handle);
+static GstBuffer *h264_drain(void *,BufTab_Handle);
 static void h264_flush_stop(void *);
 static void h264_flush_start(void *);
 
-GstStaticPadTemplate gstti_h264_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("video/x-h264, "                             /* H264                  */
-        "framerate=(fraction)[ 0, MAX ], "
-        "width=(int)[ 1, MAX ], "
-        "height=(int)[ 1, MAX ]"
-    )
-);
-
-GstStaticPadTemplate gstti_h264_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("video/x-h264, "                             /* H264                  */
-        "framerate=(fraction)[ 0, MAX ], "
-        "width=(int)[ 1, MAX ], "
-        "height=(int)[ 1, MAX ]"
-    )
+GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
+    "video/x-h264, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ]"
 );
 
 struct gstti_parser_ops gstti_h264_parser = {
@@ -101,6 +84,7 @@ struct gstti_parser_ops gstti_h264_parser = {
     .flush_start = h264_flush_start,
     .flush_stop = h264_flush_stop,
 };
+
 
 /******************************************************************************
  * Init the parser
@@ -119,12 +103,12 @@ static gboolean h264_init(void *arg){
     memset(priv,0,sizeof(struct gstti_h264_parser_private));
     priv->firstBuffer = TRUE;
 
-    priv->common = &dmaidec->parser_common;
     if (dmaidec->parser_private){
         g_free(dmaidec->parser_private);
     }
     dmaidec->parser_private = priv;
 
+    GST_DEBUG("Parser initialized");
     return TRUE;
 }
 
@@ -148,6 +132,7 @@ static gboolean h264_clean(void *arg){
     }
 
     if (dmaidec->parser_private){
+        GST_DEBUG("Freeing parser private");
         g_free(dmaidec->parser_private);
         dmaidec->parser_private = NULL;
     }
@@ -159,12 +144,14 @@ static gboolean h264_clean(void *arg){
 /******************************************************************************
  * Parse the h264 stream
  ******************************************************************************/
-static GstBuffer *h264_parse(GstBuffer *buf, void *private){
+static GstBuffer *h264_parse(GstBuffer *buf, void *private, BufTab_Handle hInBufTab){
     struct gstti_h264_parser_private *priv =
         (struct gstti_h264_parser_private *)private;
     guchar *dest;
     guint	didx;
     GstBuffer *outbuf = NULL;
+
+    GST_DEBUG("Entry");
 
     if (priv->firstBuffer){
         priv->firstBuffer = FALSE;
@@ -177,13 +164,15 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
 
     /* If this buffer is different from previous ones, reset values */
     if (priv->current != buf) {
-        priv->current = NULL;
+        if (priv->current)
+            gst_buffer_unref(priv->current);
+        priv->current = buf;
         priv->current_offset = 0;
     }
+    GST_DEBUG("Current buffer: %d",priv->current_offset);
 
     /* If we already process this buffer, then we return NULL */
     if (priv->current_offset >= GST_BUFFER_SIZE(buf)){
-        gst_buffer_unref(buf);
         return NULL;
     }
 
@@ -191,43 +180,17 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
      * Do we need an output buffer?
      */
     if (!priv->outbuf){
-        pthread_mutex_lock(priv->common->inTabMutex);
-        priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
+        priv->outbuf = BufTab_getFreeBuf(hInBufTab);
         if (!priv->outbuf){
-            pthread_cond_wait(priv->common->waitOnInBufTab,priv->common->inTabMutex);
-            /* The inBufTab may have been destroyed in case of error */
-            if (!priv->common->hInBufTab){
-                GST_DEBUG("Input buffer tab vanished on error");
-                pthread_mutex_unlock(priv->common->inTabMutex);
-                return NULL;
-            }
-
-            /*
-             * If we are sleeping to get a buffer, and we start flushing we
-             * need to discard the incoming data.
-             */
-            if (priv->flushing){
-                GST_DEBUG("Parser dropping incomming buffer due flushing");
-                gst_buffer_unref(buf);
-                pthread_mutex_unlock(priv->common->inTabMutex);
-                return NULL;
-            }
-            priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
-
-            if (!priv->outbuf){
-                GST_ERROR(
-                 "failed to get a free buffer when notified it was available");
-                return NULL;
-            }
+            GST_ERROR("failed to get a free buffer when notified it was "
+                "available. This usually implies an error on the decoder...");
+            return NULL;
         }
-        pthread_mutex_unlock(priv->common->inTabMutex);
         priv->out_offset = 0;
     }
 
     dest = (guchar *)Buffer_getUserPtr(priv->outbuf);
     didx = priv->out_offset;
-
-    priv->current = buf;
 
     if (priv->sps_pps_data){
         /*
@@ -286,8 +249,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
         /* Set the number of bytes used, required by the DMAI APIs*/
         Buffer_setNumBytesUsed(priv->outbuf, didx);
 
-        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-            priv->common->waitOnInBufTab,priv->common->inTabMutex);
+        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
         priv->outbuf = NULL;
         priv->current_offset = GST_BUFFER_SIZE(buf);
     } else {
@@ -349,8 +311,8 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
                 /* Set the number of bytes used, required by the DMAI APIs*/
                 Buffer_setNumBytesUsed(priv->outbuf, didx);
 
-                outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-                    priv->common->waitOnInBufTab,priv->common->inTabMutex);
+                outbuf =
+                    (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
                 priv->outbuf = NULL;
             } else {
                 /* We didn't find start of next frame */
@@ -373,6 +335,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
          */
         GST_BUFFER_SIZE(outbuf) = didx;
 
+        GST_DEBUG("Returning buffer of size %d",didx);
         return outbuf;
     }
 
@@ -383,7 +346,7 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private){
 /******************************************************************************
  * Drain the buffer
  ******************************************************************************/
-static GstBuffer *h264_drain(void *private){
+static GstBuffer *h264_drain(void *private, BufTab_Handle hInBufTab){
     struct gstti_h264_parser_private *priv =
         (struct gstti_h264_parser_private *)private;
     GstBuffer 		*outbuf = NULL;
@@ -394,43 +357,36 @@ static GstBuffer *h264_drain(void *private){
         /* Set the number of bytes used, required by the DMAI APIs*/
         Buffer_setNumBytesUsed(priv->outbuf, priv->out_offset);
 
-        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-            priv->common->waitOnInBufTab,priv->common->inTabMutex);
+        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
         priv->outbuf = NULL;
         GST_BUFFER_SIZE(outbuf) = priv->out_offset;
-        gst_buffer_unref(priv->current);
+        if (priv->current){
+			gst_buffer_unref(priv->current);
+			priv->current = NULL;
+		}
 
         return outbuf;
     } else {
         /*
-         * If we don't have nothing accumulated, return a zero size buffer
-         */
-        pthread_mutex_lock(priv->common->inTabMutex);
-        houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
-        if (!houtbuf){
-            pthread_cond_wait(priv->common->waitOnInBufTab,priv->common->inTabMutex);
-            /* The inBufTab may have been destroyed in case of error */
-            if (!priv->common->hInBufTab){
-                GST_DEBUG("Input buffer tab vanished on error");
-                pthread_mutex_unlock(priv->common->inTabMutex);
-                return NULL;
-            }
-
-            houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
-
-            if (!houtbuf){
-                GST_ERROR("failed to get a free buffer when notified it was "
-                "available. This usually implies an error on the decoder...");
-                return NULL;
-            }
-        }
-        pthread_mutex_unlock(priv->common->inTabMutex);
+          * If we don't have nothing accumulated, return a zero size buffer
+          */
+         houtbuf = BufTab_getFreeBuf(hInBufTab);
+         if (!houtbuf){
+             GST_ERROR(
+                 "failed to get a free buffer when notified it was available");
+             return NULL;
+         }
 
         Buffer_setNumBytesUsed(houtbuf,1);
         outbuf = (GstBuffer*)
-            gst_tidmaibuffertransport_new(houtbuf,priv->common->waitOnInBufTab,
-                priv->common->inTabMutex);
+            gst_tidmaibuffertransport_new(houtbuf,NULL);
         GST_BUFFER_SIZE(outbuf) = 0;
+
+        /* Release any buffer reference we hold */
+        if (priv->current) {
+            gst_buffer_unref(priv->current);
+            priv->current = NULL;
+        }
 
         GST_DEBUG("Parser drained");
     }
@@ -453,12 +409,12 @@ static void h264_flush_start(void *private){
     if (priv->outbuf){
         Buffer_freeUseMask(priv->outbuf,Buffer_getUseMask(priv->outbuf));
         priv->outbuf = NULL;
-        gst_buffer_unref(priv->current);
+        if (priv->current){
+            gst_buffer_unref(priv->current);
+            priv->current = NULL;
+        }
     }
 
-    if (priv->common->waitOnInBufTab){
-        pthread_cond_broadcast(priv->common->waitOnInBufTab);
-    }
     GST_DEBUG("Parser flushed");
     return;
 }

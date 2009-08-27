@@ -25,10 +25,10 @@
 #define __GST_DMAIBUFFERTRANSPORT_H__
 
 #include <gst/gst.h>
-#include <pthread.h>
 
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
+#include <ti/sdo/dmai/Rendezvous.h>
 
 G_BEGIN_DECLS
 
@@ -51,15 +51,14 @@ typedef struct _GstTIDmaiBufferTransport GstTIDmaiBufferTransport;
 struct _GstTIDmaiBufferTransport {
   GstBuffer         buffer;
   Buffer_Handle     dmaiBuffer;
-  pthread_mutex_t   *condMutex;
-  pthread_cond_t    *cond;
+  Rendezvous_Handle hRv;
   void              (* release_cb)(gpointer,GstTIDmaiBufferTransport *);
   gpointer          cb_data;
 };
 
 /* External function declarations */
 GType      gst_tidmaibuffertransport_get_type(void);
-GstBuffer* gst_tidmaibuffertransport_new(Buffer_Handle hBuf,pthread_cond_t *,pthread_mutex_t *);
+GstBuffer* gst_tidmaibuffertransport_new(Buffer_Handle hBuf,Rendezvous_Handle);
 void       gst_tidmaibuffertransport_set_release_callback
     (GstTIDmaiBufferTransport *,
      void (*)(gpointer,GstTIDmaiBufferTransport *),

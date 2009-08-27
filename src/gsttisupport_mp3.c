@@ -31,30 +31,12 @@
 #include "gsttisupport_mp3.h"
 #include "gsttidmaibuffertransport.h"
 
-GstStaticPadTemplate gstti_mp3_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    (" audio/mpeg, "
-         "mpegversion: (int) 1, "
-         "layer: (int) 3, "
-         "rate: (int) [ 8000, MAX], "
-         "channels: (int)[ 1, MAX ]; "
-    )
-);
-
-GstStaticPadTemplate gstti_mp3_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    (" audio/mpeg, "
-         "mpegversion: (int) 1, "
-         "layer: (int) 3, "
-         "rate: (int) [ 8000, MAX], "
-         "channels: (int)[ 1, MAX ]; "
-    )
+GstStaticCaps gstti_mp3_caps = GST_STATIC_CAPS(
+    "audio/mpeg, "
+    "mpegversion: (int) 1, "
+    "layer: (int) 3, "
+    "rate: (int) [ 8000, MAX], "
+    "channels: (int)[ 1, MAX ]; "
 );
 
 /******************************************************************************

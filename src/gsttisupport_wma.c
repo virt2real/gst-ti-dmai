@@ -31,32 +31,13 @@
 #include "gsttisupport_wma.h"
 #include "gsttidmaibuffertransport.h"
 
-GstStaticPadTemplate gstti_wma_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("audio/x-wma, "
-          "channels: (int)[ 1, MAX ], "
-          "rate: (int)[ 8000, MAX ], "
-          "wmaversion: (int) 2, "
-          "block_align:  (int)[ 0, MAX ], "
-          "bitrate: (int) [ 0, MAX ]; "
-    )
-);
-
-GstStaticPadTemplate gstti_wma_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("audio/x-wma, "
-          "channels: (int)[ 1, MAX ], "
-          "rate: (int)[ 8000, MAX ], "
-          "wmaversion: (int) 2, "
-          "block_align:  (int)[ 0, MAX ], "
-          "bitrate: (int) [ 0, MAX ]; "
-    )
+GstStaticCaps gstti_wma_caps = GST_STATIC_CAPS(
+    "audio/x-wma, "
+    "channels: (int)[ 1, MAX ], "
+    "rate: (int)[ 8000, MAX ], "
+    "wmaversion: (int) 2, "
+    "block_align:  (int)[ 0, MAX ], "
+    "bitrate: (int) [ 0, MAX ]; "
 );
 
 /******************************************************************************

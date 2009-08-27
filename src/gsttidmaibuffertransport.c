@@ -120,15 +120,8 @@ static void gst_tidmaibuffertransport_init(GTypeInstance *instance,
 {
     GstTIDmaiBufferTransport *buf = GST_TIDMAIBUFFERTRANSPORT(instance);
 
-    GST_LOG("begin init\n");
-
-    buf->dmaiBuffer = NULL;
-    buf->cond       = NULL;
-    buf->condMutex  = NULL;
     buf->release_cb = NULL;
     buf->cb_data = NULL;
-
-    GST_LOG("end init\n");
 }
 
 
@@ -148,21 +141,23 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
     /* If the DMAI buffer is part of a BufTab, free it for re-use.  Otherwise,
      * destroy the buffer.
      */
-    if (cbuf->condMutex) pthread_mutex_lock(cbuf->condMutex);
     if (Buffer_getBufTab(cbuf->dmaiBuffer) != NULL) {
-        GST_LOG("clearing GStreamer useMask bit so buffer can be reused\n");
         Buffer_freeUseMask(cbuf->dmaiBuffer,
             gst_tidmaibuffertransport_GST_FREE);
+
+        GST_DEBUG("clearing useMask bit so buffer %p can be reused: new mask %dh\n",
+            cbuf->dmaiBuffer,Buffer_getUseMask(cbuf->dmaiBuffer));
+        /* If rendezvous handle is set then wake-up caller */
+        if (cbuf->hRv) {
+            if (Buffer_getUseMask(cbuf->dmaiBuffer) == 0) {
+                Rendezvous_forceAndReset(cbuf->hRv);
+            } else {
+                GST_DEBUG("Not broadcasting buffer free at finalize, since use mask is not clean yet");
+            }
+        }
     } else {
         GST_LOG("calling Buffer_delete()\n");
         Buffer_delete(cbuf->dmaiBuffer);
-    }
-    if (cbuf->condMutex) pthread_mutex_unlock(cbuf->condMutex);
-
-    /* If conditional is set then wake-up caller */
-    if (cbuf->cond) {
-         GST_DEBUG("Broadcast the free buffer");
-         pthread_cond_broadcast(cbuf->cond);
     }
 
     GST_LOG("end finalize\n");
@@ -173,11 +168,11 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
  * gst_tidmaibuffertransport_new
  *    Create a new DMAI buffer transport object.
  *
- * Note: If conditional is set then pthread_cond_broadcast will be called for
+ * Note: If rendenzvous handle is set then Rendenzvous_force will be called for
  *       this handle during finalize method.
  ******************************************************************************/
 GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
-    pthread_cond_t *cond,pthread_mutex_t *condMutex)
+    Rendezvous_Handle hRv)
 {
     GstTIDmaiBufferTransport *buf;
 
@@ -197,9 +192,7 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
     }
 
     buf->dmaiBuffer = hBuf;
-    buf->cond       = cond;
-    buf->condMutex  = condMutex;
-
+    buf->hRv = hRv;
     GST_LOG("end new\n");
 
     return GST_BUFFER(buf);

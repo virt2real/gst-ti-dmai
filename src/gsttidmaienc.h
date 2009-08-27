@@ -34,6 +34,7 @@
 #include <xdc/std.h>
 #include <ti/sdo/ce/Engine.h>
 
+#include <ti/sdo/dmai/Cpu.h>
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/Fifo.h>
@@ -51,9 +52,9 @@ typedef struct _GstTIDmaiencClass GstTIDmaiencClass;
 struct _GstTIDmaienc
 {
     /* gStreamer infrastructure */
-    GstElement     element;
-    GstPad        *sinkpad;
-    GstPad        *srcpad;
+    GstElement          element;
+    GstPad              *sinkpad;
+    GstPad              *srcpad;
 
     /* Element properties */
     const gchar*        engineName;
@@ -62,6 +63,10 @@ struct _GstTIDmaienc
     /* Element state */
     Engine_Handle    	hEngine;
     gpointer         	hCodec;
+    Server_Handle       hDsp;
+    GstClockTime        lastLoadstamp;
+    gboolean            printDspLoad;
+    guint32              counter;
 
     /* Buffer management */
     GstAdapter          *adapter;
@@ -72,15 +77,13 @@ struct _GstTIDmaienc
     gint                head;
     gint                tail;
     gint                headWrap;
-    pthread_cond_t      waitOnOutBuf;
-    pthread_mutex_t     outBufMutex;
     gboolean            require_configure;
 
     /* Audio Capabilities */
-    gint		channels;
-    gint		depth;
-    gint		awidth;
-    gint		rate;
+    gint		        channels;
+    gint	         	depth;
+    gint	           	awidth;
+    gint	           	rate;
 
     /* Video Capabilities */
     gint                framerateNum;
@@ -93,7 +96,8 @@ struct _GstTIDmaienc
 /* _GstTIDmaiencClass object */
 struct _GstTIDmaiencClass
 {
-    GstElementClass parent_class;
+    GstElementClass         parent_class;
+    GstPadTemplate   *srcTemplateCaps, *sinkTemplateCaps;
 };
 
 /* Decoder operations */
@@ -110,12 +114,11 @@ struct gstti_encoder_ops {
 /* Data definition for each instance of decoder */
 struct _GstTIDmaiencData
 {
-    const gchar                     *streamtype;
-    GstStaticPadTemplate            *srcTemplateCaps;
-    GstStaticPadTemplate            *sinkTemplateCaps;
-    const gchar                     *engineName;
-    const gchar                     *codecName;
-    struct gstti_encoder_ops        *eops;
+    const gchar                 *streamtype;
+    GstStaticCaps               *srcCaps, *sinkCaps;
+    const gchar                 *engineName;
+    const gchar                 *codecName;
+    struct gstti_encoder_ops    *eops;
 };
 
 /* Function to initialize the decoders */

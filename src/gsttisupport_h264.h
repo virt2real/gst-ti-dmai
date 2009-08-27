@@ -26,13 +26,11 @@
 
 #include <gst/gst.h>
 
-/* Caps template for h264 */
-extern GstStaticPadTemplate gstti_h264_sink_caps;
-extern GstStaticPadTemplate gstti_h264_src_caps;
+/* Caps for h264 */
+extern GstStaticCaps gstti_h264_caps;
 
 /* H264 Parser */
 struct gstti_h264_parser_private {
-    struct gstti_common_parser_data *common;
     gboolean            firstBuffer;
     GstBuffer           *sps_pps_data;
     GstBuffer           *nal_code_prefix;

@@ -1082,12 +1082,6 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
         sink->hDisplay = NULL;
     }
 
-    if (sink->tempDmaiBuf) {
-        GST_DEBUG("Freeing temporary DMAI buffer\n");
-        Buffer_delete(sink->tempDmaiBuf);
-        sink->tempDmaiBuf = NULL;
-    }
-
     GST_DEBUG("Finish\n");
 
     return TRUE;
@@ -1269,7 +1263,7 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
         /* allocate DMAI buffer */
         if (sink->tempDmaiBuf == NULL) {
 
-            GST_DEBUG("\nInput buffer is non-dmai, allocating new buffer");
+            GST_DEBUG("Input buffer is non-dmai, allocating new buffer");
             gfxAttrs.bAttrs.reference   = sink->contiguousInputFrame;
             gfxAttrs.dim.width          = width;
             gfxAttrs.dim.height         = height;
@@ -1486,6 +1480,12 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
             ", flags: %d) %p\n", GST_BUFFER_SIZE(buf), ts_str, dur_str,
             GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf),
             GST_MINI_OBJECT(buf)->flags, buf);
+
+    if (sink->tempDmaiBuf) {
+        GST_DEBUG("Freeing temporary DMAI buffer\n");
+        Buffer_delete(sink->tempDmaiBuf);
+        sink->tempDmaiBuf = NULL;
+    }
 
     /* Signal the handoff in case anyone is looking for that */
     if (sink->signal_handoffs)

@@ -52,42 +52,36 @@ static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf);
 
 static gboolean  mpeg4_init(void *);
 static gboolean  mpeg4_clean(void *);
-static GstBuffer *mpeg4_parse(GstBuffer *, void *);
-static GstBuffer *mpeg4_drain(void *);
+static GstBuffer *mpeg4_parse(GstBuffer *, void *,BufTab_Handle);
+static GstBuffer *mpeg4_drain(void *,BufTab_Handle);
 static void mpeg4_flush_stop(void *);
 static void mpeg4_flush_start(void *);
 
-GstStaticPadTemplate gstti_mpeg4_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("video/mpeg, "
-     "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
-        "systemstream=(boolean)false, "
-         "framerate=(fraction)[ 0, MAX ], "
-         "width=(int)[ 1, MAX ], "
-         "height=(int)[ 1, MAX ] ;"
-     "video/x-divx, "               /* AVI containers save mpeg4 as divx... */
-         "divxversion=(int) 4, "
-         "framerate=(fraction)[ 0, MAX ], "
-         "width=(int)[ 1, MAX ], "
-         "height=(int)[ 1, MAX ] ;"
-    )
+/*
+ * We have separate caps for src and sink, since we need
+ * to accept ASP divx profile...
+ */
+GstStaticCaps gstti_mpeg4_sink_caps = GST_STATIC_CAPS(
+    "video/mpeg, "
+    "   mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
+    "   systemstream=(boolean)false, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] ;"
+    "video/x-divx, "               /* AVI containers save mpeg4 as divx... */
+    "   divxversion=(int) 4, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] ;"
 );
 
-GstStaticPadTemplate gstti_mpeg4_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("video/mpeg, "
-        "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
-        "systemstream=(boolean)false, "
-        "framerate=(fraction)[ 0, MAX ], "
-        "width=(int)[ 1, MAX ], "
-        "height=(int)[ 1, MAX ] ;"
-    )
+GstStaticCaps gstti_mpeg4_src_caps = GST_STATIC_CAPS(
+    "video/mpeg, "
+    "   mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
+    "   systemstream=(boolean)false, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] ;"
 );
 
 struct gstti_parser_ops gstti_mpeg4_parser = {
@@ -116,7 +110,6 @@ static gboolean mpeg4_init(void *arg){
 
     memset(priv,0,sizeof(struct gstti_mpeg4_parser_private));
     priv->firstBuffer = TRUE;
-    priv->common = &dmaidec->parser_common;
 
     if (dmaidec->parser_private){
         g_free(dmaidec->parser_private);
@@ -139,9 +132,11 @@ static gboolean mpeg4_clean(void *arg){
     if (priv->header) {
         GST_DEBUG("freeing mpeg4 header buffers\n");
         gst_buffer_unref(priv->header);
+        priv->header = NULL;
     }
 
     if (dmaidec->parser_private){
+        GST_DEBUG("Freeing parser private");
         g_free(dmaidec->parser_private);
         dmaidec->parser_private = NULL;
     }
@@ -153,13 +148,14 @@ static gboolean mpeg4_clean(void *arg){
 /******************************************************************************
  * Parse the mpeg4 stream
  ******************************************************************************/
-static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
+static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private, BufTab_Handle hInBufTab){
     struct gstti_mpeg4_parser_private *priv =
         (struct gstti_mpeg4_parser_private *)private;
     guchar *dest;
     guint	didx;
     GstBuffer *outbuf = NULL;
 
+    GST_DEBUG("Entry");
     if (priv->firstBuffer){
         priv->firstBuffer = FALSE;
         if (gst_mpeg4_valid_quicktime_header(buf)) {
@@ -169,13 +165,15 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
 
     /* If this buffer is different from previous ones, reset values */
     if (priv->current != buf) {
-        priv->current = NULL;
+        if (priv->current)
+            gst_buffer_unref(priv->current);
+        priv->current = buf;
         priv->current_offset = 0;
     }
+    GST_DEBUG("Current buffer: %d",priv->current_offset);
 
     /* If we already process this buffer, then we return NULL */
     if (priv->current_offset >= GST_BUFFER_SIZE(buf)){
-        gst_buffer_unref(buf);
         return NULL;
     }
 
@@ -183,43 +181,17 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
      * Do we need an output buffer?
      */
     if (!priv->outbuf){
-        pthread_mutex_lock(priv->common->inTabMutex);
-        priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
+        priv->outbuf = BufTab_getFreeBuf(hInBufTab);
         if (!priv->outbuf){
-            pthread_cond_wait(priv->common->waitOnInBufTab,priv->common->inTabMutex);
-            /* The inBufTab may have been destroyed in case of error */
-            if (!priv->common->hInBufTab){
-                GST_DEBUG("Input buffer tab vanished on error");
-                pthread_mutex_unlock(priv->common->inTabMutex);
-                return NULL;
-            }
-
-            /*
-             * If we are sleeping to get a buffer, and we start flushing we
-             * need to discard the incoming data.
-             */
-            if (priv->flushing){
-                GST_DEBUG("Parser dropping incomming buffer due flushing");
-                gst_buffer_unref(buf);
-                pthread_mutex_unlock(priv->common->inTabMutex);
-                return NULL;
-            }
-            priv->outbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
-
-            if (!priv->outbuf){
-                GST_ERROR("failed to get a free buffer when notified it was "
+            GST_ERROR("failed to get a free buffer when notified it was "
                 "available. This usually implies an error on the decoder...");
-                return NULL;
-            }
+            return NULL;
         }
-        pthread_mutex_unlock(priv->common->inTabMutex);
         priv->out_offset = 0;
     }
 
     dest = (guchar *)Buffer_getUserPtr(priv->outbuf);
     didx = priv->out_offset;
-
-    priv->current = buf;
 
     if (priv->header){
         /*
@@ -245,8 +217,7 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
         /* Set the number of bytes used, required by the DMAI APIs*/
         Buffer_setNumBytesUsed(priv->outbuf, didx);
 
-        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-            priv->common->waitOnInBufTab,priv->common->inTabMutex);
+        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
         priv->outbuf = NULL;
         priv->current_offset = GST_BUFFER_SIZE(buf);
     } else {
@@ -292,8 +263,7 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
                 /* Set the number of bytes used, required by the DMAI APIs*/
                 Buffer_setNumBytesUsed(priv->outbuf, didx);
 
-                outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-                    priv->common->waitOnInBufTab,priv->common->inTabMutex);
+                outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
                 priv->outbuf = NULL;
             } else {
                 /* We didn't find start of next frame */
@@ -316,6 +286,7 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
          */
         GST_BUFFER_SIZE(outbuf) = didx;
 
+        GST_DEBUG("Returning buffer of size %d",didx);
         return outbuf;
     }
 
@@ -326,7 +297,7 @@ static GstBuffer *mpeg4_parse(GstBuffer *buf, void *private){
 /******************************************************************************
  * Drain the buffer
  ******************************************************************************/
-static GstBuffer *mpeg4_drain(void *private){
+static GstBuffer *mpeg4_drain(void *private,BufTab_Handle hInBufTab){
     struct gstti_mpeg4_parser_private *priv =
         (struct gstti_mpeg4_parser_private *)private;
     GstBuffer 		*outbuf = NULL;
@@ -337,42 +308,36 @@ static GstBuffer *mpeg4_drain(void *private){
         /* Set the number of bytes used, required by the DMAI APIs*/
         Buffer_setNumBytesUsed(priv->outbuf, priv->out_offset);
 
-        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,
-            priv->common->waitOnInBufTab,priv->common->inTabMutex);
+        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
         priv->outbuf = NULL;
         GST_BUFFER_SIZE(outbuf) = priv->out_offset;
-        gst_buffer_unref(priv->current);
+        if (priv->current){
+            gst_buffer_unref(priv->current);
+            priv->current = NULL;
+        }
 
         return outbuf;
     } else {
         /*
          * If we don't have nothing accumulated, return a zero size buffer
          */
-        pthread_mutex_lock(priv->common->inTabMutex);
-        houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
+        houtbuf = BufTab_getFreeBuf(hInBufTab);
         if (!houtbuf){
-            pthread_cond_wait(priv->common->waitOnInBufTab,priv->common->inTabMutex);
-            /* The inBufTab may have been destroyed in case of error */
-            if (!priv->common->hInBufTab){
-                GST_DEBUG("Input buffer tab vanished on error");
-                pthread_mutex_unlock(priv->common->inTabMutex);
-                return NULL;
-            }
-            houtbuf = BufTab_getFreeBuf(priv->common->hInBufTab);
-
-            if (!houtbuf){
-                GST_ERROR(
-                 "failed to get a free buffer when notified it was available");
-                return NULL;
-            }
+            GST_ERROR(
+                "failed to get a free buffer when notified it was available");
+            return NULL;
         }
-        pthread_mutex_unlock(priv->common->inTabMutex);
 
         Buffer_setNumBytesUsed(houtbuf,1);
         outbuf = (GstBuffer*)
-           gst_tidmaibuffertransport_new(houtbuf,
-               priv->common->waitOnInBufTab,priv->common->inTabMutex);
+           gst_tidmaibuffertransport_new(houtbuf,NULL);
         GST_BUFFER_SIZE(outbuf) = 0;
+
+        /* Release any buffer reference we hold */
+        if (priv->current) {
+            gst_buffer_unref(priv->current);
+            priv->current = NULL;
+        }
 
         GST_DEBUG("Parser drained");
     }
@@ -395,12 +360,12 @@ static void mpeg4_flush_start(void *private){
     if (priv->outbuf){
         Buffer_freeUseMask(priv->outbuf, Buffer_getUseMask(priv->outbuf));
         priv->outbuf = NULL;
-        gst_buffer_unref(priv->current);
+        if (priv->current){
+            gst_buffer_unref(priv->current);
+            priv->current = NULL;
+        }
     }
 
-    if (priv->common->waitOnInBufTab){
-        pthread_cond_broadcast(priv->common->waitOnInBufTab);
-    }
     GST_DEBUG("Parser flushed");
     return;
 }
@@ -434,8 +399,7 @@ static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf)
         goto no_data;
 
     /* Read extra data passed via demuxer. */
-    value = gst_structure_get_value(capStruct, "codec_data");
-    if (value < 0)
+    if (!(value = gst_structure_get_value(capStruct, "codec_data")))
         goto no_data;
 
     codec_data = gst_value_get_buffer(value);
@@ -443,7 +407,7 @@ static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf)
     return codec_data;
 
 no_data:
-    GST_ERROR("demuxer does not have codec_data field\n");
+    GST_WARNING("demuxer does not have codec_data field\n");
     return NULL;
 }
 

@@ -32,28 +32,11 @@
 #include "gsttidmaibuffertransport.h"
 
 
-GstStaticPadTemplate gstti_aac_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("audio/mpeg, "
-     "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
-        "channels= (int)[ 1, MAX ], "
-        "rate = (int)[ 8000, MAX ]; "
-    )
-);
-
-GstStaticPadTemplate gstti_aac_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("audio/mpeg, "
-     "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
-        "channels= (int)[ 1, MAX ], "
-        "rate = (int)[ 8000, MAX ]; "
-    )
+GstStaticCaps gstti_aac_caps = GST_STATIC_CAPS(
+    "audio/mpeg, "
+    "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
+    "channels= (int)[ 1, MAX ], "
+    "rate = (int)[ 8000, MAX ]; "
 );
 
 

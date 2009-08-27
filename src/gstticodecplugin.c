@@ -49,77 +49,34 @@
 #include "gsttividresize.h"
 #include "gsttidmaiaccel.h"
 
-
-
-/* Setting the audio caps */
-/*
-static GstStaticPadTemplate gstti_pcm_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("audio/x-raw-int, "
-         "width = (int) 16, "
-         "depth = (int) 16, "
-         "endianness = (int) BYTE_ORDER, "
-         "channels = (int) { 1, 8 }, "
-         "rate = (int) [ 8000, 96000 ]"
-    )
-);
-*/
-
-static GstStaticPadTemplate gstti_pcm_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("audio/x-raw-int, "
-         "width = (int) 16, "
-         "depth = (int) 16, "
-         "endianness = (int) BYTE_ORDER, "
-         "channels = (int) { 1, 8 }, "
-         "rate = (int) [ 8000, 96000 ]"
-    )
+/* Audio caps */
+static GstStaticCaps gstti_pcm_caps = GST_STATIC_CAPS(
+    "audio/x-raw-int, "
+    "   width = (int) 16, "
+    "   depth = (int) 16, "
+    "   endianness = (int) BYTE_ORDER, "
+    "   channels = (int) { 1, 8 }, "
+    "   rate = (int) [ 8000, 96000 ]"
 );
 
-
-
-/* Setting the video caps */
-
-static GstStaticPadTemplate gstti_uyvy_src_caps = GST_STATIC_PAD_TEMPLATE(
-    "src",
-    GST_PAD_SRC,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    ("video/x-raw-yuv, "                        /* UYVY */
-        "format=(fourcc)UYVY, "
-        "framerate=(fraction)[ 0, MAX ], "
-        "width=(int)[ 1, MAX ], "
-        "height=(int)[ 1, MAX ]"
-    )
-);
-
-static GstStaticPadTemplate gstti_uyvy_sink_caps = GST_STATIC_PAD_TEMPLATE(
-    "sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS
-    (
+/* Video caps */
 #if PLATFORM == dm6467
-      "video/x-raw-yuv, "                        /* Y8C8 - YUV422 semi planar */
-        "format=(fourcc)Y8C8, "
-        "framerate=(fraction)[ 0, MAX ], "
-        "width=(int)[ 1, MAX ], "
-        "height=(int)[ 1, MAX ]"
-#else
-      "video/x-raw-yuv, "                        /* UYVY */
-        "format=(fourcc)UYVY, "
-        "framerate=(fraction)[ 0, MAX ], "
-        "width=(int)[ 1, MAX ], "
-        "height=(int)[ 1, MAX ] "
-#endif
-    )
+static GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "                        /* Y8C8 - YUV422 semi planar */
+    "   format=(fourcc)Y8C8, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ]"
 );
+#else
+static GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "                        /* UYVY */
+    "   format=(fourcc)UYVY, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] "
+);
+#endif
 
 extern struct gstti_decoder_ops gstti_viddec2_ops;
 extern struct gstti_decoder_ops gstti_viddec0_ops;
@@ -152,8 +109,8 @@ GstTIDmaidecData decoders[] = {
 #ifdef ENABLE_H264DEC_XDM2
     {
         .streamtype = "h264",
-        .sinkTemplateCaps = &gstti_h264_sink_caps,
-        .srcTemplateCaps = &gstti_uyvy_src_caps,
+        .sinkCaps = &gstti_h264_caps,
+        .srcCaps = &gstti_uyvy_caps,
         .engineName = DECODEENGINE,
         .codecName = "h264dec",
         .dops = &gstti_viddec2_ops,
@@ -162,8 +119,8 @@ GstTIDmaidecData decoders[] = {
 #elif defined(ENABLE_H264DEC_XDM0)
     {
         .streamtype = "h264",
-        .sinkTemplateCaps = &gstti_h264_sink_caps,
-        .srcTemplateCaps = &gstti_uyvy_src_caps,
+        .sinkCaps = &gstt_capsk_caps,
+        .srcCaps = &gstti_uyvy_caps,
         .engineName = DECODEENGINE,
         .codecName = "h264dec",
         .dops = &gstti_viddec0_ops,
@@ -173,8 +130,8 @@ GstTIDmaidecData decoders[] = {
 #ifdef ENABLE_MPEG4DEC_XDM2
     {
         .streamtype = "mpeg4",
-        .sinkTemplateCaps = &gstti_mpeg4_sink_caps,
-        .srcTemplateCaps = &gstti_uyvy_src_caps,
+        .sinkCaps = &gstti_mpeg4_sink_caps,
+        .srcCaps = &gstti_uyvy_caps,
         .engineName = DECODEENGINE,
         .codecName = "mpeg4dec",
         .dops = &gstti_viddec2_ops,
@@ -183,8 +140,8 @@ GstTIDmaidecData decoders[] = {
 #elif defined(ENABLE_MPEG4DEC_XDM0)
     {
         .streamtype = "mpeg4",
-        .sinkTemplateCaps = &gstti_mpeg4_sink_caps,
-        .srcTemplateCaps = &gstti_uyvy_src_caps,
+        .sinkCaps = &gstti_mpeg4_sink_caps,
+        .srcCaps = &gstti_uyvy_caps,
         .engineName = DECODEENGINE,
         .codecName = "mpeg4dec",
         .dops = &gstti_viddec0_ops,
@@ -198,8 +155,8 @@ GstTIDmaidecData decoders[] = {
 #ifdef ENABLE_AACDEC_XDM1
     {
         .streamtype = "aac",
-        .sinkTemplateCaps = &gstti_aac_sink_caps,
-        .srcTemplateCaps = &gstti_pcm_src_caps,
+        .sinkCaps = &gstti_aac_caps,
+        .srcCaps = &gstti_pcm_caps,
         .engineName = DECODEENGINE,
         .codecName = "aachedec",
         .dops = &gstti_auddec1_ops,
@@ -208,8 +165,8 @@ GstTIDmaidecData decoders[] = {
 #elif defined(ENABLE_AAC4DEC_XDM0)
     {
         .streamtype = "aac",
-        .sinkTemplateCaps = &gstti_aac_sink_caps,
-        .srcTemplateCaps = &gstti_pcm_src_caps,
+        .sinkCaps = &gstti_aac_caps,
+        .srcCaps = &gstti_pcm_caps,
         .engineName = DECODEENGINE,
         .codecName = "aachedec",
         .dops = &gstti_auddec0_ops,
@@ -219,6 +176,14 @@ GstTIDmaidecData decoders[] = {
 #endif*/
 
     { .streamtype = NULL },
+
+    /* Dummy entry to avoid build errors when no element
+       is enabled using the src or sink caps
+    */
+    { .streamtype = NULL,
+      .srcCaps = &gstti_uyvy_caps,
+      .sinkCaps = &gstti_uyvy_caps,
+    },
 };
 
 
@@ -228,8 +193,8 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_H264ENC_XDM1
     {
         .streamtype = "h264",
-        .sinkTemplateCaps = &gstti_uyvy_sink_caps,
-        .srcTemplateCaps = &gstti_h264_src_caps,
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_h264_caps,
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
         .eops = &gstti_videnc1_ops,
@@ -237,8 +202,8 @@ GstTIDmaiencData encoders[] = {
 #elif defined(ENABLE_H264ENC_XDM0)
     {
         .streamtype = "h264",
-        .sinkTemplateCaps = &gstti_uyvy_sink_caps,
-        .srcTemplateCaps = &gstti_h264_src_caps,
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_h264_caps,
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
         .eops = &gstti_videnc0_ops,
@@ -247,8 +212,8 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_MPEG4ENC_XDM1
     {
         .streamtype = "mpeg4",
-        .sinkTemplateCaps = &gstti_uyvy_sink_caps,
-        .srcTemplateCaps = &gstti_mpeg4_src_caps,
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_mpeg4_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
         .eops = &gstti_videnc1_ops,
@@ -256,8 +221,8 @@ GstTIDmaiencData encoders[] = {
 #elif defined(ENABLE_MPEG4ENC_XDM0)
     {
         .streamtype = "mpeg4",
-        .sinkTemplateCaps = &gstti_uyvy_sink_caps,
-        .srcTemplateCaps = &gstti_mpeg4_src_caps,
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_mpeg4_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
         .eops = &gstti_videnc0_ops,
@@ -269,8 +234,8 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_AACENC_XDM1
     {
         .streamtype = "aac",
-        .sinkTemplateCaps = &gstti_pcm_sink_caps,
-        .srcTemplateCaps = &gstti_aac_src_caps,
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_aac_caps,
         .engineName = ENCODEENGINE,
         .codecName = "aacenc",
         .eops = &gstti_audenc1_ops,
@@ -278,8 +243,8 @@ GstTIDmaiencData encoders[] = {
 #elif defined(ENABLE_AACENC_XDM0)
     {
         .streamtype = "aac",
-        .sinkTemplateCaps = &gstti_pcm_sink_caps,
-        .srcTemplateCaps = &gstti_aac_src_caps,
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_aac_caps,
         .engineName = ENCODEENGINE,
         .codecName = "aacenc",
         .eops = &gstti_audenc0_ops,
@@ -288,8 +253,8 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_WMAENC_XDM1
     {
         .streamtype = "wma",
-        .sinkTemplateCaps = &gstti_pcm_sink_caps,
-        .srcTemplateCaps = &gstti_wma_src_caps,
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_wma_caps,
         .engineName = ENCODEENGINE,
         .codecName = "wmaenc",
         .eops = &gstti_audenc1_ops,
@@ -297,8 +262,8 @@ GstTIDmaiencData encoders[] = {
 #elif defined(ENABLE_WMAENC_XDM0)
     {
         .streamtype = "wma",
-        .sinkTemplateCaps = &gstti_pcm_sink_caps,
-        .srcTemplateCaps = &gstti_wma_src_caps,
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_wma_caps,
         .engineName = ENCODEENGINE,
         .codecName = "wmaenc",
         .eops = &gstti_audenc0_ops,
@@ -307,8 +272,8 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_MP3ENC_XDM1
     {
         .streamtype = "mp3",
-        .sinkTemplateCaps = &gstti_pcm_sink_caps,
-        .srcTemplateCaps = &gstti_mp3_src_caps,
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_mp3_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mp3enc",
         .eops = &gstti_audenc1_ops,
@@ -316,14 +281,21 @@ GstTIDmaiencData encoders[] = {
 #elif defined(ENABLE_MP3ENC_XDM0)
     {
         .streamtype = "mp3",
-        .sinkTemplateCaps = &gstti_pcm_sink_caps,
-        .srcTemplateCaps = &gstti_mp3_src_caps,
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_mp3_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mp3enc",
         .eops = &gstti_audenc0_ops,
     },
 #endif
     { .streamtype = NULL },
+    /* Dummy entry to avoid build errors when no element
+       is enabled using the src or sink caps
+    */
+    { .streamtype = NULL,
+      .srcCaps = &gstti_pcm_caps,
+      .sinkCaps = &gstti_pcm_caps,
+    },
 };
 
 /* entry point to initialize the plug-in

@@ -26,8 +26,8 @@
 #include <gst/gst.h>
 #include <ti/sdo/dmai/BufTab.h>
 
-typedef GstBuffer * (* parser_function) (GstBuffer *, void *);
-typedef GstBuffer * (* parser_drain) (void *);
+typedef GstBuffer * (* parser_function) (GstBuffer *, void *, BufTab_Handle);
+typedef GstBuffer * (* parser_drain) (void *, BufTab_Handle);
 typedef void (* parser_flush) (void *);
 typedef gboolean (* parser_init) (void *);
 
@@ -82,17 +82,6 @@ struct gstti_parser_ops {
      * This function makes the parser stop flushing contents.
      */
     parser_flush	flush_stop;
-};
-
-
-/*
- * Custom data structures for each parser available
- */
-
-struct gstti_common_parser_data{
-    pthread_mutex_t     *inTabMutex;
-    pthread_cond_t      *waitOnInBufTab;
-    BufTab_Handle       hInBufTab;
 };
 
 #endif

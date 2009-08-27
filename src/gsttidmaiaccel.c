@@ -2,7 +2,8 @@
  * gsttidmaiaccel.c
  *
  * This file defines the "dmaiaccel" element, which converts gst buffers into
- * dmai transport buffers if possible.
+ * dmai transport buffers if possible, otherwise it just memcpy the data into
+ * dmai transport buffers.
  *
  * Original Author:
  *     Diego Dompe, RidgeRun
@@ -165,7 +166,6 @@ static void gst_tidmaiaccel_class_init(GstTIDmaiaccelClass *klass)
         GST_DEBUG_FUNCPTR(gst_tidmaiaccel_prepare_output_buffer);
     trans_class->get_unit_size =
         GST_DEBUG_FUNCPTR(gst_tidmaiaccel_get_unit_size);
-//    trans_class->passthrough_on_same_caps = FALSE;
 
     GST_LOG("Finish\n");
 }
@@ -223,49 +223,87 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
 {
     GstTIDmaiaccel *dmaiaccel = GST_TIDMAIACCEL(trans);
     Buffer_Handle   hOutBuf;
-    Bool isContiguous;
+    Bool isContiguous = FALSE;
 
-    if (dmaiaccel->disabled){
-        goto clone_buffer;
+    if (!dmaiaccel->disabled){
+        Memory_getBufferPhysicalAddress(
+                    GST_BUFFER_DATA(inBuf),
+                    GST_BUFFER_SIZE(inBuf),
+                    &isContiguous);
     }
 
-    Memory_getBufferPhysicalAddress(
-                GST_BUFFER_DATA(inBuf),
-                GST_BUFFER_SIZE(inBuf),
-                &isContiguous);
-//    if (isContiguous){
-    if (TRUE){
-        if (dmaiaccel->width){
-            GST_INFO("Is contiguous video buffer");
+    if (isContiguous && dmaiaccel->width){
+        GST_DEBUG("Is contiguous video buffer");
 
-            /* This is a contiguous buffer, create a dmai buffer transport */
+        /* This is a contiguous buffer, create a dmai buffer transport */
+        BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
+
+        gfxAttrs.bAttrs.reference   = TRUE;
+        gfxAttrs.dim.width          = dmaiaccel->width;
+        gfxAttrs.dim.height         = dmaiaccel->height;
+        gfxAttrs.colorSpace         = dmaiaccel->colorSpace;
+        gfxAttrs.dim.lineLength     = dmaiaccel->lineLength;
+
+        hOutBuf = Buffer_create(GST_BUFFER_SIZE(inBuf), &gfxAttrs.bAttrs);
+        Buffer_setUserPtr(hOutBuf, (Int8*)GST_BUFFER_DATA(inBuf));
+        Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
+        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL);
+        gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
+            Buffer_getSize(hOutBuf));
+        gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
+        gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));
+        return GST_FLOW_OK;
+    } else {
+        GST_DEBUG("Copying into contiguous video buffer");
+        /* This is a contiguous buffer, create a dmai buffer transport */
+
+        if (!dmaiaccel->disabled){
+            /* Initialize our buffer tab */
+            Rendezvous_Attrs  rzvAttrs  = Rendezvous_Attrs_DEFAULT;
             BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
 
-            //        gfxAttrs.bAttrs.reference   = TRUE;
             gfxAttrs.dim.width          = dmaiaccel->width;
             gfxAttrs.dim.height         = dmaiaccel->height;
             gfxAttrs.colorSpace         = dmaiaccel->colorSpace;
             gfxAttrs.dim.lineLength     = dmaiaccel->lineLength;
 
-            hOutBuf = Buffer_create(GST_BUFFER_SIZE(inBuf), &gfxAttrs.bAttrs);
-            //      Buffer_setUserPtr(hOutBuf, (Int8*)GST_BUFFER_DATA(inBuf));
-            Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
-            *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL);
-            gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
-                Buffer_getSize(hOutBuf));
-            //        gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
-            gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));
-            return GST_FLOW_OK;
+            dmaiaccel->hOutBufTab =
+                        BufTab_create(2, GST_BUFFER_SIZE(inBuf),
+                            BufferGfx_getBufferAttrs(&gfxAttrs));
+            dmaiaccel->waitOnOutBufTab = Rendezvous_create(2, &rzvAttrs);
+            if (dmaiaccel->hOutBufTab == NULL) {
+                GST_ELEMENT_ERROR(dmaiaccel,RESOURCE,NO_SPACE_LEFT,(NULL),
+                    ("failed to create output buffer tab"));
+                return GST_FLOW_ERROR;
+            }
+            dmaiaccel->disabled = TRUE;
         }
+
+        hOutBuf = BufTab_getFreeBuf(dmaiaccel->hOutBufTab);
+        if (hOutBuf == NULL) {
+            GST_INFO("Failed to get free buffer, waiting on bufTab\n");
+            Rendezvous_meet(dmaiaccel->waitOnOutBufTab);
+
+            hOutBuf = BufTab_getFreeBuf(dmaiaccel->hOutBufTab);
+
+            if (hOutBuf == NULL) {
+                GST_ELEMENT_ERROR(dmaiaccel,RESOURCE,NO_SPACE_LEFT,(NULL),
+                    ("failed to get a free contiguous buffer from BufTab"));
+                return GST_FLOW_ERROR;
+            }
+        }
+
+        memcpy(Buffer_getUserPtr(hOutBuf),GST_BUFFER_DATA(inBuf),
+            GST_BUFFER_SIZE(inBuf));
+        Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
+        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, dmaiaccel->waitOnOutBufTab);
+        gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
+            Buffer_getSize(hOutBuf));
+        gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
+        gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));
+
+        return GST_FLOW_OK;
     }
-
-    /* Nothing to accelerate, clone the old buffer */
-clone_buffer:
-    GST_WARNING("Isn't contiguous");
-    *outBuf = gst_buffer_ref (inBuf);
-    dmaiaccel->disabled = TRUE;
-
-    return GST_FLOW_OK;
 }
 
 
@@ -293,6 +331,13 @@ static GstFlowReturn gst_tidmaiaccel_transform (GstBaseTransform *trans,
     return GST_FLOW_OK;
 }
 
+#if 0
+if (dmaidec->hOutBufTab) {
+    GST_DEBUG("freeing output buffers\n");
+    BufTab_delete(dmaidec->hOutBufTab);
+    dmaidec->hOutBufTab = NULL;
+}
+#endif
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

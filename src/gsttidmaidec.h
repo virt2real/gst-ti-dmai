@@ -23,8 +23,6 @@
 #ifndef __GST_TIDMAIDEC_H__
 #define __GST_TIDMAIDEC_H__
 
-#include <pthread.h>
-
 #include <gst/gst.h>
 #include "gsttiparsers.h"
 #include "gstticommonutils.h"
@@ -36,6 +34,7 @@
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/Fifo.h>
 #include <ti/sdo/dmai/BufTab.h>
+#include <ti/sdo/dmai/Rendezvous.h>
 
 G_BEGIN_DECLS
 
@@ -64,20 +63,11 @@ struct _GstTIDmaidec
     gpointer         	hCodec;
 
     /* Output thread */
-    pthread_t           outputThread;
     GList               *outList;
-    pthread_mutex_t     listMutex;
-    pthread_cond_t      listCond;
-    gboolean            flushing;
-    gboolean            shutdown;
-    gboolean            eos;
 
     /* Blocking Conditions to Throttle I/O */
-    pthread_cond_t      waitOnInBufTab;
-    pthread_mutex_t     inTabMutex;
-    pthread_cond_t      waitOnOutBufTab;
-    pthread_mutex_t     outTabMutex;
-    UInt16              outputUseMask;
+    Rendezvous_Handle   waitOnOutBufTab;
+    gint16              outputUseMask;
 
     /* Framerate (Num/Den) */
     gint                framerateNum;
@@ -94,17 +84,22 @@ struct _GstTIDmaidec
     UInt32              numOutputBufs;
     BufTab_Handle       hOutBufTab;
     GstBuffer           *metaTab;
+    gboolean            require_configure;
 
     /* Parser structures */
-    void                            *parser_private;
-    gboolean                         parser_started;
-    struct gstti_common_parser_data  parser_common;
+    void                *parser_private;
+    gboolean            parser_started;
+
+    /* Flags */
+    gboolean            flushing;
 };
 
 /* _GstTIDmaidecClass object */
 struct _GstTIDmaidecClass
 {
-    GstElementClass parent_class;
+    GstElementClass         parent_class;
+
+    GstPadTemplate   *srcTemplateCaps, *sinkTemplateCaps;
 };
 
 /* Decoder operations */
@@ -127,13 +122,12 @@ struct gstti_decoder_ops {
 /* Data definition for each instance of decoder */
 struct _GstTIDmaidecData
 {
-    const gchar                     *streamtype;
-    GstStaticPadTemplate            *srcTemplateCaps;
-    GstStaticPadTemplate            *sinkTemplateCaps;
-    const gchar                     *engineName;
-    const gchar                     *codecName;
-    struct gstti_decoder_ops        *dops;
-    struct gstti_parser_ops         *parser;
+    const gchar                 *streamtype;
+    GstStaticCaps               *srcCaps, *sinkCaps;
+    const gchar                 *engineName;
+    const gchar                 *codecName;
+    struct gstti_decoder_ops    *dops;
+    struct gstti_parser_ops     *parser;
 };
 
 /* Function to initialize the decoders */

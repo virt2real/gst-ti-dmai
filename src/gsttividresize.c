@@ -257,7 +257,7 @@ static GstFlowReturn gst_tividresize_prepare_output_buffer (GstBaseTransform
      * buffer for re-use in this element when the source pad calls
      * gst_buffer_unref().
      */
-    *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL);
+    *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL);
     gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
             Buffer_getSize(hOutBuf));
     gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));

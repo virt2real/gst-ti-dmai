@@ -25,6 +25,8 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <ti/sdo/dmai/BufTab.h>
+#include <ti/sdo/dmai/Rendezvous.h>
 
 G_BEGIN_DECLS
 
@@ -56,6 +58,9 @@ struct _GstTIDmaiaccel
   gint                height;
   ColorSpace_Type     colorSpace;
   gint                lineLength;
+
+  BufTab_Handle       hOutBufTab;
+  Rendezvous_Handle   waitOnOutBufTab;
 };
 
 /* _GstTIDmaiaccelClass object */
