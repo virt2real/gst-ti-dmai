@@ -1086,11 +1086,11 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     if (!GST_IS_TIDMAIBUFFERTRANSPORT(buf) ||
         Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
           != Buffer_Type_GRAPHICS){
-        if (encoder->eops->codec_type == AUDIO) {
-            if (!GST_CLOCK_TIME_IS_VALID(dmaienc->basets)){
-                dmaienc->basets = GST_BUFFER_TIMESTAMP(buf);
-                dmaienc->duration = 0;
-            }
+        if (!GST_CLOCK_TIME_IS_VALID(dmaienc->basets)){
+            dmaienc->basets = GST_BUFFER_TIMESTAMP(buf);
+            dmaienc->duration = 0;
+        }
+        if (GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(buf))){
             dmaienc->duration += GST_BUFFER_DURATION(buf);
         }
 
@@ -1099,11 +1099,12 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
         if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
             buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->inBufSize);
 
-            if (encoder->eops->codec_type == AUDIO) {
+            if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(buf))){
                 GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
-                GST_BUFFER_DURATION(buf) = dmaienc->duration;
-                dmaienc->basets = GST_CLOCK_TIME_NONE;
+                GST_BUFFER_DURATION(buf) = dmaienc->duration != 0 ?
+                    dmaienc->duration : GST_CLOCK_TIME_NONE;
             }
+            dmaienc->basets = GST_CLOCK_TIME_NONE;
         } else {
             buf = NULL;
         }
