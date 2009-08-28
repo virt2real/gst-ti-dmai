@@ -45,7 +45,6 @@
 #include <sched.h>
 #include <gst/gst.h>
 
-#include <ti/sdo/dmai/Cpu.h>
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/BufferGfx.h>
@@ -263,10 +262,11 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
             encoder->codecName, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_SIZE_OUTPUT_BUF,
-        g_param_spec_int("sizeOutputBuf",
-            "Size of Ouput Buffer",
-            "Size of the output buffer to allocate for encoded data",
-            0, G_MAXINT32, 0, G_PARAM_WRITABLE));
+        g_param_spec_int("sizeOutputMultiple",
+            "Number of times the output buffer size is"
+            " respect to the input buffer size",
+            "Times the input buffer size that the output buffer size will be",
+            0, G_MAXINT32, 3, G_PARAM_WRITABLE));
 
     g_object_class_install_property(gobject_class, PROP_DSP_LOAD,
         g_param_spec_boolean("printDspLoad",
@@ -385,9 +385,9 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
         GST_LOG("setting \"codecName\" to \"%s\"\n", dmaienc->codecName);
         break;
     case PROP_SIZE_OUTPUT_BUF:
-        dmaienc->outBufSize = g_value_get_int(value);
-        GST_LOG("setting \"outBufSize\" to \"%d\"\n",
-            dmaienc->outBufSize);
+        dmaienc->outBufMultiple = g_value_get_int(value);
+        GST_LOG("setting \"outBufMultiple\" to \"%d\"\n",
+            dmaienc->outBufMultiple);
         break;
     case PROP_DSP_LOAD:
         dmaienc->printDspLoad = g_value_get_boolean(value);
@@ -421,7 +421,7 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         g_value_set_string(value, dmaienc->codecName);
         break;
     case PROP_SIZE_OUTPUT_BUF:
-        g_value_set_int(value,dmaienc->outBufSize);
+        g_value_set_int(value,dmaienc->outBufMultiple);
         break;
     case PROP_DSP_LOAD:
         g_value_set_boolean(value,dmaienc->printDspLoad);
@@ -609,9 +609,10 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
-    if (dmaienc->outBufSize == 0) {
-        dmaienc->outBufSize = dmaienc->inBufSize * 3;
+    if (dmaienc->outBufMultiple == 0) {
+        dmaienc->outBufMultiple = 3;
     }
+    dmaienc->outBufSize = dmaienc->inBufSize * dmaienc->outBufMultiple;
     dmaienc->headWrap = dmaienc->outBufSize;
     GST_DEBUG("Output bufer size %d, Input buffer size %d\n",dmaienc->outBufSize,dmaienc->inBufSize);
 
@@ -838,7 +839,13 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
         return;
     }
 
+    GST_LOG("Head %d, Tail %d, OutbufSize %d, Headwrap %d, size %d",
+        dmaienc->head,dmaienc->tail,dmaienc->outBufSize,
+        dmaienc->headWrap,GST_BUFFER_SIZE(buf));
     dmaienc->tail += GST_BUFFER_SIZE(buf);
+    if (dmaienc->tail == dmaienc->head){
+        dmaienc->tail = dmaienc->head = 0;
+    }
     if (dmaienc->tail >= dmaienc->headWrap){
         dmaienc->headWrap = dmaienc->outBufSize;
         dmaienc->tail = 0;

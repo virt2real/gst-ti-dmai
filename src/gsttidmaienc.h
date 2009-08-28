@@ -66,12 +66,13 @@ struct _GstTIDmaienc
     Server_Handle       hDsp;
     GstClockTime        lastLoadstamp;
     gboolean            printDspLoad;
-    guint32              counter;
+    guint32             counter;
 
     /* Buffer management */
     GstAdapter          *adapter;
     gint                outBufSize;
     gint                inBufSize;
+    gint                outBufMultiple;
     Buffer_Handle       outBuf;
     Buffer_Handle       inBuf;
     gint                head;
