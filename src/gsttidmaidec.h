@@ -59,8 +59,10 @@ struct _GstTIDmaidec
     const gchar*        codecName;
 
     /* Element state */
-    Engine_Handle    	hEngine;
-    gpointer         	hCodec;
+    Engine_Handle       hEngine;
+    gpointer            hCodec;
+    gpointer            *params;
+    gpointer            *dynParams;
 
     /* Output thread */
     GList               *outList;
@@ -106,6 +108,7 @@ struct _GstTIDmaidecClass
 struct gstti_decoder_ops {
     const gchar             *xdmversion;
     enum dmai_codec_type    codec_type;
+    gboolean                (* default_setup_params)(GstTIDmaidec *);
     gboolean                (* codec_create) (GstTIDmaidec *);
     void                    (* codec_destroy) (GstTIDmaidec *);
     gboolean                (* codec_process)

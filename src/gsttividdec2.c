@@ -40,6 +40,7 @@
 #include "gsttidmaidec.h"
 #include "gsttidmaibuffertransport.h"
 
+static gboolean gstti_viddec2_setup_params(GstTIDmaidec *);
 static gboolean gstti_viddec2_create(GstTIDmaidec *);
 static void gstti_viddec2_destroy(GstTIDmaidec *);
 static gboolean gstti_viddec2_process
@@ -54,6 +55,7 @@ static Buffer_Handle gstti_viddec2_get_free_buffers
 struct gstti_decoder_ops gstti_viddec2_ops = {
     .xdmversion = "xDM 1.2",
     .codec_type = VIDEO,
+    .default_setup_params = gstti_viddec2_setup_params,
     .codec_create = gstti_viddec2_create,
     .codec_destroy = gstti_viddec2_destroy,
     .codec_process = gstti_viddec2_process,
@@ -69,31 +71,57 @@ GST_DEBUG_CATEGORY_STATIC (gst_tividdec2_debug);
 
 
 /******************************************************************************
- * gst_tividdec2_create
- *     Initialize codec
+ * gstti_viddec2_setup_params Support for xDM1.0
+ *     Setup default codec params
  *****************************************************************************/
-static gboolean gstti_viddec2_create (GstTIDmaidec *dmaidec)
-{
-    VIDDEC2_Params         params    = Vdec2_Params_DEFAULT;
-    VIDDEC2_DynamicParams  dynParams = Vdec2_DynamicParams_DEFAULT;
+static gboolean gstti_viddec2_setup_params(GstTIDmaidec *dmaidec){
+    VIDDEC2_Params *params;
+    VIDDEC2_DynamicParams *dynParams;
 
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tividdec2_debug, "TIViddec2", 0,
         "DMAI Video2 Decoder");
 
+    if (!dmaidec->params){
+        dmaidec->params = g_malloc(sizeof (VIDDEC2_Params));
+    }
+    if (!dmaidec->dynParams){
+        dmaidec->dynParams = g_malloc(sizeof (VIDDEC2_DynamicParams));
+    }
+    *(VIDDEC2_Params *)dmaidec->params     = Vdec2_Params_DEFAULT;
+    *(VIDDEC2_DynamicParams *)dmaidec->dynParams  = Vdec2_DynamicParams_DEFAULT;
+    params = (VIDDEC2_Params *)dmaidec->params;
+    dynParams = (VIDDEC2_DynamicParams *)dmaidec->dynParams;
+
+    GST_WARNING("Setting up default params for the Codec, would be better if"
+        " the CodecServer used implements his own setup_params function...");
+
     /* Set up codec parameters depending on device */
 #if PLATFORM == dm6467
-    params.forceChromaFormat = XDM_YUV_420P;
+    params->forceChromaFormat = XDM_YUV_420P;
 # else
-    params.forceChromaFormat = XDM_YUV_422ILE;
+    params->forceChromaFormat = XDM_YUV_422ILE;
 #endif
-    params.maxWidth          = dmaidec->width;
-    params.maxHeight         = dmaidec->height;
+    params->maxWidth = dmaidec->width;
+    params->maxHeight = dmaidec->height;
+
+    return TRUE;
+}
+/******************************************************************************
+ * gst_tividdec2_create
+ *     Initialize codec
+ *****************************************************************************/
+static gboolean gstti_viddec2_create (GstTIDmaidec *dmaidec)
+{
+    /* Initialize GST_LOG for this object */
+    GST_DEBUG_CATEGORY_INIT(gst_tividdec2_debug, "TIViddec2", 0,
+        "DMAI Video2 Decoder");
 
     GST_DEBUG("opening video decoder \"%s\"\n", dmaidec->codecName);
     dmaidec->hCodec =
         Vdec2_create(dmaidec->hEngine, (Char*)dmaidec->codecName,
-                    &params, &dynParams);
+                    (VIDDEC2_Params *)dmaidec->params,
+                    (VIDDEC2_DynamicParams *) dmaidec->dynParams);
 
     if (dmaidec->hCodec == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,OPEN_READ_WRITE,(NULL),

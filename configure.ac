@@ -186,7 +186,7 @@ if test "x$preset" = "xdm355s" ; then
 	enable_resizer=1;
   	enable_videosink=1;
   	with_platform=dm355;
-  	with_xdc_config_basename=gstticodecplugin_dm355s;
+  	with_xdc_config_basename=dm355s;
 fi
 
 if test "x$preset" = "xdm357" ; then
@@ -300,7 +300,7 @@ if test "${with_xdctarget+set}" != set ; then
 fi
 
 dnl Define XDC config file. This allow to compile against other codec servers
-AC_SUBST([XDC_CONFIG_BASENAME],[gstticodecplugin_$PLATFORM])
+AC_SUBST([XDC_CONFIG_BASENAME],[$PLATFORM])
 AC_ARG_WITH(xdc-config-basename,
   [AS_HELP_STRING([--with-xdc-config-basename=<basename>],
     [Set a custom base name for the XDC config file 

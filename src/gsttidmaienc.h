@@ -61,9 +61,11 @@ struct _GstTIDmaienc
     const gchar*        codecName;
 
     /* Element state */
-    Engine_Handle    	hEngine;
-    gpointer         	hCodec;
+    Engine_Handle       hEngine;
+    gpointer            hCodec;
     Server_Handle       hDsp;
+    gpointer            *params;
+    gpointer            *dynParams;
     GstClockTime        lastLoadstamp;
     gboolean            printDspLoad;
     guint32             counter;
@@ -80,14 +82,14 @@ struct _GstTIDmaienc
     gint                headWrap;
     gboolean            require_configure;
 
-    /* Audio Capabilities */
-    gint		        channels;
-    gint	         	depth;
-    gint	           	awidth;
-    gint	           	rate;
+    /* Audio Data */
+    gint                channels;
+    gint                depth;
+    gint                awidth;
+    gint                rate;
     GstClockTime        basets,duration;
 
-    /* Video Capabilities */
+    /* Video Data */
     gint                framerateNum;
     gint                framerateDen;
     gint                height;
@@ -100,12 +102,15 @@ struct _GstTIDmaiencClass
 {
     GstElementClass         parent_class;
     GstPadTemplate   *srcTemplateCaps, *sinkTemplateCaps;
+    /* Custom Codec Data */
+    struct codec_custom_data    *codec_data;
 };
 
 /* Decoder operations */
 struct gstti_encoder_ops {
     const gchar             *xdmversion;
     enum dmai_codec_type    codec_type;
+    gboolean                (* default_setup_params)(GstTIDmaienc *);
     gboolean                (* codec_create) (GstTIDmaienc *);
     void                    (* codec_destroy) (GstTIDmaienc *);
     gboolean                (* codec_process)

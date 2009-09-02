@@ -22,8 +22,6 @@
 #ifndef __GST_TICOMMONUTILS_H__
 #define __GST_TICOMMONUTILS_H__
 
-#include <pthread.h>
-
 #include <gst/gst.h>
 
 #include <xdc/std.h>
@@ -48,12 +46,26 @@ enum dmai_codec_type
     IMAGE,
 };
 
-/* This variable is used to flush the fifo.  It is pushed to the
- * fifo when we want to flush it.  When the encode/decode thread
- * receives the address of this variable the fifo is flushed and
- * the thread can exit.  The value of this variable is not used.
- */
-extern int gst_ti_flush_fifo;
+struct codec_custom_data {
+    /* Decoder elements can fine-tune their src pad caps*/
+    GstStaticCaps   *srcCaps;
+    /* Encoder elements can fine-tune their src pad caps*/
+    GstStaticCaps   *sinkCaps;
+    /* Custom function to initialize the code arguments */
+    gboolean       (*setup_params)(GstElement *);
+    /* Functions to provide custom properties */
+    void           (*install_properties)(GObjectClass *);
+    void           (*set_property)
+                        (GObject *,guint,const GValue *,GParamSpec *);
+    void           (*get_property)(GObject *,guint,GValue *, GParamSpec *);
+};
+
+struct codec_custom_data_entry{
+    gchar *codec_name;
+    struct codec_custom_data data;
+};
+
+extern struct codec_custom_data_entry codec_custom_data[];
 
 /* Function to replace DMAI's BufferGfx_getFrameType */
 extern Int32 gstti_bufferGFX_getFrameType(Buffer_Handle hBuf);

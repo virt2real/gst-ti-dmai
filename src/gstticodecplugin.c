@@ -119,7 +119,7 @@ GstTIDmaidecData decoders[] = {
 #elif defined(ENABLE_H264DEC_XDM0)
     {
         .streamtype = "h264",
-        .sinkCaps = &gstt_capsk_caps,
+        .sinkCaps = &gstt_h264_caps,
         .srcCaps = &gstti_uyvy_caps,
         .engineName = DECODEENGINE,
         .codecName = "h264dec",

@@ -40,6 +40,7 @@
 #include "gsttidmaienc.h"
 #include "gsttidmaibuffertransport.h"
 
+static gboolean gstti_videnc1_setup_params(GstTIDmaienc *);
 static gboolean gstti_videnc1_create(GstTIDmaienc *);
 static void gstti_videnc1_destroy(GstTIDmaienc *);
 static gboolean gstti_videnc1_process
@@ -48,6 +49,7 @@ static gboolean gstti_videnc1_process
 struct gstti_encoder_ops gstti_videnc1_ops = {
     .xdmversion = "xDM 1.0",
     .codec_type = VIDEO,
+    .default_setup_params = gstti_videnc1_setup_params,
     .codec_create = gstti_videnc1_create,
     .codec_destroy = gstti_videnc1_destroy,
     .codec_process = gstti_videnc1_process,
@@ -57,6 +59,47 @@ struct gstti_encoder_ops gstti_videnc1_ops = {
 GST_DEBUG_CATEGORY_STATIC (gst_tividenc1_debug);
 #define GST_CAT_DEFAULT gst_tividenc1_debug
 
+/******************************************************************************
+ * gst_tividenc1_setup_params Support for xDM1.0
+ *     Setup default codec params
+ *****************************************************************************/
+static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
+    VIDENC1_Params *params;
+    VIDENC1_DynamicParams *dynParams;
+
+    /* Initialize GST_LOG for this object */
+    GST_DEBUG_CATEGORY_INIT(gst_tividenc1_debug, "TIAudenc1", 0,
+        "DMAI Audio1 Encoder");
+
+    if (!dmaienc->params){
+        dmaienc->params = g_malloc(sizeof (VIDENC1_Params));
+    }
+    if (!dmaienc->dynParams){
+        dmaienc->dynParams = g_malloc(sizeof (VIDENC1_DynamicParams));
+    }
+    *(VIDENC1_Params *)dmaienc->params     = Venc1_Params_DEFAULT;
+    *(VIDENC1_DynamicParams *)dmaienc->dynParams  = Venc1_DynamicParams_DEFAULT;
+    params = (VIDENC1_Params *)dmaienc->params;
+    dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    GST_WARNING("Setting up default params for the Codec, would be better if"
+        " the CodecServer used implements his own setup_params function...");
+
+    /* Set up codec parameters depending on device */
+#if PLATFORM == dm6467
+    params->inputChromaFormat = XDM_YUV_420P;
+# else
+    params->inputChromaFormat = XDM_YUV_422ILE;
+#if PLATFORM == dm355
+    params->reconChromaFormat = XDM_YUV_420P;
+#endif
+#endif
+    params->maxWidth = dynParams->inputWidth = dmaienc->width;
+    params->maxHeight = dynParams->inputHeight = dmaienc->height;
+    dynParams->targetBitRate  = params->maxBitRate;
+
+    return TRUE;
+}
 
 /******************************************************************************
  * gst_tividenc1_create
@@ -64,32 +107,15 @@ GST_DEBUG_CATEGORY_STATIC (gst_tividenc1_debug);
  *****************************************************************************/
 static gboolean gstti_videnc1_create (GstTIDmaienc *dmaienc)
 {
-    VIDENC1_Params        params     = Venc1_Params_DEFAULT;
-    VIDENC1_DynamicParams dynParams  = Venc1_DynamicParams_DEFAULT;
-
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tividenc1_debug, "TIVidenc1", 0,
         "DMAI Video1 Encoder");
 
-    /* Set up codec parameters depending on device */
-#if PLATFORM == dm6467
-    params.inputChromaFormat = XDM_YUV_420P;
-# else
-    params.inputChromaFormat = XDM_YUV_422ILE;
-#if PLATFORM == dm355
-    params.reconChromaFormat = XDM_YUV_420P;
-#endif
-#endif
-    params.maxWidth          = dmaienc->width;
-    params.maxHeight         = dmaienc->height;
-    dynParams.inputWidth     = dmaienc->width;
-    dynParams.inputHeight    = dmaienc->height;
-    dynParams.targetBitRate  = params.maxBitRate;
-
     GST_DEBUG("opening video encoder \"%s\"\n", dmaienc->codecName);
     dmaienc->hCodec =
         Venc1_create(dmaienc->hEngine, (Char*)dmaienc->codecName,
-                    &params, &dynParams);
+                    (VIDENC1_Params *)dmaienc->params,
+                    (VIDENC1_DynamicParams *)dmaienc->dynParams);
 
     if (dmaienc->hCodec == NULL) {
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,OPEN_READ_WRITE,(NULL),

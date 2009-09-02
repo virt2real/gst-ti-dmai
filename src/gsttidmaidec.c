@@ -327,13 +327,15 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     gst_element_add_pad(GST_ELEMENT(dmaidec), dmaidec->srcpad);
 
     /* Initialize TIDmaidec state */
-    dmaidec->outCaps			= NULL;
+    dmaidec->outCaps            = NULL;
     dmaidec->engineName         = g_strdup(decoder->engineName);
     dmaidec->codecName          = g_strdup(decoder->codecName);
 
     dmaidec->hEngine            = NULL;
     dmaidec->hCodec             = NULL;
-    dmaidec->flushing    		= FALSE;
+    dmaidec->params             = NULL;
+    dmaidec->dynParams          = NULL;
+    dmaidec->flushing           = FALSE;
     dmaidec->parser_started     = FALSE;
 
     dmaidec->waitOnOutBufTab    = NULL;
@@ -343,8 +345,8 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->framerateNum       = 0;
     dmaidec->framerateDen       = 0;
-    dmaidec->height		        = 0;
-    dmaidec->width		        = 0;
+    dmaidec->height             = 0;
+    dmaidec->width              = 0;
     dmaidec->segment_start      = GST_CLOCK_TIME_NONE;
     dmaidec->segment_stop       = GST_CLOCK_TIME_NONE;
     dmaidec->current_timestamp  = 0;
@@ -745,6 +747,16 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         GST_LOG("closing video decoder\n");
         decoder->dops->codec_destroy(dmaidec);
         dmaidec->hCodec = NULL;
+    }
+
+    if (dmaidec->params){
+        g_free(dmaidec->params);
+        dmaidec->params = NULL;
+    }
+
+    if (dmaidec->dynParams){
+        g_free(dmaidec->dynParams);
+        dmaidec->dynParams = NULL;
     }
 
     if (dmaidec->parser_started){

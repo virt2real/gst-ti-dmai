@@ -77,7 +77,7 @@ GstStaticCaps gstti_mpeg4_sink_caps = GST_STATIC_CAPS(
 
 GstStaticCaps gstti_mpeg4_src_caps = GST_STATIC_CAPS(
     "video/mpeg, "
-    "   mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
+    "   mpegversion=(int) 4, "
     "   systemstream=(boolean)false, "
     "   framerate=(fraction)[ 0, MAX ], "
     "   width=(int)[ 1, MAX ], "

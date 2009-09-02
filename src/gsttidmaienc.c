@@ -57,7 +57,7 @@
 #include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
-GST_DEBUG_CATEGORY_STATIC (gst_tidmaienc_debug);
+GST_DEBUG_CATEGORY (gst_tidmaienc_debug);
 #define GST_CAT_DEFAULT gst_tidmaienc_debug
 
 /* Element property identifiers */
@@ -172,7 +172,7 @@ static void gst_tidmaienc_base_init(GstTIDmaiencClass *klass)
     gchar *codec_type, *codec_name;
     GstCaps *srccaps, *sinkcaps;
     GstPadTemplate *sinktempl, *srctempl;
-
+    struct codec_custom_data_entry *data_entry = codec_custom_data;
 
     encoder = (GstTIDmaiencData *)
      g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIENC_PARAMS_QDATA);
@@ -210,11 +210,31 @@ static void gst_tidmaienc_base_init(GstTIDmaiencClass *klass)
     g_free(codec_type);
     g_free(codec_name);
 
+    /* Search for custom codec data */
+    klass->codec_data = NULL;
+    while (data_entry->codec_name != NULL){
+        if (!strcmp(data_entry->codec_name,encoder->codecName)){
+            klass->codec_data = &data_entry->data;
+            GST_INFO("Got custom codec data for instance of %s",encoder->codecName);
+            break;
+        }
+        data_entry++;
+    }
+
     /* pad templates */
-    sinkcaps = gst_static_caps_get(encoder->sinkCaps);
+    if (klass->codec_data && klass->codec_data->sinkCaps) {
+        sinkcaps = gst_static_caps_get(klass->codec_data->sinkCaps);
+    } else {
+        sinkcaps = gst_static_caps_get(encoder->sinkCaps);
+    }
     sinktempl = gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
         sinkcaps);
-    srccaps = gst_static_caps_get(encoder->srcCaps);
+
+    if (klass->codec_data && klass->codec_data->srcCaps) {
+        srccaps = gst_static_caps_get(klass->codec_data->srcCaps);
+    } else {
+        srccaps = gst_static_caps_get(encoder->srcCaps);
+    }
     srctempl = gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
         srccaps);
 
@@ -273,6 +293,12 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
             "Print the load of the DSP if available",
             "Boolean that set if DSP load information should be displayed",
             FALSE, G_PARAM_READWRITE));
+
+    /* If this codec provide custom properties... */
+    if (klass->codec_data && klass->codec_data->install_properties) {
+        GST_DEBUG("Installing custom properties for %s",encoder->codecName);
+        klass->codec_data->install_properties(gobject_class);
+    }
 }
 
 /******************************************************************************
@@ -354,6 +380,9 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->depth              = 0;
     dmaienc->awidth             = 0;
     dmaienc->rate               = 0;
+    dmaienc->params            = NULL;
+    dmaienc->dynParams         = NULL;
+
     dmaienc->basets             = GST_CLOCK_TIME_NONE;
 }
 
@@ -366,6 +395,8 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
     const GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    GstTIDmaiencClass      *klass =
+        (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
 
     GST_LOG("begin set_property\n");
 
@@ -395,7 +426,12 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
             dmaienc->printDspLoad?"TRUE":"FALSE");
         break;
     default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        /* If this codec provide custom properties... */
+        if (klass->codec_data && klass->codec_data->set_property) {
+            klass->codec_data->set_property(object,prop_id,value,pspec);
+        } else {
+            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        }
         break;
     }
 
@@ -410,6 +446,8 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
     GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    GstTIDmaiencClass      *klass =
+        (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
 
     GST_LOG("begin get_property\n");
 
@@ -427,7 +465,12 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         g_value_set_boolean(value,dmaienc->printDspLoad);
         break;
     default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        /* If this codec provide custom properties... */
+        if (klass->codec_data && klass->codec_data->get_property) {
+            klass->codec_data->get_property(object,prop_id,value,pspec);
+        } else {
+            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        }
         break;
     }
 
@@ -628,6 +671,14 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     GST_DEBUG("Output buffer handler: %p\n",dmaienc->outBuf);
 
     /* Initialize the rest of the codec */
+    if (gclass->codec_data && gclass->codec_data->setup_params) {
+        /* If our specific codec provides custom parameters... */
+        gclass->codec_data->setup_params(GST_ELEMENT(dmaienc));
+    } else {
+        /* Otherwise just use the default encoder implementation */
+        encoder->eops->default_setup_params(dmaienc);
+    }
+
     return encoder->eops->codec_create(dmaienc);
 }
 
@@ -669,6 +720,16 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
         GST_DEBUG("freeing input buffer, %p\n",dmaienc->inBuf);
         Buffer_delete(dmaienc->inBuf);
         dmaienc->inBuf = NULL;
+    }
+
+    if (dmaienc->params){
+        g_free(dmaienc->params);
+        dmaienc->params = NULL;
+    }
+
+    if (dmaienc->dynParams){
+        g_free(dmaienc->dynParams);
+        dmaienc->dynParams = NULL;
     }
 
     return TRUE;
