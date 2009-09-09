@@ -25,8 +25,20 @@
 #endif
 
 #include  "gstticommonutils.h"
+#include "ti_encoders.h"
+#include "caps.h"
 
 struct codec_custom_data_entry codec_custom_data[] = {
+    { .codec_name = "mpeg4enc",
+      .data = {
+        .sinkCaps = &gstti_D1_uyvy_caps,
+        .srcCaps = &gstti_D1_mpeg4_src_caps,
+        .setup_params = ti_mpeg4enc_params,
+        .install_properties = ti_mpeg4enc_install_properties,
+        .set_property = ti_mpeg4enc_set_property,
+        .get_property = ti_mpeg4enc_get_property,
+      },
+    },
     { .codec_name = NULL },
 };
 

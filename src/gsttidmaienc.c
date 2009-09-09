@@ -313,6 +313,22 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     encoder = (GstTIDmaiencData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
+    /* Initialize the rest of the codec */
+    if (gclass->codec_data && gclass->codec_data->setup_params) {
+        /* If our specific codec provides custom parameters... */
+        GST_DEBUG("Use custom setup params");
+        gclass->codec_data->setup_params(GST_ELEMENT(dmaienc));
+    } else {
+        /* Otherwise just use the default encoder implementation */
+        GST_DEBUG("Use default setup params");
+        encoder->eops->default_setup_params(dmaienc);
+    }
+
+    /* Install custom properties for this codec type */
+    if (encoder->eops->install_properties){
+        encoder->eops->install_properties((GObjectClass *)gclass);
+    }
+
     /* Instantiate raw sink pad.
      *
      * Fixate on our static template caps instead of writing a getcaps
@@ -380,8 +396,6 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->depth              = 0;
     dmaienc->awidth             = 0;
     dmaienc->rate               = 0;
-    dmaienc->params            = NULL;
-    dmaienc->dynParams         = NULL;
 
     dmaienc->basets             = GST_CLOCK_TIME_NONE;
 }
@@ -397,6 +411,8 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
     GstTIDmaiencClass      *klass =
         (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
+    GstTIDmaiencData *encoder = (GstTIDmaiencData *)
+      g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIENC_PARAMS_QDATA);
 
     GST_LOG("begin set_property\n");
 
@@ -426,11 +442,14 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
             dmaienc->printDspLoad?"TRUE":"FALSE");
         break;
     default:
-        /* If this codec provide custom properties... */
+        /* If this codec provide custom properties...
+         * We allow custom codecs to overwrite the generic properties
+         */
         if (klass->codec_data && klass->codec_data->set_property) {
             klass->codec_data->set_property(object,prop_id,value,pspec);
-        } else {
-            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        }
+        if (encoder->eops->set_property){
+            encoder->eops->set_property(object,prop_id,value,pspec);
         }
         break;
     }
@@ -448,6 +467,8 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
     GstTIDmaiencClass      *klass =
         (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
+    GstTIDmaiencData *encoder = (GstTIDmaiencData *)
+      g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIENC_PARAMS_QDATA);
 
     GST_LOG("begin get_property\n");
 
@@ -465,11 +486,14 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         g_value_set_boolean(value,dmaienc->printDspLoad);
         break;
     default:
-        /* If this codec provide custom properties... */
+        /* If this codec provide custom properties...
+         * We allow custom codecs to overwrite the generic properties
+         */
         if (klass->codec_data && klass->codec_data->get_property) {
             klass->codec_data->get_property(object,prop_id,value,pspec);
-        } else {
-            G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        }
+        if (encoder->eops->get_property){
+            encoder->eops->get_property(object,prop_id,value,pspec);
         }
         break;
     }
@@ -670,15 +694,6 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     }
     GST_DEBUG("Output buffer handler: %p\n",dmaienc->outBuf);
 
-    /* Initialize the rest of the codec */
-    if (gclass->codec_data && gclass->codec_data->setup_params) {
-        /* If our specific codec provides custom parameters... */
-        gclass->codec_data->setup_params(GST_ELEMENT(dmaienc));
-    } else {
-        /* Otherwise just use the default encoder implementation */
-        encoder->eops->default_setup_params(dmaienc);
-    }
-
     return encoder->eops->codec_create(dmaienc);
 }
 
@@ -720,16 +735,6 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
         GST_DEBUG("freeing input buffer, %p\n",dmaienc->inBuf);
         Buffer_delete(dmaienc->inBuf);
         dmaienc->inBuf = NULL;
-    }
-
-    if (dmaienc->params){
-        g_free(dmaienc->params);
-        dmaienc->params = NULL;
-    }
-
-    if (dmaienc->dynParams){
-        g_free(dmaienc->dynParams);
-        dmaienc->dynParams = NULL;
     }
 
     return TRUE;
@@ -794,6 +799,7 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
 
         dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
             dmaienc->colorSpace) * dmaienc->height;
+
     } else if(!strncmp(mime, "audio/", 6)){
         /* Generic Audio Properties */
 
@@ -836,6 +842,9 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
     g_free(str);
     gst_pad_set_caps(dmaienc->srcpad, caps);
     gst_caps_unref(caps);
+
+    /* Set the caps on the parameters of the encoder */
+    encoder->eops->set_codec_caps(dmaienc);
 
     if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
         gst_object_unref(dmaienc);

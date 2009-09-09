@@ -40,28 +40,107 @@
 #include "gsttidmaienc.h"
 #include "gsttidmaibuffertransport.h"
 
-static gboolean gstti_videnc1_setup_params(GstTIDmaienc *);
-static gboolean gstti_videnc1_create(GstTIDmaienc *);
-static void gstti_videnc1_destroy(GstTIDmaienc *);
-static gboolean gstti_videnc1_process
- (GstTIDmaienc *, Buffer_Handle,Buffer_Handle);
-
-struct gstti_encoder_ops gstti_videnc1_ops = {
-    .xdmversion = "xDM 1.0",
-    .codec_type = VIDEO,
-    .default_setup_params = gstti_videnc1_setup_params,
-    .codec_create = gstti_videnc1_create,
-    .codec_destroy = gstti_videnc1_destroy,
-    .codec_process = gstti_videnc1_process,
-};
-
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC (gst_tividenc1_debug);
 #define GST_CAT_DEFAULT gst_tividenc1_debug
 
+enum
+{
+    PROP_100 = 100,
+    PROP_RATECONTROL,
+    PROP_MAXBITRATE,
+    PROP_TARGETBITRATE,
+    PROP_INTRAFRAMEINTERVAL,
+};
+
+static void gstt_videnc1_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_RATECONTROL,
+        g_param_spec_int("ratecontrol",
+            "Rate Control Algorithm",
+            "Rate Control Algorithm to use:\n"
+            "\t\t\t 1 - Constant Bit Rate (CBR), for video conferencing\n"
+            "\t\t\t 2 - Variable Bit Rate (VBR), for storage\n"
+            "\t\t\t 3 - Two pass rate control for non real time applications\n"
+            "\t\t\t 4 - No Rate Control is used\n"
+            "\t\t\t 5 - User defined on extended parameters"
+            ,
+            1, 5, 1, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_MAXBITRATE,
+        g_param_spec_int("maxbitrate",
+            "Maximum bit rate",
+            "Maximum bit-rate to be supported in bits per second",
+            1000, 20000000, 6000000, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_TARGETBITRATE,
+        g_param_spec_int("targetbitrate",
+            "Target bit rate",
+            "Target bit-rate in bits per second, should be <= than the maxbitrate",
+            1000, 20000000, 6000000, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_INTRAFRAMEINTERVAL,
+        g_param_spec_int("intraframeinterval",
+            "Intra frame interval",
+            "Interval between two consecutive intra frames:\n"
+            "\t\t\t 0 - Only first I frame followed by all P frames\n"
+            "\t\t\t 1 - No inter frames (all intra frames)\n"
+            "\t\t\t 2 - Consecutive IP sequence (if no B frames)\n"
+            "\t\t\t N - (n-1) P sequences between I frames\n"
+            ,
+            0, G_MAXINT32, 30, G_PARAM_READWRITE));
+}
+
+
+static void gstti_videnc1_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    VIDENC1_Params *params = (VIDENC1_Params *)dmaienc->params;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_RATECONTROL:
+        params->rateControlPreset = g_value_get_int(value);
+        break;
+    case PROP_MAXBITRATE:
+        params->maxBitRate = g_value_get_int(value);
+        break;
+    case PROP_TARGETBITRATE:
+        dynParams->targetBitRate = g_value_get_int(value);
+        break;
+    case PROP_INTRAFRAMEINTERVAL:
+        dynParams->intraFrameInterval = g_value_get_int(value);
+        break;
+    default:
+        break;
+    }
+}
+
+
+static void gstti_videnc1_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    VIDENC1_Params *params = (VIDENC1_Params *)dmaienc->params;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_RATECONTROL:
+        g_value_set_int(value,params->rateControlPreset);
+        break;
+    case PROP_MAXBITRATE:
+        g_value_set_int(value,params->maxBitRate);
+        break;
+    case PROP_TARGETBITRATE:
+        g_value_set_int(value,dynParams->targetBitRate);
+        break;
+    case PROP_INTRAFRAMEINTERVAL:
+        g_value_set_int(value,dynParams->intraFrameInterval);
+        break;
+    default:
+        break;
+    }
+}
+
 /******************************************************************************
- * gst_tividenc1_setup_params Support for xDM1.0
- *     Setup default codec params
+ * gst_tividenc1_setup_params
  *****************************************************************************/
 static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
     VIDENC1_Params *params;
@@ -94,12 +173,22 @@ static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
     params->reconChromaFormat = XDM_YUV_420P;
 #endif
 #endif
-    params->maxWidth = dynParams->inputWidth = dmaienc->width;
-    params->maxHeight = dynParams->inputHeight = dmaienc->height;
-    dynParams->targetBitRate  = params->maxBitRate;
 
     return TRUE;
 }
+
+
+/******************************************************************************
+ * gst_tividenc1_set_codec_caps
+ *****************************************************************************/
+static void gstti_videnc1_set_codec_caps(GstTIDmaienc *dmaienc){
+    VIDENC1_Params *params = (VIDENC1_Params *)dmaienc->params;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    params->maxWidth = dynParams->inputWidth = dmaienc->width;
+    params->maxHeight = dynParams->inputHeight = dmaienc->height;
+}
+
 
 /******************************************************************************
  * gst_tividenc1_create
@@ -159,6 +248,19 @@ static gboolean gstti_videnc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
 
     return TRUE;
 }
+
+struct gstti_encoder_ops gstti_videnc1_ops = {
+    .xdmversion = "xDM 1.0",
+    .codec_type = VIDEO,
+    .default_setup_params = gstti_videnc1_setup_params,
+    .set_codec_caps = gstti_videnc1_set_codec_caps,
+    .install_properties = gstt_videnc1_install_properties,
+    .set_property = gstti_videnc1_set_property,
+    .get_property = gstti_videnc1_get_property,
+    .codec_create = gstti_videnc1_create,
+    .codec_destroy = gstti_videnc1_destroy,
+    .codec_process = gstti_videnc1_process,
+};
 
 
 /******************************************************************************

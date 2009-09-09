@@ -110,7 +110,14 @@ struct _GstTIDmaiencClass
 struct gstti_encoder_ops {
     const gchar             *xdmversion;
     enum dmai_codec_type    codec_type;
+    /* Functions to provide custom properties */
+    void                    (*install_properties)(GObjectClass *);
+    void                    (*set_property)
+                                (GObject *,guint,const GValue *,GParamSpec *);
+    void                    (*get_property)(GObject *,guint,GValue *, GParamSpec *);
+    /* Functions to manipulate codecs */
     gboolean                (* default_setup_params)(GstTIDmaienc *);
+    void                    (* set_codec_caps)(GstTIDmaienc *);
     gboolean                (* codec_create) (GstTIDmaienc *);
     void                    (* codec_destroy) (GstTIDmaienc *);
     gboolean                (* codec_process)
