@@ -484,14 +484,6 @@ static GstStateChangeReturn gst_tidmaidec_change_state(GstElement *element,
     return ret;
 }
 
-///
-struct Rendezvous_Object {
-    Int orig;
-    Int count;
-    Int force;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-};
 
 /******************************************************************************
  * gst_tidmaidec_init_decoder
@@ -544,25 +536,32 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
         dmaidec->numInputBufs = 2;
     }
 
+    /* Define the number of display buffers to allocate.  This number must be
+     * at least 2, but should be more if codecs don't return a display buffer
+     * after every process call.  If this has not been set via set_property(),
+     * default to the value set above based on device type.
+     */
+    if (dmaidec->numOutputBufs == 0) {
+#if PLATFORM == dm6467
+        dmaidec->numOutputBufs = 5;
+#else
+        dmaidec->numOutputBufs = 3;
+#endif
+    }
+
     /* Create array to keep information of incoming buffers */
-    dmaidec->metaTab = malloc(sizeof(GstBuffer) * dmaidec->numInputBufs);
+    dmaidec->metaTab = malloc(sizeof(GstBuffer) * dmaidec->numOutputBufs);
     if (dmaidec->metaTab == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
             ("failed to create meta input buffers"));
          return FALSE;
     }
-    for (i = 0; i  < dmaidec->numInputBufs; i++) {
+    for (i = 0; i  < dmaidec->numOutputBufs; i++) {
         GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
     }
 
     /* Initialize rendezvous objects for making threads wait on conditions */
     dmaidec->waitOnOutBufTab = Rendezvous_create(2, &rzvAttrs);
- ///
-    {
-    struct Rendezvous_Object * r = (struct Rendezvous_Object *)dmaidec->waitOnOutBufTab;
-    GST_INFO("RDZ is %p",dmaidec->waitOnOutBufTab);
-    GST_INFO("Debug, %d, %d, %d",r->orig,r->count,r->force);
-    }
 
     /* Status variables */
     dmaidec->flushing = FALSE;
@@ -607,10 +606,7 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
 
 
     if (dmaidec->waitOnOutBufTab) {
-        struct Rendezvous_Object * r = (struct Rendezvous_Object *)dmaidec->waitOnOutBufTab;
-        GST_INFO("RDZ is %p",dmaidec->waitOnOutBufTab);
-        GST_INFO("Debug, %d, %d, %d",r->orig,r->count,r->force);
-///        Rendezvous_delete(dmaidec->waitOnOutBufTab);
+        Rendezvous_delete(dmaidec->waitOnOutBufTab);
         dmaidec->waitOnOutBufTab = NULL;
     }
 
@@ -648,19 +644,6 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     GST_DEBUG("Init\n");
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
-
-    /* Define the number of display buffers to allocate.  This number must be
-     * at least 2, but should be more if codecs don't return a display buffer
-     * after every process call.  If this has not been set via set_property(),
-     * default to the value set above based on device type.
-     */
-    if (dmaidec->numOutputBufs == 0) {
-#if PLATFORM == dm6467
-        dmaidec->numOutputBufs = 5;
-#else
-        dmaidec->numOutputBufs = 3;
-#endif
-    }
 
     /* Create codec output buffers */
     if (decoder->dops->codec_type == VIDEO) {
@@ -1106,8 +1089,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * gst_buffer_unref().
          */
         outBuf = gst_tidmaibuffertransport_new(hDstBuf,
-            NULL);
-//            dmaidec->waitOnOutBufTab);
+            dmaidec->waitOnOutBufTab);
         gst_buffer_copy_metadata(outBuf,&dmaidec->metaTab[Buffer_getId(hDstBuf)],
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
