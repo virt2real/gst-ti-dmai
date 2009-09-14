@@ -582,7 +582,7 @@ AC_ARG_ENABLE(videosink,
 AC_ARG_ENABLE(resizer,
   [AS_HELP_STRING([--enable-resizer],
 	[Enable DMAI video resizer @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_RESIZER],[1],
+  [AC_DEFINE([ENABLE_DMAI_RESIZER],[1],
 			  [DMAI Video Resizer is enabled])])
 
 echo

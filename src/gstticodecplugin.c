@@ -46,7 +46,7 @@
 #include "gsttisupport_aac.h"
 #include "gsttisupport_mp3.h"
 #include "gsttisupport_wma.h"
-#include "gsttividresize.h"
+#include "gsttidmairesizer.h"
 #include "gsttidmaiaccel.h"
 
 /* Audio caps */
@@ -331,9 +331,9 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
         return FALSE;
 #endif
 
-#ifdef ENABLE_RESIZER
-    if (!gst_element_register(TICodecPlugin, "TIDmaiResizer",
-        GST_RANK_PRIMARY,GST_TYPE_TIVIDRESIZE))
+#ifdef ENABLE_DMAI_RESIZER
+    if (!gst_element_register(TICodecPlugin, "dmairesizer",
+        GST_RANK_PRIMARY,GST_TYPE_DMAI_RESIZER))
         return FALSE;
 #endif
 
