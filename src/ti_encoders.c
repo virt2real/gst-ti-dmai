@@ -27,11 +27,14 @@
 #include "gstticommonutils.h"
 #include "gsttidmaienc.h"
 #include <ti/sdo/dmai/ce/Venc1.h>
+#ifdef MPEG4_C64X_TI_ENCODER
 #include <ti/sdo/codecs/mpeg4enc/imp4venc.h>
+#endif
 
 GST_DEBUG_CATEGORY_EXTERN(gst_tidmaienc_debug);
 #define GST_CAT_DEFAULT gst_tidmaienc_debug
 
+#ifdef MPEG4_C64X_TI_ENCODER
 gboolean ti_mpeg4enc_params(GstElement *element){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
     VIDENC1_Params *params;
@@ -326,7 +329,7 @@ void ti_mpeg4enc_get_property(GObject *object, guint prop_id,
         break;
     }
 }
-
+#endif
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

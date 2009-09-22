@@ -153,6 +153,7 @@ if test "x$preset" = "xomap35x" ; then
   	enable_wmadec_xdm1=1;
   	enable_jpegdec_xdm1=1;
 	enable_mpeg4enc_xdm1=1;
+	AC_DEFINE([MPEG4_C64X_TI_ENCODER],[1],[TI DSP MPEG4 Encoder])
   	enable_h264enc_xdm1=1;
   	enable_jpegenc_xdm1=1;
   	enable_videosink=1;
@@ -220,6 +221,7 @@ if test "x$preset" = "xdm6446_2" ; then
   	enable_h264dec_xdm2=1;
   	enable_mpeg2dec_xdm2=1;
 	enable_mpeg4enc_xdm1=1;
+	AC_DEFINE([MPEG4_C64X_TI_ENCODER],[1],[TI DSP MPEG4 Encoder])
 	enable_h264enc_xdm1=1;
   	enable_aacdec_xdm1=1;
   	enable_mp3dec_xdm1=1;
