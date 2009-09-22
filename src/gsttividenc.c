@@ -170,9 +170,6 @@ static gboolean gstti_videnc0_setup_params(GstTIDmaienc *dmaienc){
     params->inputChromaFormat = XDM_YUV_420P;
 # else
     params->inputChromaFormat = XDM_YUV_422ILE;
-#if PLATFORM == dm355
-    params->reconChromaFormat = XDM_YUV_420P;
-#endif
 #endif
     dynParams->targetBitRate  = params->maxBitRate;
 
