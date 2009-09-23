@@ -136,7 +136,7 @@ AC_ARG_WITH(preset,
   [AS_HELP_STRING([--with-preset=<preset>],
 	[Select a preset (autoselects the platform and plugins):                                       
 		dm355 (dvsdk 1.30 or 2.00), dm355s (dvsdk2.0 + DM355s codecs),
-		dm357 (dvsdk 2.00),
+		dm357 (dvsdk 2.00), dm365 (dvsdk 2.10)
 		dm6446 (dvsdk 1.30), dm6446_2 (dvsdk 2.00),                                       
 		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00)
 	])],
@@ -188,6 +188,19 @@ if test "x$preset" = "xdm355s" ; then
   	enable_videosink=1;
   	with_platform=dm355;
   	with_xdc_config_basename=dm355s;
+fi
+
+if test "x$preset" = "xdm365" ; then
+	AC_MSG_NOTICE(The following preset has been selected: $preset);
+  	enable_h264dec_xdm2=1;
+	enable_mpeg4dec_xdm2=1;
+  	enable_jpegdec_xdm1=1;
+	enable_h264enc_xdm1=1;
+	enable_mpeg4enc_xdm1=1;
+  	enable_jpegenc_xdm1=1;
+	enable_resizer=1;
+  	enable_videosink=1;
+  	with_platform=dm365;
 fi
 
 if test "x$preset" = "xdm357" ; then
@@ -246,7 +259,7 @@ fi
 dnl Define the platform
 AC_ARG_WITH(platform,
   [AS_HELP_STRING([--with-platform=<platform>],
-    [Select the platform to build: dm355, dm357, dm6446, dm6467, omap35x])],
+    [Select the platform to build: dm355, dm365, dm357, dm6446, dm6467, omap35x])],
   [AC_MSG_NOTICE([Setting the platform to "$withval"])
    AC_SUBST([PLATFORM],[$withval])
   ]
@@ -261,6 +274,10 @@ if test "x$PLATFORM" = "xdm6446" ; then
 fi
 if test "x$PLATFORM" = "xdm355" ; then
   with_xdcplatform=ti.platforms.evmDM355;
+  with_xdctarget=gnu.targets.MVArm9;
+fi
+if test "x$PLATFORM" = "xdm365" ; then
+  with_xdcplatform=ti.platforms.evmDM365;
   with_xdctarget=gnu.targets.MVArm9;
 fi
 if test "x$PLATFORM" = "xdm6467" ; then
