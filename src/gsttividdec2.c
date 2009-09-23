@@ -40,33 +40,9 @@
 #include "gsttidmaidec.h"
 #include "gsttidmaibuffertransport.h"
 
-static gboolean gstti_viddec2_create(GstTIDmaidec *);
-static void gstti_viddec2_destroy(GstTIDmaidec *);
-static gboolean gstti_viddec2_process
-                    (GstTIDmaidec *, GstBuffer *,Buffer_Handle,gboolean);
-static Buffer_Handle gstti_viddec2_get_data(GstTIDmaidec *);
-static void gstti_viddec2_flush(GstTIDmaidec *);
-static GstCaps * gstti_viddec2_get_output_caps
-                    (GstTIDmaidec *, Buffer_Handle);
-static Buffer_Handle gstti_viddec2_get_free_buffers
-                        (GstTIDmaidec *);
-
-struct gstti_decoder_ops gstti_viddec2_ops = {
-    .xdmversion = "xDM 1.2",
-    .codec_type = VIDEO,
-    .codec_create = gstti_viddec2_create,
-    .codec_destroy = gstti_viddec2_destroy,
-    .codec_process = gstti_viddec2_process,
-    .codec_get_data = gstti_viddec2_get_data,
-    .codec_flush = gstti_viddec2_flush,
-    .codec_get_output_caps = gstti_viddec2_get_output_caps,
-    .codec_get_free_buffers = gstti_viddec2_get_free_buffers,
-};
-
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY_STATIC (gst_tividdec2_debug);
 #define GST_CAT_DEFAULT gst_tividdec2_debug
-
 
 /******************************************************************************
  * gst_tividdec2_create
@@ -84,7 +60,9 @@ static gboolean gstti_viddec2_create (GstTIDmaidec *dmaidec)
     /* Set up codec parameters depending on device */
 #if PLATFORM == dm6467
     params.forceChromaFormat = XDM_YUV_420P;
-# else
+#elif PLATFORM == dm365
+    params.forceChromaFormat = XDM_YUV_420SP;
+#else
     params.forceChromaFormat = XDM_YUV_422ILE;
 #endif
     params.maxWidth          = dmaidec->width;
@@ -185,36 +163,16 @@ static void gstti_viddec2_flush(GstTIDmaidec *dmaidec){
     Vdec2_flush(dmaidec->hCodec);
 }
 
-
-/******************************************************************************
- * gst_tividdec2_get_source_caps
- ******************************************************************************/
-static GstCaps * gstti_viddec2_get_output_caps(
-    GstTIDmaidec *dmaidec, Buffer_Handle hBuf)
-{
-    BufferGfx_Dimensions  dim;
-    GstCaps              *caps;
-    char                 *string;
-
-    /* Create a UYVY caps object using the dimensions from the given buffer */
-    BufferGfx_getDimensions(hBuf, &dim);
-
-    caps =
-        gst_caps_new_simple("video/x-raw-yuv",
-            "format",    GST_TYPE_FOURCC,   GST_MAKE_FOURCC('U','Y','V','Y'),
-            "framerate", GST_TYPE_FRACTION, dmaidec->framerateNum,
-            dmaidec->framerateDen,
-            "width",     G_TYPE_INT,        dim.width,
-            "height",    G_TYPE_INT,        dim.height,
-            NULL);
-
-    /* Get the output pad caps */
-    string = gst_caps_to_string(caps);
-    GST_DEBUG("setting output caps to UYVY:  %s", string);
-    g_free(string);
-
-    return caps;
-}
+struct gstti_decoder_ops gstti_viddec2_ops = {
+    .xdmversion = "xDM 1.2",
+    .codec_type = VIDEO,
+    .codec_create = gstti_viddec2_create,
+    .codec_destroy = gstti_viddec2_destroy,
+    .codec_process = gstti_viddec2_process,
+    .codec_get_data = gstti_viddec2_get_data,
+    .codec_flush = gstti_viddec2_flush,
+    .codec_get_free_buffers = gstti_viddec2_get_free_buffers,
+};
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

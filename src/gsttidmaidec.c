@@ -648,7 +648,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     /* Create codec output buffers */
     if (decoder->dops->codec_type == VIDEO) {
         GST_DEBUG("creating output buffer table\n");
-#if PLATFORM == dm6467
+#if (PLATFORM == dm6467) || (PLATFORM == dm365)
         gfxAttrs.colorSpace     = ColorSpace_YUV420PSEMI;
 #else
         gfxAttrs.colorSpace     = ColorSpace_UYVY;
@@ -1080,7 +1080,28 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * properties.
          */
         if (!dmaidec->outCaps){
-            dmaidec->outCaps = decoder->dops->codec_get_output_caps(dmaidec, hDstBuf);
+            if (decoder->dops->codec_type == VIDEO) {
+                BufferGfx_Dimensions  dim;
+                GstCaps              *caps;
+                GstStructure         *capStruct;
+
+                /* Create caps object using the dimensions from the given buffer */
+                BufferGfx_getDimensions(hDstBuf, &dim);
+
+                caps =  gst_caps_make_writable(gst_caps_copy(
+                    gst_pad_get_pad_template_caps(dmaidec->srcpad)));
+                capStruct = gst_caps_get_structure(caps, 0);
+                gst_structure_set(capStruct,"height",G_TYPE_INT,dim.height,
+                                  "width",G_TYPE_INT,dim.width,
+                                  "framerate", GST_TYPE_FRACTION,
+                                  dmaidec->framerateNum,dmaidec->framerateDen,
+                                  (char *)NULL);
+
+                dmaidec->outCaps = caps;
+            } else {
+                GST_ELEMENT_ERROR(dmaidec,STREAM,DECODE,(NULL),
+                    ("Unknown codec type, can't calculate the output caps"));
+            }
         }
 
         /* Create a DMAI transport buffer object to carry a DMAI buffer to

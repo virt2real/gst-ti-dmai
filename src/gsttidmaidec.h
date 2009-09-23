@@ -112,8 +112,6 @@ struct gstti_decoder_ops {
                                 (GstTIDmaidec *, GstBuffer *,
                                  Buffer_Handle, gboolean /* flushing */);
     Buffer_Handle           (* codec_get_data) (GstTIDmaidec *);
-    GstCaps *               (* codec_get_output_caps)
-                                (GstTIDmaidec *, Buffer_Handle);
     /* Advanced functions for video decoders */
     void                    (* codec_flush) (GstTIDmaidec *);
     Buffer_Handle           (* codec_get_free_buffers)(GstTIDmaidec *);

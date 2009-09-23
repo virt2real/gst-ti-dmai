@@ -61,14 +61,23 @@ static GstStaticCaps gstti_pcm_caps = GST_STATIC_CAPS(
 
 /* Video caps */
 #if PLATFORM == dm6467
-static GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
+static GstStaticCaps gstti_y8c8_caps = GST_STATIC_CAPS (
     "video/x-raw-yuv, "                        /* Y8C8 - YUV422 semi planar */
     "   format=(fourcc)Y8C8, "
     "   framerate=(fraction)[ 0, MAX ], "
     "   width=(int)[ 1, MAX ], "
     "   height=(int)[ 1, MAX ]"
 );
-#else
+#elif PLATFORM == dm365
+static GstStaticCaps gstti_nv12_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "                        /* UYVY */
+    "   format=(fourcc)NV12, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] "
+);
+#endif
+
 static GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
     "video/x-raw-yuv, "                        /* UYVY */
     "   format=(fourcc)UYVY, "
@@ -76,7 +85,6 @@ static GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
     "   width=(int)[ 1, MAX ], "
     "   height=(int)[ 1, MAX ] "
 );
-#endif
 
 extern struct gstti_decoder_ops gstti_viddec2_ops;
 extern struct gstti_decoder_ops gstti_viddec0_ops;
@@ -110,7 +118,11 @@ GstTIDmaidecData decoders[] = {
     {
         .streamtype = "h264",
         .sinkCaps = &gstti_h264_caps,
+#if PLATFORM == dm365
+        .srcCaps = &gstti_nv12_caps,
+#else
         .srcCaps = &gstti_uyvy_caps,
+#endif
         .engineName = DECODEENGINE,
         .codecName = "h264dec",
         .dops = &gstti_viddec2_ops,
@@ -131,7 +143,11 @@ GstTIDmaidecData decoders[] = {
     {
         .streamtype = "mpeg4",
         .sinkCaps = &gstti_mpeg4_sink_caps,
+#if PLATFORM == dm365
+        .srcCaps = &gstti_nv12_caps,
+#else
         .srcCaps = &gstti_uyvy_caps,
+#endif
         .engineName = DECODEENGINE,
         .codecName = "mpeg4dec",
         .dops = &gstti_viddec2_ops,
@@ -193,7 +209,11 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_H264ENC_XDM1
     {
         .streamtype = "h264",
+#if PLATFORM == dm365
+        .sinkCaps = &gstti_nv12_caps,
+#else
         .sinkCaps = &gstti_uyvy_caps,
+#endif
         .srcCaps = &gstti_h264_caps,
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
@@ -212,7 +232,11 @@ GstTIDmaiencData encoders[] = {
 #ifdef ENABLE_MPEG4ENC_XDM1
     {
         .streamtype = "mpeg4",
+#if PLATFORM == dm365
+        .sinkCaps = &gstti_nv12_caps,
+#else
         .sinkCaps = &gstti_uyvy_caps,
+#endif
         .srcCaps = &gstti_mpeg4_src_caps,
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
