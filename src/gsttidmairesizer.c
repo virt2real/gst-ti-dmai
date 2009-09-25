@@ -99,14 +99,14 @@ gst_dmai_resizer_class_init (GstTIDmaiResizerClass * klass)
       ARG_SOURCE_X,
       g_param_spec_int ("source-x",
           "source-x",
-          "X axis pixel on the origin image (must be multiple of 16)",
+          "X axis pixel on the origin image ",
           0, G_MAXINT, 0, G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
       ARG_SOURCE_Y,
       g_param_spec_int ("source-y",
           "source-y",
-          "Y axis pixel on the origin image (must be multiple of 16)",
+          "Y axis pixel on the origin image",
           0, G_MAXINT, 0, G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
@@ -120,7 +120,7 @@ gst_dmai_resizer_class_init (GstTIDmaiResizerClass * klass)
       ARG_SOURCE_HEIGHT,
       g_param_spec_int ("source-height",
           "source-height",
-          "Height of source frame (must be multiple of 16)", 0, G_MAXINT, 0,
+          "Height of source frame", 0, G_MAXINT, 0,
           G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
@@ -298,21 +298,13 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case ARG_SOURCE_X:{
-      dmairesizer->source_x = g_value_get_int (value);
-      if (dmairesizer->source_x & 0xF) {
-        dmairesizer->source_x &= ~0xF;
-        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
-            ("Rounding source x to %d (step 16)", dmairesizer->source_x));
-      }
+      dmairesizer->source_x = BufferGfx_calcLineLength (g_value_get_int (value), dmairesizer->colorSpace);
+      /*Working for dm6446, not tested for other platforms*/
+      dmairesizer->source_x = GST_ROUND_UP_4(dmairesizer->source_x);
       break;
     }
     case ARG_SOURCE_Y:{
       dmairesizer->source_y = g_value_get_int (value);
-      if (dmairesizer->source_y & 0xF) {
-        dmairesizer->source_y &= ~0xF;
-        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
-            ("Rounding source y to %d (step 16)", dmairesizer->source_y));
-      }
       break;
     }
     case ARG_SOURCE_WIDTH:{
@@ -327,12 +319,6 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
     }
     case ARG_SOURCE_HEIGHT:{
       dmairesizer->source_height = g_value_get_int (value);
-      if (dmairesizer->source_height & 0xF) {
-        dmairesizer->source_height &= ~0xF;
-        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
-            ("Rounding source height to %d (step 16)",
-                dmairesizer->source_height));
-      }
       break;
     }
     case ARG_TARGET_WIDTH:{
@@ -521,24 +507,36 @@ get_dmai_buffer (GstTIDmaiResizer * dmairesizer, GstBuffer * buf)
   if (GST_IS_TIDMAIBUFFERTRANSPORT (buf)) {
     GST_INFO ("Incoming buffer is a DMAI buffer\n");
 
-    if (Buffer_getType (GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf)) ==
-        Buffer_Type_GRAPHICS) {
+    if ((Buffer_getType (GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf)) ==
+        Buffer_Type_GRAPHICS) && !dmairesizer->source_y && 
+        !dmairesizer->source_x) {
+      BufferGfx_Dimensions srcDim;
       GST_INFO ("Incoming buffer is graphics type\n");
+      BufferGfx_getDimensions(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf),
+        &srcDim);
+      srcDim.width = dmairesizer->source_width;
+      srcDim.height = dmairesizer->source_height;
+      BufferGfx_setDimensions(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf),
+        &srcDim);
+
       return GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf);
     } else {
       GST_INFO ("Incoming buffer isn't graphic type\n");
       Buffer_Handle hBuf;
       BufferGfx_Attrs gfxAttrs = BufferGfx_Attrs_DEFAULT;
       gfxAttrs.bAttrs.reference = TRUE;
-      gfxAttrs.dim.width = dmairesizer->width;
-      gfxAttrs.dim.height = dmairesizer->height;
+      gfxAttrs.dim.width = dmairesizer->source_width;
+      gfxAttrs.dim.height = dmairesizer->source_height;
+      gfxAttrs.dim.x = 0;
+      gfxAttrs.dim.y = 0;
       gfxAttrs.colorSpace = dmairesizer->colorSpace;
       gfxAttrs.dim.lineLength =
           BufferGfx_calcLineLength (dmairesizer->width,
           dmairesizer->colorSpace);
       hBuf = Buffer_create (dmairesizer->inBufSize, &gfxAttrs.bAttrs);
       Buffer_setUserPtr (hBuf,
-          Buffer_getUserPtr (GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf)));
+          Buffer_getUserPtr (GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf)) +
+          (gfxAttrs.dim.lineLength * dmairesizer->source_y) + dmairesizer->source_x );
       Buffer_setNumBytesUsed (hBuf, dmairesizer->inBufSize);
       return hBuf;
     }
@@ -547,13 +545,13 @@ get_dmai_buffer (GstTIDmaiResizer * dmairesizer, GstBuffer * buf)
     BufferGfx_Attrs gfxAttrs = BufferGfx_Attrs_DEFAULT;
     Buffer_Attrs *attrs;
 
-    gfxAttrs.dim.width = dmairesizer->width;
-    gfxAttrs.dim.height = dmairesizer->height;
+    gfxAttrs.dim.width = dmairesizer->source_width;
+    gfxAttrs.dim.height = dmairesizer->source_height;
+
     gfxAttrs.colorSpace = dmairesizer->colorSpace;
     gfxAttrs.dim.lineLength =
         BufferGfx_calcLineLength (dmairesizer->width, dmairesizer->colorSpace);
     attrs = &gfxAttrs.bAttrs;
-
     /* Allocate a Buffer tab and copy the data there */
     if (!dmairesizer->inBuf) {
       dmairesizer->inBuf = Buffer_create (dmairesizer->inBufSize, attrs);
@@ -564,8 +562,9 @@ get_dmai_buffer (GstTIDmaiResizer * dmairesizer, GstBuffer * buf)
       }
       GST_DEBUG ("Input buffer handler: %p\n", dmairesizer->inBuf);
     }
-    memcpy (Buffer_getUserPtr (dmairesizer->inBuf), GST_BUFFER_DATA (buf),
-        dmairesizer->inBufSize);
+    memcpy (Buffer_getUserPtr (dmairesizer->inBuf), GST_BUFFER_DATA (buf) + 
+      (gfxAttrs.dim.lineLength * dmairesizer->source_y) + dmairesizer->source_x,
+      dmairesizer->inBufSize);
     Buffer_setNumBytesUsed (dmairesizer->inBuf, dmairesizer->inBufSize);
     return dmairesizer->inBuf;
   }
@@ -587,6 +586,33 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   GstBuffer *pushBuffer;
   GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (GST_OBJECT_PARENT (pad));
 
+  /*Check dimentions*/
+  if(dmairesizer->source_width > dmairesizer->width){
+    GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, 
+    ("source-width out of limits\n"), 
+    ("setting source-width like width and source-x like zero\n"));
+    dmairesizer->source_width =  dmairesizer->width;
+    dmairesizer->source_x = 0;
+  } else if(dmairesizer->source_width + dmairesizer->source_x > dmairesizer->width){ 
+    GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, 
+    ("source-x out of limits\n"), 
+    ("setting source-x like width - source-width\n"));
+    dmairesizer->source_x = dmairesizer->width -  dmairesizer->source_width;
+  }
+
+  if(dmairesizer->source_height > dmairesizer->height){
+    GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, 
+    ("source-height out of limits\n"), 
+    ("setting source-height like height and source-y like zero\n"));
+    dmairesizer->source_height =  dmairesizer->height;
+    dmairesizer->source_y = 0;
+  } else if(dmairesizer->source_height + dmairesizer->source_y > dmairesizer->height){
+    GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, 
+    ("source-y out of limits\n"),
+    ("setting source-y like width - source-height\n"));
+    dmairesizer->source_y = dmairesizer->height - dmairesizer->source_height;
+  }
+
   if (dmairesizer->inBufSize == 0) {
     dmairesizer->inBufSize = GST_BUFFER_SIZE (buf);
     GST_DEBUG ("Input buffer size set to %d\n", dmairesizer->inBufSize);
@@ -597,6 +623,11 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   /*Send to resize */
   outBuffer = resize_buffer (dmairesizer, inBuffer);
   gst_buffer_unref (buf);
+
+  if(outBuffer == NULL){
+    /*GST_ELEMENT_ERROR called before */
+    return GST_FLOW_UNEXPECTED;
+  }
 
   /*Push buffer */
   pushBuffer =
