@@ -82,6 +82,8 @@ struct _GstTIDmaiVideoSink {
   gint          framerate;
   gint          numBufs;
   gint          rotation;
+  gint          x_position;
+  gint          y_position;
   gboolean      resizer;
   gboolean      autoselect;
   gboolean      contiguousInputFrame;

@@ -117,7 +117,9 @@ enum
   PROP_SIGNAL_HANDOFFS,
   PROP_CAN_ACTIVATE_PUSH,
   PROP_CAN_ACTIVATE_PULL,
-  PROP_CONTIG_INPUT_BUF
+  PROP_CONTIG_INPUT_BUF,
+  PROP_X_POSITION,
+  PROP_Y_POSITION
 };
 
 enum
@@ -276,6 +278,15 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
             "Set this if elemenet recieves contiguous input frame",
             FALSE, G_PARAM_WRITABLE));
 
+    /*Positioning*/
+    g_object_class_install_property(gobject_class, PROP_X_POSITION,
+        g_param_spec_int("x-position", "x position", "X positioning of"
+        " frame in display", -1, G_MAXINT, -1, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_Y_POSITION,
+        g_param_spec_int("y-position", "y position", "Y positioning of"
+        " frame in display", -1, G_MAXINT, -1, G_PARAM_READWRITE));
+
     /**
     * GstTIDmaiVideoSink::handoff:
     * @dmaisink: the dmaisink instance
@@ -408,6 +419,9 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->accelFrameCopy = TRUE;
     dmaisink->autoselect     = FALSE;
     dmaisink->prevVideoStd   = 0;
+    dmaisink->x_position     = -1;
+    dmaisink->y_position     = -1;
+    
 
     dmaisink->signal_handoffs = DEFAULT_SIGNAL_HANDOFFS;
 
@@ -492,6 +506,12 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
         case PROP_CONTIG_INPUT_BUF:
             sink->contiguousInputFrame = g_value_get_boolean(value);
             break;
+        case PROP_X_POSITION:
+            sink->x_position = g_value_get_int(value);
+            break;
+        case PROP_Y_POSITION:
+            sink->y_position = g_value_get_int(value);
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
             break;
@@ -554,6 +574,12 @@ static void gst_tidmaivideosink_get_property(GObject * object, guint prop_id,
             break;
         case PROP_CONTIG_INPUT_BUF:
             g_value_set_boolean(value, sink->contiguousInputFrame);
+            break;
+        case PROP_X_POSITION:
+            g_value_set_int(value, sink->x_position);
+            break;
+        case PROP_Y_POSITION:
+            g_value_set_int(value, sink->y_position);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1419,26 +1445,46 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
              * in the middle of playing we will not resize the window, even for
              * v4l2 after the initial setup.  Instead we will only display the
              * portion of the video that fits on the screen.  If the video is
-             * smaller than the display center it in the screen.
+             * smaller than the display center or place it in the screen.
              * TODO: later add an option to resize the video.
              */
+            /*WIDTH*/
             if (width > dim.width) {
                 GST_INFO("Input image width (%d) greater than display width"
                          " (%ld)\n Image cropped to fit screen\n",
                          width, dim.width);
                 dim.x = 0;
             } else {
-                dim.x     = ((dim.width - width) / 2) & ~1;
+                if(sink->x_position >= 0){
+                   if(sink->x_position > dim.width || (sink->x_position + width  > dim.width)){
+                      dim.x     = dim.width - width;
+                      GST_INFO("X Positioning exceed limits, repositioning\n");
+                   }else{
+                      dim.x     = sink->x_position & ~1;
+                   }
+                }else{
+                   dim.x     = ((dim.width - width) / 2) & ~1;
+                }
                 dim.width = width;
             }
 
+            /*HEIGHT*/
             if (height > dim.height) {
                 GST_INFO("Input image height (%d) greater than display height"
                          " (%ld)\n Image cropped to fit screen\n",
                          height, dim.height);
                 dim.y = 0;
             } else {
-                dim.y      = (dim.height - height) / 2;
+                if(sink->y_position >= 0){
+                   if(sink->y_position > dim.height || (sink->y_position + height > dim.height)){
+                      dim.y     = dim.height - height;
+                      GST_INFO("Y Positioning exceed limits, repositioning\n");
+                   }else{
+                      dim.y     = sink->y_position;
+                   }
+                }else{
+                   dim.y     = ((dim.height - height) / 2);
+                }
                 dim.height = height;
             }
             BufferGfx_setDimensions(hDispBuf, &dim);
