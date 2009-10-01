@@ -37,25 +37,100 @@
 #include "gsttidmaienc.h"
 #include "gsttidmaibuffertransport.h"
 
-/* Support for xDM 0.9 */
-static gboolean gstti_audenc0_setup_params(GstTIDmaienc *);
-static gboolean gstti_audenc0_create(GstTIDmaienc *);
-static void gstti_audenc0_destroy(GstTIDmaienc *);
-static gboolean gstti_audenc0_process(GstTIDmaienc *, Buffer_Handle,Buffer_Handle);
-
-struct gstti_encoder_ops gstti_audenc0_ops = {
-    .xdmversion = "xDM 0.9",
-    .codec_type = AUDIO,
-    .default_setup_params = gstti_audenc0_setup_params,
-    .codec_create = gstti_audenc0_create,
-    .codec_destroy = gstti_audenc0_destroy,
-    .codec_process = gstti_audenc0_process,
-};
-
 /* Declare variable used to categorize GST_LOG output */
 /* Debug variable for xDM 0.9 */
 GST_DEBUG_CATEGORY_STATIC (gst_tiaudenc0_debug);
 #define GST_CAT_DEFAULT gst_tiaudenc0_debug
+
+enum
+{
+    PROP_100 = 100,
+    PROP_BITRATE,
+    PROP_MAXBITRATE,
+};
+
+
+static void gstti_audenc0_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_BITRATE,
+        g_param_spec_int("bitrate",
+            "Bit rate",
+            "Average bit rate in bps",
+             0, G_MAXINT32, 128000, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_BITRATE,
+        g_param_spec_int("maxbitrate",
+            "Max bitrate for VBR encoding",
+            "Max bitrate for VBR encoding",
+             0, G_MAXINT32, 128000, G_PARAM_READWRITE));
+}
+
+
+static void gstti_audenc0_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    AUDENC_Params *params = (AUDENC_Params *)dmaienc->params;
+    AUDENC_DynamicParams *dynParams = (AUDENC_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_BITRATE:
+        dynParams->bitRate = g_value_get_int(value);
+        break;
+    case PROP_MAXBITRATE:
+        params->maxBitrate = g_value_get_int(value);
+        break;
+    default:
+        break;
+    }
+}
+
+
+static void gstti_audenc0_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    AUDENC_Params *params = (AUDENC_Params *)dmaienc->params;
+    AUDENC_DynamicParams *dynParams = (AUDENC_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_BITRATE:
+        g_value_set_int(value,dynParams->bitRate);
+        break;
+    case PROP_MAXBITRATE:
+        g_value_set_int(value,params->maxBitrate);
+        break;
+    default:
+        break;
+    }
+}
+
+
+/******************************************************************************
+ * gst_tividenc0_set_codec_caps
+ *****************************************************************************/
+static void gstti_audenc0_set_codec_caps(GstTIDmaienc *dmaienc){
+    AUDENC_Params *params = (AUDENC_Params *)dmaienc->params;
+    AUDENC_DynamicParams *dynParams = (AUDENC_DynamicParams *)dmaienc->dynParams;
+
+    /* Set up codec parameters depending on device */
+    GST_DEBUG("Setting up codec parameters");
+
+    params->maxSampleRate = dynParams->sampleRate = dmaienc->rate;
+    switch (dmaienc->channels){
+        case (1):
+            params->maxNoOfCh = IAUDIO_MONO;
+            break;
+        case (2):
+            params->maxNoOfCh = IAUDIO_STEREO;
+            break;
+        default:
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FORMAT,(NULL),
+                ("Unsupported number of channels: %d\n", dmaienc->channels));
+            return;
+    }
+    dynParams->numChannels = params->maxNoOfCh;
+    dynParams->inputBitsPerSample = dmaienc->awidth;
+}
+
 
 /******************************************************************************
  * gst_tiaudenc1_setup_params Support for xDM1.0
@@ -83,21 +158,6 @@ static gboolean gstti_audenc0_setup_params(GstTIDmaienc *dmaienc){
     GST_WARNING("Setting up default params for the Codec, would be better if"
         " the CodecServer used implements his own setup_params function...");
 
-    params->maxSampleRate = dynParams->sampleRate = dmaienc->rate;
-    switch (dmaienc->channels){
-        case (1):
-            params->maxNoOfCh = IAUDIO_MONO;
-            break;
-        case (2):
-            params->maxNoOfCh = IAUDIO_STEREO;
-            break;
-        default:
-            GST_ELEMENT_ERROR(dmaienc,STREAM,FORMAT,(NULL),
-                ("Unsupported number of channels: %d\n", dmaienc->channels));
-            return FALSE;
-    }
-    dynParams->numChannels = params->maxNoOfCh;
-    dynParams->inputBitsPerSample = dmaienc->awidth;
     params->maxBitrate = dynParams->bitRate = 128000;
 
     return TRUE;
@@ -163,6 +223,19 @@ static gboolean gstti_audenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     return TRUE;
 }
 
+/* Support for xDM 0.9 */
+struct gstti_encoder_ops gstti_audenc0_ops = {
+    .xdmversion = "xDM 0.9",
+    .codec_type = AUDIO,
+    .default_setup_params = gstti_audenc0_setup_params,
+    .set_codec_caps = gstti_audenc0_set_codec_caps,
+    .install_properties = gstti_audenc0_install_properties,
+    .set_property = gstti_audenc0_set_property,
+    .get_property = gstti_audenc0_get_property,
+    .codec_create = gstti_audenc0_create,
+    .codec_destroy = gstti_audenc0_destroy,
+    .codec_process = gstti_audenc0_process,
+};
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

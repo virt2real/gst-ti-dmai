@@ -53,11 +53,15 @@ struct codec_custom_data {
     GstStaticCaps   *sinkCaps;
     /* Custom function to initialize the code arguments */
     gboolean       (*setup_params)(GstElement *);
+    /* Call to set the caps */
+    void           (* set_codec_caps)(GstElement *);
     /* Functions to provide custom properties */
     void           (*install_properties)(GObjectClass *);
     void           (*set_property)
                         (GObject *,guint,const GValue *,GParamSpec *);
     void           (*get_property)(GObject *,guint,GValue *, GParamSpec *);
+	/* Custom properties */
+    gint           max_samples;
 };
 
 struct codec_custom_data_entry{

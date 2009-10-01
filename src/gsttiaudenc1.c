@@ -1,7 +1,10 @@
 /*
  * gsttiaudenc1.c
  *
- * This file provides the access to the codec APIs for xDM 1.0 Audio Codecs
+ * This file provides the access to the codec APIs for xDM 1.0 Video Codecs
+ *
+ * Original Author:
+ *     Don Darling, Texas Instruments, Inc.
  *
  * Contributors:
  *     Diego Dompe, RidgeRun
@@ -31,39 +34,80 @@
 
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
+#include <ti/sdo/dmai/BufferGfx.h>
 #include <ti/sdo/dmai/BufTab.h>
 #include <ti/sdo/dmai/ce/Aenc1.h>
 
 #include "gsttidmaienc.h"
 #include "gsttidmaibuffertransport.h"
 
-/* Support for xDM 1.0 */
-static gboolean gstti_audenc1_setup_params(GstTIDmaienc *);
-static gboolean gstti_audenc1_create(GstTIDmaienc *);
-static void gstti_audenc1_destroy(GstTIDmaienc *);
-static gboolean gstti_audenc1_process(GstTIDmaienc *, Buffer_Handle,Buffer_Handle);
-
-
-/* Define the structs for both versions of xDM*/
-
-struct gstti_encoder_ops gstti_audenc1_ops = {
-    .xdmversion = "xDM 1.0",
-    .codec_type = AUDIO,
-    .default_setup_params = gstti_audenc1_setup_params,
-    .codec_create = gstti_audenc1_create,
-    .codec_destroy = gstti_audenc1_destroy,
-    .codec_process = gstti_audenc1_process,
-};
-
 /* Declare variable used to categorize GST_LOG output */
-/* Debug variable for xDM 1.0 and xDM 0.0 */
 GST_DEBUG_CATEGORY_STATIC (gst_tiaudenc1_debug);
 #define GST_CAT_DEFAULT gst_tiaudenc1_debug
 
+enum
+{
+    PROP_100 = 100,
+    PROP_BITRATE,
+    PROP_MAXBITRATE,
+};
+
+
+static void gstti_audenc1_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_BITRATE,
+        g_param_spec_int("bitrate",
+            "Bit rate",
+            "Average bit rate in bps",
+             0, G_MAXINT32, 128000, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_BITRATE,
+        g_param_spec_int("maxbitrate",
+            "Max bitrate for VBR encoding",
+            "Max bitrate for VBR encoding",
+             0, G_MAXINT32, 128000, G_PARAM_READWRITE));
+}
+
+
+static void gstti_audenc1_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    AUDENC1_Params *params = (AUDENC1_Params *)dmaienc->params;
+    AUDENC1_DynamicParams *dynParams = (AUDENC1_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_BITRATE:
+        params->bitRate = g_value_get_int(value);
+        dynParams->bitRate = params->bitRate;
+        break;
+    case PROP_MAXBITRATE:
+        params->maxBitRate = g_value_get_int(value);
+        break;
+    default:
+        break;
+    }
+}
+
+
+static void gstti_audenc1_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    AUDENC1_Params *params = (AUDENC1_Params *)dmaienc->params;
+
+    switch (prop_id) {
+    case PROP_BITRATE:
+        g_value_set_int(value,params->bitRate);
+        break;
+    case PROP_MAXBITRATE:
+        g_value_set_int(value,params->maxBitRate);
+        break;
+    default:
+        break;
+    }
+}
 
 /******************************************************************************
- * gst_tiaudenc1_setup_params Support for xDM1.0
- *     Setup default codec params
+ * gst_tiaudenc1_setup_params
  *****************************************************************************/
 static gboolean gstti_audenc1_setup_params(GstTIDmaienc *dmaienc){
     AUDENC1_Params *params;
@@ -79,13 +123,27 @@ static gboolean gstti_audenc1_setup_params(GstTIDmaienc *dmaienc){
     if (!dmaienc->dynParams){
         dmaienc->dynParams = g_malloc(sizeof (AUDENC1_DynamicParams));
     }
+
     *(AUDENC1_Params *)dmaienc->params     = Aenc1_Params_DEFAULT;
     *(AUDENC1_DynamicParams *)dmaienc->dynParams  = Aenc1_DynamicParams_DEFAULT;
     params = (AUDENC1_Params *)dmaienc->params;
     dynParams = (AUDENC1_DynamicParams *)dmaienc->dynParams;
 
-    GST_WARNING("Setting up default params for the Codec, would be better if"
-        " the CodecServer used implements his own setup_params function...");
+    params->bitRate = dynParams->bitRate = 128000;
+    params->maxBitRate = 128000;
+    return TRUE;
+}
+
+
+/******************************************************************************
+ * gst_tividenc0_set_codec_caps
+ *****************************************************************************/
+static void gstti_audenc1_set_codec_caps(GstTIDmaienc *dmaienc){
+    AUDENC1_Params *params = (AUDENC1_Params *)dmaienc->params;
+    AUDENC1_DynamicParams *dynParams = (AUDENC1_DynamicParams *)dmaienc->dynParams;
+
+    /* Set up codec parameters depending on device */
+    GST_DEBUG("Setting up codec parameters");
 
     params->sampleRate = dynParams->sampleRate = dmaienc->rate;
     switch (dmaienc->channels){
@@ -98,32 +156,32 @@ static gboolean gstti_audenc1_setup_params(GstTIDmaienc *dmaienc){
         default:
             GST_ELEMENT_ERROR(dmaienc,STREAM,FORMAT,(NULL),
                 ("Unsupported number of channels: %d\n", dmaienc->channels));
-            return FALSE;
+            return;
     }
     dynParams->channelMode = params->channelMode;
     params->inputBitsPerSample = dynParams->inputBitsPerSample = dmaienc->awidth;
-    params->bitRate = dynParams->bitRate = 128000;
-
-    return TRUE;
 }
 
+
 /******************************************************************************
- * gst_tiaudenc1_create Support for xDM1.0
+ * gst_tiaudenc1_create
  *     Initialize codec
  *****************************************************************************/
 static gboolean gstti_audenc1_create (GstTIDmaienc *dmaienc)
 {
+    
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tiaudenc1_debug, "TIAudenc1", 0,
         "DMAI Audio1 Encoder");
-
-    GST_DEBUG("opening audio encoder \"%s\"\n", dmaienc->codecName);
+		    
     dmaienc->hCodec =
-        Aenc1_create(dmaienc->hEngine, (Char*)dmaienc->codecName,
+         Aenc1_create(dmaienc->hEngine, (Char*)dmaienc->codecName,
                     (AUDENC1_Params *)dmaienc->params, 
                     (AUDENC1_DynamicParams *)dmaienc->dynParams);
-
-    if (dmaienc->hCodec == NULL) {
+                    
+	
+	
+	if (dmaienc->hCodec == NULL) {
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,OPEN_READ_WRITE,(NULL),
             ("failed to create audio encoder: %s\n", dmaienc->codecName));
         return FALSE;
@@ -134,7 +192,7 @@ static gboolean gstti_audenc1_create (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gst_tiaudenc1_destroy Support for xDM1.0
+ * gst_tiaudenc1_destroy
  *     free codec resources
  *****************************************************************************/
 static void gstti_audenc1_destroy (GstTIDmaienc *dmaienc)
@@ -146,18 +204,21 @@ static void gstti_audenc1_destroy (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gst_tiaudenc1_process Support for xDM1.0
+ * gst_tiaudenc1_process
  ******************************************************************************/
 static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
 
     Int ret;
 
-    /* Invoke the audio encoder */
-    GST_DEBUG("invoking the audio encoder,(%p, %p)\n",
-        Buffer_getUserPtr(hSrcBuf),Buffer_getUserPtr(hDstBuf));
+    if (dmaienc->hCodec == NULL) {
+        GST_ELEMENT_ERROR(dmaienc,RESOURCE,OPEN_READ_WRITE,(NULL),
+            ("hCodec is null: %s\n", dmaienc->codecName));
+        return FALSE;
+    }
+     
     ret = Aenc1_process(dmaienc->hCodec, hSrcBuf, hDstBuf);
-
+   
     if (ret < 0) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,ENCODE,(NULL),
             ("failed to encode audio buffer: error %d",ret));
@@ -165,8 +226,21 @@ static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     }
 
     return TRUE;
+
 }
 
+struct gstti_encoder_ops gstti_audenc1_ops = {
+    .xdmversion = "xDM 1.0",
+    .codec_type = AUDIO,
+    .default_setup_params = gstti_audenc1_setup_params,
+    .set_codec_caps = gstti_audenc1_set_codec_caps,
+    .install_properties = gstti_audenc1_install_properties,
+    .set_property = gstti_audenc1_set_property,
+    .get_property = gstti_audenc1_get_property,
+    .codec_create = gstti_audenc1_create,
+    .codec_destroy = gstti_audenc1_destroy,
+    .codec_process = gstti_audenc1_process,
+};
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

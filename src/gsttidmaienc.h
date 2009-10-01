@@ -75,6 +75,7 @@ struct _GstTIDmaienc
     GstAdapter          *adapter;
     gint                outBufSize;
     gint                inBufSize;
+    gint                adapterSize;
     gint                outBufMultiple;
     Buffer_Handle       outBuf;
     Buffer_Handle       inBuf;
@@ -88,7 +89,8 @@ struct _GstTIDmaienc
     gint                depth;
     gint                awidth;
     gint                rate;
-    GstClockTime        basets,duration;
+    GstClockTime        basets;
+    GstClockTime        asampleSize,asampleTime;
 
     /* Video Data */
     gint                framerateNum;

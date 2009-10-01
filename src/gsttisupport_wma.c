@@ -31,14 +31,14 @@
 #include "gsttisupport_wma.h"
 #include "gsttidmaibuffertransport.h"
 
+
 GstStaticCaps gstti_wma_caps = GST_STATIC_CAPS(
     "audio/x-wma, "
-    "channels: (int)[ 1, MAX ], "
-    "rate: (int)[ 8000, MAX ], "
-    "wmaversion: (int) 2, "
-    "block_align:  (int)[ 0, MAX ], "
-    "bitrate: (int) [ 0, MAX ]; "
+    "channels= (int)[ 1, 2 ], "
+    "rate= (int)[ 8000, 96000 ], "
+    "wmaversion= (int) 1; "
 );
+
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

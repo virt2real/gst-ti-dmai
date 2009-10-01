@@ -8,7 +8,8 @@ gsttividdec2.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
 gsttisupport_mpeg4.c gsttisupport_h264.c  \
 gsttiaudenc1.c gsttiaudenc.c \
 gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c \
-gstticommonutils.c @XDC_CONFIG_BASENAME@.c ti_encoders.c caps.c
+gstticommonutils.c @XDC_CONFIG_BASENAME@.c ti_encoders.c caps.c \
+ittiam_encoders.c ittiam_caps.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
@@ -25,7 +26,8 @@ libgstticodecplugin_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) \
 noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h gsttiparsers.h \
 gsttisupport_h264.h gsttisupport_mpeg4.h gsttisupport_aac.h gsttisupport_mp3.h \
 gsttisupport_wma.h ti_encoders.h caps.h \
-gsttidmaidec.h gsttidmaienc.h gsttidmaiaccel.h
+gsttidmaidec.h gsttidmaienc.h gsttidmaiaccel.h \
+ittiam_encoders.h ittiam_caps.h
 
 # XDC Configuration
 CONFIGURO     = $(XDC_INSTALL_DIR)/xs xdc.tools.configuro

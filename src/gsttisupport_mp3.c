@@ -33,10 +33,10 @@
 
 GstStaticCaps gstti_mp3_caps = GST_STATIC_CAPS(
     "audio/mpeg, "
-    "mpegversion: (int) 1, "
-    "layer: (int) 3, "
-    "rate: (int) [ 8000, MAX], "
-    "channels: (int)[ 1, MAX ]; "
+	"mpegversion= (int) 1, "
+	"layer= (int) 3, "
+	"rate= (int) [ 8000, MAX], "
+	"channels= (int)[ 1, 2 ]; "
 );
 
 /******************************************************************************

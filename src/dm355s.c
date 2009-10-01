@@ -1,4 +1,4 @@
-/*
+ /*
  * dm355s.c
  *
  * This file provides filtered capabilities for the codecs used with the
@@ -7,6 +7,9 @@
  *
  * Author:
  *     Diego Dompe, RidgeRun
+ *
+ * Contributor:
+ *     Cristina Murillo, RidgeRun
  *
  * Copyright (C) 2009 RidgeRun
  *
@@ -25,11 +28,39 @@
 #  include <config.h>
 #endif
 
-#include  "gstticommonutils.h"
+#include "gstticommonutils.h"
+#include "ittiam_encoders.h"
+#include "ittiam_caps.h"
+#include "gsttisupport_mp3.h"
 
 struct codec_custom_data_entry codec_custom_data[] = {
+    { .codec_name = "aacenc",
+          .data = {
+          .sinkCaps = &gstti_ittiam_pcm_caps,
+          .srcCaps = &gstti_ittiam_aac_caps,
+          .setup_params = ittiam_aacenc_params,
+          .set_codec_caps = ittiam_aacenc_set_codec_caps,
+          .install_properties = ittiam_aacenc_install_properties,
+          .set_property = ittiam_aacenc_set_property,
+          .get_property = ittiam_aacenc_get_property,
+          .max_samples = 1025,
+          },
+     },
+    { .codec_name = "mp3enc",
+          .data = {
+          .sinkCaps = &gstti_ittiam_pcm_caps,
+          .srcCaps = &gstti_ittiam_mp3_caps,
+          //.srcCaps = &gstti_mp3_caps,
+          .setup_params = ittiam_mp3enc_params,
+          .install_properties = ittiam_mp3enc_install_properties,
+          .set_property = ittiam_mp3enc_set_property,
+          .get_property = ittiam_mp3enc_get_property,
+          .max_samples = 1152,
+          },
+     },
     { .codec_name = NULL },
 };
+
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

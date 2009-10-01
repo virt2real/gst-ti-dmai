@@ -105,7 +105,7 @@ static gboolean
  gst_tidmaienc_configure_codec (GstTIDmaienc *dmaienc);
 static gboolean
  gst_tidmaienc_deconfigure_codec (GstTIDmaienc *dmaienc);
-static GstFlowReturn
+static int
  encode(GstTIDmaienc *dmaienc,GstBuffer * buf);
 
 /*
@@ -410,6 +410,8 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
 
     dmaienc->outBuf             = NULL;
     dmaienc->inBuf              = NULL;
+    dmaienc->adapterSize        = 0;
+    dmaienc->inBufSize          = 0;
 
     dmaienc->require_configure  = TRUE;
 
@@ -428,6 +430,8 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->rate               = 0;
 
     dmaienc->basets             = GST_CLOCK_TIME_NONE;
+    dmaienc->asampleSize        = GST_CLOCK_TIME_NONE;
+    dmaienc->asampleTime        = GST_CLOCK_TIME_NONE;
 }
 
 
@@ -837,6 +841,7 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
 
         dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
             dmaienc->colorSpace) * dmaienc->height;
+        dmaienc->adapterSize = dmaienc->inBufSize;
 
     } else if(!strncmp(mime, "audio/", 6)){
         /* Generic Audio Properties */
@@ -870,29 +875,50 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     (char *)NULL);
 
         dmaienc->inBufSize = 0;
-    }
 
-    else { //Add support for images
+		/* By default process up to 1024 samples per channel */
+        dmaienc->adapterSize = 1024 * (dmaienc->awidth >> 3) * dmaienc->channels;
+        dmaienc->asampleSize = (dmaienc->awidth >> 3) * dmaienc->channels;
+        dmaienc->asampleTime = 1000000000l / dmaienc->rate;
+		
+        if (gclass->codec_data && gclass->codec_data->max_samples) {
+   			dmaienc->adapterSize = gclass->codec_data->max_samples * 
+   				(dmaienc->awidth >> 3) * dmaienc->channels;
+   			GST_DEBUG("Codec can process at most %d samples per call",
+   				gclass->codec_data->max_samples);
+        }        
+    } else { //Add support for images
 
     }
 
     GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(caps)));
     g_free(str);
-    gst_pad_set_caps(dmaienc->srcpad, caps);
-    gst_caps_unref(caps);
-
-    /* Set the caps on the parameters of the encoder */
-    encoder->eops->set_codec_caps(dmaienc);
-
-    if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
-        gst_object_unref(dmaienc);
-        GST_ERROR("failing to deconfigure codec");
-        return FALSE;
+    
+    if (!gst_pad_set_caps(dmaienc->srcpad, caps)) {
+        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+           	("Failed to set the srcpad caps"));
+    } else {
+	    gst_caps_unref(caps);
+	
+	    /* Set the caps on the parameters of the encoder */
+	    encoder->eops->set_codec_caps(dmaienc);
+	
+	    if (gclass->codec_data && gclass->codec_data->set_codec_caps) {
+	    	gclass->codec_data->set_codec_caps((GstElement*)dmaienc);
+	    }
+	
+	    if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
+	        gst_object_unref(dmaienc);
+	        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+    	       	("Failed to deconfigure codec"));
+	        return FALSE;
+	    }
+	
+	    gst_object_unref(dmaienc);
+	
+	    GST_DEBUG("sink caps negotiation successful\n");   
     }
-
-    gst_object_unref(dmaienc);
-
-    GST_DEBUG("sink caps negotiation successful\n");
+    
     return TRUE;
 }
 
@@ -933,12 +959,6 @@ done:
 
 void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
-
-    GST_LOG("Release pointers: %p, %p, %p, %d",
-        buf,
-        Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)),
-        Buffer_getUserPtr(dmaienc->outBuf),
-        dmaienc->tail);
 
     if (Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) !=
         Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->tail){
@@ -986,13 +1006,12 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc){
      * This is an heuristic
      */
     if (outSpace(dmaienc) < dmaienc->inBufSize){
-        GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
-            ("Not enough space free on the output circular buffer"));
+        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+           	("Not enough space free on the output circular buffer"));
         return NULL;
     }
 
     hBuf = Buffer_create(dmaienc->inBufSize,&Attrs);
-    GST_LOG("Outbuf at %p, head at %d",Buffer_getUserPtr(dmaienc->outBuf),dmaienc->head);
     Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->head);
     Buffer_setNumBytesUsed(hBuf,dmaienc->inBufSize);
 
@@ -1073,6 +1092,7 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
 
         memcpy(Buffer_getUserPtr(dmaienc->inBuf),GST_BUFFER_DATA(buf),
                 dmaienc->inBufSize);
+
         Buffer_setNumBytesUsed(dmaienc->inBuf,dmaienc->inBufSize);
 
         return dmaienc->inBuf;
@@ -1083,11 +1103,12 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
  * encode
  *  This function encodes a frame and push the buffer downstream
  ******************************************************************************/
-static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
+static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     GstTIDmaiencClass      *gclass;
     GstTIDmaiencData       *encoder;
     Buffer_Handle  hDstBuf,hSrcBuf;
     GstBuffer     *outBuf;
+    int ret = -1;
 
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
@@ -1121,14 +1142,22 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
         Buffer_getNumBytesUsed(hDstBuf));
     gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));
 
-    /* DMAI set the buffer type on the input buffer, since only this one
-     * is a GFX buffer
-     */
-    if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
-        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
-    } else {
-        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
-    }
+	ret = (int)Buffer_getNumBytesUsed(hSrcBuf);
+
+	if (encoder->eops->codec_type == VIDEO) {
+	    /* DMAI set the buffer type on the input buffer, since only this one
+	     * is a GFX buffer
+	     */
+	    if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
+	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+	    } else {
+	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+	    }
+	} else if (encoder->eops->codec_type == AUDIO) {
+		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
+			* dmaienc->asampleTime;
+	}
+
     gst_buffer_unref(rawData);
     rawData = NULL;
 
@@ -1148,18 +1177,39 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     }
 
     if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
-        GST_DEBUG("push to source pad failed\n");
+        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+           	("Failed to push to pad buffer"));
     }
-
-    return GST_FLOW_OK;
 
 failure:
     if (rawData != NULL)
         gst_buffer_unref(rawData);
 
-    return GST_FLOW_UNEXPECTED;
+    return ret;
 }
 
+static GstBuffer *adapter_get_buffer(GstTIDmaienc *dmaienc, 
+					GstTIDmaiencData *encoder){
+	GstBuffer *buf = NULL;
+	const guint8 *buffer = NULL;
+
+    if (encoder->eops->codec_type == AUDIO){
+    	buffer = gst_adapter_peek(dmaienc->adapter,dmaienc->adapterSize);
+		buf = gst_buffer_new();
+		GST_BUFFER_DATA(buf) = (guint8 *)buffer;
+		GST_BUFFER_SIZE(buf) = dmaienc->adapterSize;
+		GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
+		GST_BUFFER_DURATION(buf) = (dmaienc->adapterSize / dmaienc->asampleSize)
+			* dmaienc->asampleTime;
+    } else {
+    	/* For Video processing we want to use gst_adapter_take_buffer
+    	 * because it keeps the timestamps
+    	 */
+      	buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->adapterSize);
+    }
+    
+    return buf;
+}
 
 /******************************************************************************
  * gst_tidmaienc_chain
@@ -1173,6 +1223,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)GST_OBJECT_PARENT(pad);
     GstTIDmaiencClass *gclass;
     GstTIDmaiencData *encoder;
+    int bytesConsumed;
 
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
@@ -1180,13 +1231,12 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 
     /* On audio paths we don't know the input buffer size until it arrives */
     if (dmaienc->inBufSize == 0){
-        if (encoder->eops->codec_type == AUDIO) {
-            /* For audio we take 4 times the input buffer size */
-            dmaienc->inBufSize = GST_BUFFER_SIZE(buf) << 2;
-        } else {
-            dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
-        }
-        GST_DEBUG("Input buffer size set to %d\n",dmaienc->inBufSize);
+
+        dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
+    	if (dmaienc->inBufSize > dmaienc->adapterSize){
+    		dmaienc->inBufSize = dmaienc->adapterSize;
+    	}
+        GST_DEBUG("Incoming buffer size %d\n",dmaienc->inBufSize);
     }
 
     if (dmaienc->require_configure){
@@ -1197,50 +1247,54 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
         }
     }
 
-    if (GST_BUFFER_SIZE(buf) > dmaienc->inBufSize){
-        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-           ("Failed to encode buffer, received input buffer with size bigger than allocated memory"));
-        gst_buffer_unref(buf);
-        return GST_FLOW_UNEXPECTED;
-    }
-
     if (!GST_IS_TIDMAIBUFFERTRANSPORT(buf) ||
         Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
           != Buffer_Type_GRAPHICS){
+
         if (!GST_CLOCK_TIME_IS_VALID(dmaienc->basets)){
             dmaienc->basets = GST_BUFFER_TIMESTAMP(buf);
-            dmaienc->duration = 0;
         }
-        if (GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(buf))){
-            dmaienc->duration += GST_BUFFER_DURATION(buf);
-        }
-
+        
+        /* Push the buffer into the adapter*/
         gst_adapter_push(dmaienc->adapter,buf);
 
-        if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
-            buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->inBufSize);
-
-            if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(buf))){
-                GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
-                GST_BUFFER_DURATION(buf) = dmaienc->duration != 0 ?
-                    dmaienc->duration : GST_CLOCK_TIME_NONE;
-            }
-            dmaienc->basets = GST_CLOCK_TIME_NONE;
+        if (gst_adapter_available(dmaienc->adapter) >= dmaienc->adapterSize){	
+			buf = adapter_get_buffer(dmaienc,encoder);
         } else {
-            buf = NULL;
+        	buf = NULL;
         }
     } else {
         GST_DEBUG("Using accelerated buffer\n");
     }
 
-    if (buf){
-        if (encode(dmaienc, buf) != GST_FLOW_OK) {
-           GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-               ("Failed to encode buffer"));
-           gst_buffer_unref(buf);
-           return GST_FLOW_UNEXPECTED;
-       }
+    while (buf){
+    	bytesConsumed = encode(dmaienc, buf);
+		buf = NULL;
+
+       	if (bytesConsumed < 0) {
+        	GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+            	("Failed to encode buffer"));
+           	gst_buffer_unref(buf);
+        	return GST_FLOW_UNEXPECTED;
+        }
+       
+    	if (encoder->eops->codec_type == AUDIO) {
+       		/* Need to flush the adapter */
+       		gst_adapter_flush(dmaienc->adapter,bytesConsumed);
+			if (gst_adapter_available(dmaienc->adapter) == 0) {
+				dmaienc->basets = GST_CLOCK_TIME_NONE;
+			} else {
+	       		dmaienc->basets += (bytesConsumed / dmaienc->asampleSize)
+					* dmaienc->asampleTime;
+			}
+
+			if (gst_adapter_available(dmaienc->adapter) >= dmaienc->adapterSize){
+				buf = adapter_get_buffer(dmaienc,encoder);
+			}
+       	}
     }
+
+
 
     if (dmaienc->hDsp){
         GstClockTime time = gst_util_get_timestamp();
@@ -1269,7 +1323,6 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
             Server_getNumMemSegs(dmaienc->hDsp,&nsegs);
             for (i=0; i < nsegs; i++){
                 Server_MemStat ms;
-
                 Server_getMemStat(dmaienc->hDsp,i,&ms);
                 idx += g_snprintf(&info[idx],4096-idx,
                     "Memory segment %s: base 0x%x, size 0x%x, maxblocklen 0x%x, used 0x%x\n",

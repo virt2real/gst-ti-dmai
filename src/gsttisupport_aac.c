@@ -34,7 +34,7 @@
 
 GstStaticCaps gstti_aac_caps = GST_STATIC_CAPS(
     "audio/mpeg, "
-    "mpegversion=(int) 4, "  /* MPEG versions 2 and 4 */
+    "mpegversion=(int) 4, "
     "channels= (int)[ 1, MAX ], "
     "rate = (int)[ 8000, MAX ]; "
 );
