@@ -68,6 +68,7 @@ struct _GstTIDmaienc
     gpointer            *dynParams;
     GstClockTime        lastLoadstamp;
     gboolean            printDspLoad;
+    gboolean            copyOutput;
     guint32             counter;
 
     /* Buffer management */

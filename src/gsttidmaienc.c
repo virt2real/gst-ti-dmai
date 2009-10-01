@@ -68,6 +68,7 @@ enum
     PROP_CODEC_NAME,      /* codecName      (string)  */
     PROP_SIZE_OUTPUT_BUF, /* sizeOutputBuf  (int)     */
     PROP_DSP_LOAD,        /* printDspLoad   (boolean) */
+    PROP_COPY_OUTPUT,     /* copyOutput    (boolean) */
 };
 
 #define GST_TIDMAIENC_PARAMS_QDATA g_quark_from_static_string("dmaienc-params")
@@ -316,6 +317,12 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
             "Boolean that set if DSP load information should be displayed",
             FALSE, G_PARAM_READWRITE));
 
+    g_object_class_install_property(gobject_class, PROP_COPY_OUTPUT,
+        g_param_spec_boolean("copyOutput",
+            "Copy the output buffers",
+            "Boolean that set if the output buffers should be copied into standard gst buffers",
+            FALSE, G_PARAM_READWRITE));
+
     /* Install custom properties for this codec type */
     if (encoder->eops->install_properties){
         encoder->eops->install_properties(gobject_class);
@@ -392,6 +399,7 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->hDsp               = NULL;
     dmaienc->lastLoadstamp      = GST_CLOCK_TIME_NONE;
     dmaienc->printDspLoad       = FALSE;
+    dmaienc->copyOutput         = FALSE;
     dmaienc->counter            = 0;
 
     dmaienc->adapter            = NULL;
@@ -463,6 +471,11 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
         GST_LOG("seeting \"printDspLoad\" to %s\n",
             dmaienc->printDspLoad?"TRUE":"FALSE");
         break;
+    case PROP_COPY_OUTPUT:
+        dmaienc->copyOutput = g_value_get_boolean(value);
+        GST_LOG("seeting \"copyOutput\" to %s\n",
+            dmaienc->copyOutput?"TRUE":"FALSE");
+        break;
     default:
         /* If this codec provide custom properties...
          * We allow custom codecs to overwrite the generic properties
@@ -506,6 +519,9 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_DSP_LOAD:
         g_value_set_boolean(value,dmaienc->printDspLoad);
+        break;
+    case PROP_COPY_OUTPUT:
+        g_value_set_boolean(value,dmaienc->copyOutput);
         break;
     default:
         /* If this codec provide custom properties...
@@ -1125,6 +1141,12 @@ static GstFlowReturn encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
         dmaienc->counter += GST_BUFFER_SIZE(outBuf);
     }
 
+    if (dmaienc->copyOutput) {
+	GstBuffer *buf = gst_buffer_copy(outBuf);
+	gst_buffer_unref(outBuf);
+	outBuf = buf;
+    }
+
     if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
         GST_DEBUG("push to source pad failed\n");
     }
@@ -1208,7 +1230,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
             buf = NULL;
         }
     } else {
-        GST_INFO("Using accelerated buffer\n");
+        GST_DEBUG("Using accelerated buffer\n");
     }
 
     if (buf){
