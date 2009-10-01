@@ -290,6 +290,9 @@ if test "x$PLATFORM" = "xdm357" ; then
   with_xdctarget=gnu.targets.MVArm9;
 fi
 
+dnl Options for compilation
+AM_CONDITIONAL([ENABLE_ITTIAM_CODECS], [test x$preset = xdm355s])
+
 dnl Define the xdcplatform
 AC_ARG_WITH(xdcplatform,
   [AS_HELP_STRING([--with-xdcplatform=<xdcplatform>],
