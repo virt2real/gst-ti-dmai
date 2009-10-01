@@ -874,10 +874,9 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     "rate",G_TYPE_INT,dmaienc->rate,
                                     (char *)NULL);
 
-        dmaienc->inBufSize = 0;
-
 		/* By default process up to 1024 samples per channel */
         dmaienc->adapterSize = 1024 * (dmaienc->awidth >> 3) * dmaienc->channels;
+        dmaienc->inBufSize = dmaienc->adapterSize;
         dmaienc->asampleSize = (dmaienc->awidth >> 3) * dmaienc->channels;
         dmaienc->asampleTime = 1000000000l / dmaienc->rate;
 		
@@ -1229,16 +1228,6 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
-    /* On audio paths we don't know the input buffer size until it arrives */
-    if (dmaienc->inBufSize == 0){
-
-        dmaienc->inBufSize = GST_BUFFER_SIZE(buf);
-    	if (dmaienc->inBufSize > dmaienc->adapterSize){
-    		dmaienc->inBufSize = dmaienc->adapterSize;
-    	}
-        GST_DEBUG("Incoming buffer size %d\n",dmaienc->inBufSize);
-    }
-
     if (dmaienc->require_configure){
         dmaienc->require_configure = FALSE;
         if (!gst_tidmaienc_configure_codec(dmaienc)) {
@@ -1293,8 +1282,6 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 			}
        	}
     }
-
-
 
     if (dmaienc->hDsp){
         GstClockTime time = gst_util_get_timestamp();
