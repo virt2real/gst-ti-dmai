@@ -55,7 +55,7 @@ static GstStaticCaps gstti_pcm_caps = GST_STATIC_CAPS(
     "   width = (int) 16, "
     "   depth = (int) 16, "
     "   endianness = (int) BYTE_ORDER, "
-    "   channels = (int) { 1, 8 }, "
+    "   channels = (int) [ 1, 8 ], "
     "   rate = (int) [ 8000, 96000 ]"
 );
 
