@@ -622,9 +622,9 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
 
   /*Send to resize */
   outBuffer = resize_buffer (dmairesizer, inBuffer);
-  gst_buffer_unref (buf);
 
   if(outBuffer == NULL){
+    gst_buffer_unref (buf);
     /*GST_ELEMENT_ERROR called before */
     return GST_FLOW_UNEXPECTED;
   }
@@ -639,6 +639,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   }
   gst_buffer_copy_metadata (pushBuffer, buf, GST_BUFFER_COPY_FLAGS |
       GST_BUFFER_COPY_TIMESTAMPS);
+  gst_buffer_unref (buf);
   gst_buffer_set_caps (pushBuffer, GST_PAD_CAPS (dmairesizer->srcpad));
 
   if (gst_pad_push (dmairesizer->srcpad, pushBuffer) != GST_FLOW_OK) {
