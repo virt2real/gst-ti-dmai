@@ -27,11 +27,9 @@
  * TODO LIST
  *
  *  * Add reverse playback
- *  * Add pad-alloc functionality
  *  * Reduce minimal input buffer requirements to 1 frame size and
  *    implement heuristics to break down the input tab into smaller chunks.
  *  * Allow custom properties for the class.
- *  * Add QoS
  *  * Add handling of pixel aspect ratio
  */
 
@@ -41,7 +39,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sched.h>
+#include <math.h>
 #include <gst/gst.h>
 
 #include <ti/sdo/dmai/Dmai.h>
@@ -66,6 +64,7 @@ enum
     PROP_CODEC_NAME,      /* codecName      (string)  */
     PROP_NUM_INPUT_BUFS,  /* numInputBufs  (int)     */
     PROP_NUM_OUTPUT_BUFS, /* numOutputBufs  (int)     */
+    PROP_QOS,             /* qos (boolean */
 };
 
 #define GST_TIDMAIDEC_PARAMS_QDATA g_quark_from_static_string("dmaidec-params")
@@ -90,6 +89,8 @@ static gboolean
  gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps);
 static gboolean
  gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event);
+static gboolean
+ gst_tidmaidec_src_event(GstPad *pad, GstEvent *event);
 static gboolean
  gst_tidmaidec_query(GstPad * pad, GstQuery * query);
 static GstFlowReturn
@@ -278,6 +279,12 @@ static void gst_tidmaidec_class_init(GstTIDmaidecClass *klass)
             "Number of Input Buffers",
             "Number of input buffers to allocate for codec",
             2, G_MAXINT32, 3, G_PARAM_WRITABLE));
+
+    g_object_class_install_property(gobject_class, PROP_QOS,
+        g_param_spec_boolean("qos",
+            "Quality of service",
+            "Enable quality of service",
+            TRUE, G_PARAM_READWRITE));
 }
 
 /******************************************************************************
@@ -321,6 +328,8 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
             gst_caps_copy(gst_pad_get_pad_template_caps(dmaidec->srcpad))));
     gst_pad_set_query_function (dmaidec->srcpad,
         GST_DEBUG_FUNCPTR (gst_tidmaidec_query));
+    gst_pad_set_event_function(
+        dmaidec->srcpad, GST_DEBUG_FUNCPTR(gst_tidmaidec_src_event));
 
     /* Add pads to TIDmaidec element */
     gst_element_add_pad(GST_ELEMENT(dmaidec), dmaidec->sinkpad);
@@ -343,11 +352,15 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->framerateNum       = 0;
     dmaidec->framerateDen       = 0;
+    dmaidec->frameDuration      = GST_CLOCK_TIME_NONE;
     dmaidec->height		        = 0;
     dmaidec->width		        = 0;
     dmaidec->segment_start      = GST_CLOCK_TIME_NONE;
     dmaidec->segment_stop       = GST_CLOCK_TIME_NONE;
     dmaidec->current_timestamp  = 0;
+    dmaidec->skip_frames        = 0;
+    dmaidec->skip_done          = 0;
+    dmaidec->qos                = FALSE;
 
     dmaidec->numOutputBufs      = 0UL;
     dmaidec->numInputBufs       = 0UL;
@@ -392,6 +405,10 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
         GST_LOG("setting \"numInputBufs\" to \"%ld\"\n",
             dmaidec->numInputBufs);
         break;
+    case PROP_QOS:
+        dmaidec->qos = g_value_get_boolean(value);
+        GST_LOG("seeting \"qos\" to %s\n",
+            dmaidec->qos?"TRUE":"FALSE");
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -423,6 +440,9 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
         break;
     case PROP_NUM_INPUT_BUFS:
         g_value_set_int(value,dmaidec->numInputBufs);
+        break;
+    case PROP_QOS:
+        g_value_set_boolean(value,dmaidec->qos);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -917,7 +937,6 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
 
         ret = gst_pad_event_default(pad, event);
         goto done;
-
     /* Unhandled events */
     default:
         ret = gst_pad_event_default(pad, event);
@@ -929,6 +948,61 @@ done:
     gst_object_unref(dmaidec);
     return ret;
 }
+
+
+/******************************************************************************
+ * gst_tidmaidec_sink_event
+ *     Perform event processing.
+ ******************************************************************************/
+static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
+{
+    GstTIDmaidec *dmaidec;
+    gboolean      ret = FALSE;
+    GstTIDmaidecClass *gclass;
+    GstTIDmaidecData *decoder;
+
+    dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
+    gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
+    decoder = (GstTIDmaidecData *)
+      g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
+
+    GST_DEBUG("pad \"%s\" received:  %s\n", GST_PAD_NAME(pad),
+        GST_EVENT_TYPE_NAME(event));
+
+    switch (GST_EVENT_TYPE(event)) {
+    case GST_EVENT_LATENCY:
+        gst_event_parse_latency(event,&dmaidec->latency);
+        GST_DEBUG("Latency is %"GST_TIME_FORMAT,GST_TIME_ARGS(dmaidec->latency));
+
+        ret = TRUE;
+        goto done;
+    case GST_EVENT_QOS:
+    {
+        GstClockTime timestamp;
+        GstClockTimeDiff diff;
+        gdouble proportion;
+
+        gst_event_parse_qos(event,&proportion,&diff,&timestamp);
+
+        dmaidec->qos_value = (int)ceil(proportion);
+        GST_DEBUG("QOS event: QOSvalue %d, %E",dmaidec->qos_value,
+            proportion);
+
+        ret = gst_pad_event_default(pad, event);
+        goto done;
+    }
+    /* Unhandled events */
+    default:
+        ret = gst_pad_event_default(pad, event);
+        goto done;
+
+    }
+
+done:
+    gst_object_unref(dmaidec);
+    return ret;
+}
+
 
 /*
  * gst_tidmaidec_query
@@ -1029,8 +1103,10 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
      */
     if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData))) {
         GST_BUFFER_TIMESTAMP(encData) = dmaidec->current_timestamp;
-        GST_BUFFER_DURATION(encData)  =
-            gst_tidmaidec_frame_duration(dmaidec);
+        if (!GST_CLOCK_TIME_IS_VALID(dmaidec->frameDuration)){
+            dmaidec->frameDuration = gst_tidmaidec_frame_duration(dmaidec);
+        }
+        GST_BUFFER_DURATION(encData)  = dmaidec->frameDuration;
         dmaidec->current_timestamp += GST_BUFFER_DURATION(encData);
     }
 
@@ -1118,7 +1194,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         gst_buffer_set_caps(outBuf, dmaidec->outCaps);
 
         if (TRUE) { /* Forward playback*/
-            GST_DEBUG("Pushing buffer downstream");
+            GST_LOG("Pushing buffer downstream");
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
                     GST_DEBUG("push to source pad failed while in flushing state\n");
@@ -1159,7 +1235,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     if (decoder->dops->codec_get_free_buffers){
         hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         while (hFreeBuf) {
-            GST_DEBUG("Freeing buffer %p",hFreeBuf);
+            GST_LOG("Freeing buffer %p",hFreeBuf);
             Buffer_freeUseMask(hFreeBuf, dmaidec->outputUseMask);
             hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         }
@@ -1217,25 +1293,45 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
         return GST_FLOW_OK;
     }
 
-#if 1
     while ((pushBuffer =
             decoder->parser->parse(buf,dmaidec->parser_private,
                 dmaidec->hInBufTab))){
+
+        /* Decide if we need to skip frames due QoS
+         */
+        if (dmaidec->skip_frames){
+            if (!GST_BUFFER_FLAG_IS_SET(pushBuffer,GST_BUFFER_FLAG_DELTA_UNIT)){
+                /* This is an I frame... */
+                dmaidec->skip_frames--;
+            }
+            if (dmaidec->skip_frames){
+                gst_buffer_unref(pushBuffer);
+                continue;
+            }
+        }
+
+        /* Decode and push */
         if (decode(dmaidec, pushBuffer) != GST_FLOW_OK) {
             GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
                 ("Failed to send buffer downstream"));
             gst_buffer_unref(buf);
             return GST_FLOW_UNEXPECTED;
         }
+
+        if (dmaidec->skip_done){
+            dmaidec->skip_done--;
+        }
+
+        if (dmaidec->qos && (dmaidec->qos_value > 1) &&
+            (dmaidec->skip_done == 0)){
+            /* We are falling behind, time to skip frames
+             * We use an heuristic on how long we shouldn't attempt QoS
+             * adjustments again, to give time for the sink to recover
+             */
+            dmaidec->skip_frames = dmaidec->qos_value - 1;
+            dmaidec->skip_done = 15;
+        }
     }
-#else
-    if (decode(dmaidec, buf) != GST_FLOW_OK) {
-        GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
-            ("Failed to send buffer downstream"));
-        gst_buffer_unref(buf);
-        return GST_FLOW_UNEXPECTED;
-    }
-#endif
 
     return GST_FLOW_OK;
 }
