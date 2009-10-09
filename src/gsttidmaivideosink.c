@@ -1467,7 +1467,6 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
                 }else{
                   
                    dim.x     = (((dim.width - width) / 2) & ~1) & ~0xF;
-                   printf("X:%d\n", (int)dim.x);
                 }
                 dim.width = width;
             }
