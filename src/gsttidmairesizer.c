@@ -535,8 +535,7 @@ get_dmai_buffer (GstTIDmaiResizer * dmairesizer, GstBuffer * buf)
           dmairesizer->colorSpace);
       hBuf = Buffer_create (dmairesizer->inBufSize, &gfxAttrs.bAttrs);
       Buffer_setUserPtr (hBuf,
-          Buffer_getUserPtr (GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf)) +
-          (gfxAttrs.dim.lineLength * dmairesizer->source_y) + dmairesizer->source_x );
+          Buffer_getUserPtr (GST_TIDMAIBUFFERTRANSPORT_DMAIBUF (buf)));
       Buffer_setNumBytesUsed (hBuf, dmairesizer->inBufSize);
       return hBuf;
     }
@@ -562,8 +561,7 @@ get_dmai_buffer (GstTIDmaiResizer * dmairesizer, GstBuffer * buf)
       }
       GST_DEBUG ("Input buffer handler: %p\n", dmairesizer->inBuf);
     }
-    memcpy (Buffer_getUserPtr (dmairesizer->inBuf), GST_BUFFER_DATA (buf) + 
-      (gfxAttrs.dim.lineLength * dmairesizer->source_y) + dmairesizer->source_x,
+    memcpy (Buffer_getUserPtr (dmairesizer->inBuf), GST_BUFFER_DATA (buf),
       dmairesizer->inBufSize);
     Buffer_setNumBytesUsed (dmairesizer->inBuf, dmairesizer->inBufSize);
     return dmairesizer->inBuf;
@@ -585,6 +583,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   Buffer_Handle inBuffer, outBuffer;
   GstBuffer *pushBuffer;
   GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (GST_OBJECT_PARENT (pad));
+  BufferGfx_Dimensions srcDim;
 
   /*Check dimentions*/
   if(dmairesizer->source_width > dmairesizer->width){
@@ -619,7 +618,10 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   }
   /*Check buffer type and convert if is neccesary */
   inBuffer = get_dmai_buffer (dmairesizer, buf);
-
+  BufferGfx_getDimensions(inBuffer, &srcDim);
+  srcDim.x = dmairesizer->source_x;
+  srcDim.y = dmairesizer->source_y;
+  BufferGfx_setDimensions(inBuffer, &srcDim);
   /*Send to resize */
   outBuffer = resize_buffer (dmairesizer, inBuffer);
 
