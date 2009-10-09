@@ -508,9 +508,11 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
             break;
         case PROP_X_POSITION:
             sink->x_position = g_value_get_int(value);
+            sink->x_position &= ~0xF;
             break;
         case PROP_Y_POSITION:
             sink->y_position = g_value_get_int(value);
+            sink->y_position &= ~0xF;
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1463,7 +1465,9 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
                       dim.x     = sink->x_position & ~1;
                    }
                 }else{
-                   dim.x     = ((dim.width - width) / 2) & ~1;
+                  
+                   dim.x     = (((dim.width - width) / 2) & ~1) & ~0xF;
+                   printf("X:%d\n", (int)dim.x);
                 }
                 dim.width = width;
             }
