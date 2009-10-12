@@ -326,6 +326,18 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private, BufTab_Handle hInBuf
         priv->out_offset = didx;
     }
 
+    if (priv->flushing){
+        GST_DEBUG("Flushing from the parser");
+        if (priv->outbuf){
+            Buffer_freeUseMask(priv->outbuf, Buffer_getUseMask(priv->outbuf));
+            priv->outbuf = NULL;
+            if (priv->current){
+                gst_buffer_unref(priv->current);
+                priv->current = NULL;
+            }
+        }
+    }
+
     if (outbuf){
         gst_buffer_copy_metadata(outbuf,buf,GST_BUFFER_COPY_ALL);
 
@@ -405,15 +417,6 @@ static void h264_flush_start(void *private){
 
     priv->flushing = TRUE;
     priv->access_unit_found = FALSE;
-
-    if (priv->outbuf){
-        Buffer_freeUseMask(priv->outbuf,Buffer_getUseMask(priv->outbuf));
-        priv->outbuf = NULL;
-        if (priv->current){
-            gst_buffer_unref(priv->current);
-            priv->current = NULL;
-        }
-    }
 
     GST_DEBUG("Parser flushed");
     return;
