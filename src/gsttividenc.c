@@ -54,7 +54,7 @@ enum
 };
 
 
-static void gstt_videnc0_install_properties(GObjectClass *gobject_class){
+static void gstti_videnc0_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_RATECONTROL,
         g_param_spec_int("ratecontrol",
             "Rate Control Algorithm",
@@ -165,12 +165,6 @@ static gboolean gstti_videnc0_setup_params(GstTIDmaienc *dmaienc){
     GST_WARNING("Setting up default params for the Codec, would be better if"
         " the CodecServer used implements his own setup_params function...");
 
-    /* Set up codec parameters depending on device */
-#if PLATFORM == dm6467
-    params->inputChromaFormat = XDM_YUV_420P;
-# else
-    params->inputChromaFormat = XDM_YUV_422ILE;
-#endif
     dynParams->targetBitRate  = params->maxBitRate;
 
     return TRUE;
@@ -186,6 +180,23 @@ static void gstti_videnc0_set_codec_caps(GstTIDmaienc *dmaienc){
 
     params->maxWidth = dynParams->inputWidth = dmaienc->width;
     params->maxHeight = dynParams->inputHeight = dmaienc->height;
+
+    /* Set up codec parameters depending on device */
+    switch (dmaienc->colorSpace) {
+        case ColorSpace_UYVY:
+            params->inputChromaFormat = XDM_YUV_422ILE;
+#if PLATFORM == dm355
+            params->reconChromaFormat = XDM_YUV_420P;
+#endif
+            break;
+        case ColorSpace_YUV422PSEMI:
+            params->inputChromaFormat = XDM_YUV_420P;
+            break;
+        default:
+            GST_ELEMENT_ERROR(dmaienc,STREAM, NOT_IMPLEMENTED,
+                ("unsupported fourcc in video stream\n"), (NULL));
+            return;
+    }
 }
 
 
@@ -228,6 +239,14 @@ static void gstti_videnc0_destroy (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
+ * gstti_videnc0_get_outBufSize
+ ******************************************************************************/
+static gint gstti_videnc0_get_outBufSize(GstTIDmaienc *dmaienc){
+    return Venc_getOutBufSize(dmaienc->hCodec);
+}
+
+
+/******************************************************************************
  * gst_tividenc0_process
  ******************************************************************************/
 static gboolean gstti_videnc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
@@ -253,9 +272,10 @@ struct gstti_encoder_ops gstti_videnc0_ops = {
     .codec_type = VIDEO,
     .default_setup_params = gstti_videnc0_setup_params,
     .set_codec_caps = gstti_videnc0_set_codec_caps,
-    .install_properties = gstt_videnc0_install_properties,
+    .install_properties = gstti_videnc0_install_properties,
     .set_property = gstti_videnc0_set_property,
     .get_property = gstti_videnc0_get_property,
+    .codec_get_outBufSize = gstti_videnc0_get_outBufSize,
     .codec_create = gstti_videnc0_create,
     .codec_destroy = gstti_videnc0_destroy,
     .codec_process = gstti_videnc0_process,

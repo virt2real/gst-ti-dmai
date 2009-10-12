@@ -53,7 +53,7 @@ enum
     PROP_INTRAFRAMEINTERVAL,
 };
 
-static void gstt_videnc1_install_properties(GObjectClass *gobject_class){
+static void gstti_videnc1_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_RATECONTROL,
         g_param_spec_int("ratecontrol",
             "Rate Control Algorithm",
@@ -147,8 +147,8 @@ static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
     VIDENC1_DynamicParams *dynParams;
 
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tividenc1_debug, "TIAudenc1", 0,
-        "DMAI Audio1 Encoder");
+    GST_DEBUG_CATEGORY_INIT(gst_tividenc1_debug, "TIVidenc1", 0,
+        "DMAI Video1 Encoder");
 
     if (!dmaienc->params){
         dmaienc->params = g_malloc(sizeof (VIDENC1_Params));
@@ -164,16 +164,6 @@ static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
     GST_WARNING("Setting up default params for the Codec, would be better if"
         " the CodecServer used implements his own setup_params function...");
 
-    /* Set up codec parameters depending on device */
-#if PLATFORM == dm6467
-    params->inputChromaFormat = XDM_YUV_420P;
-# else
-    params->inputChromaFormat = XDM_YUV_422ILE;
-#if PLATFORM == dm355
-    params->reconChromaFormat = XDM_YUV_420P;
-#endif
-#endif
-
     return TRUE;
 }
 
@@ -184,6 +174,30 @@ static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
 static void gstti_videnc1_set_codec_caps(GstTIDmaienc *dmaienc){
     VIDENC1_Params *params = (VIDENC1_Params *)dmaienc->params;
     VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    /* Set up codec parameters depending on device */
+    switch (dmaienc->colorSpace) {
+        case ColorSpace_UYVY:
+            params->inputChromaFormat = XDM_YUV_422ILE;
+#if PLATFORM == dm355
+            params->reconChromaFormat = XDM_YUV_420P;
+#endif
+            break;
+        case ColorSpace_YUV422PSEMI:
+            params->inputChromaFormat = XDM_YUV_420P;
+            break;
+#if PLATFORM == dm365
+        case ColorSpace_YUV420PSEMI:
+            params->inputChromaFormat = XDM_YUV_420SP;
+            params->reconChromaFormat = XDM_YUV_420SP;
+            break;
+#endif
+        default:
+            GST_ELEMENT_ERROR(dmaienc,STREAM, NOT_IMPLEMENTED,
+                ("unsupported fourcc in video stream: %d\n",
+                    dmaienc->colorSpace), (NULL));
+            return;
+    }
 
     params->maxWidth = dynParams->inputWidth = dmaienc->width;
     params->maxHeight = dynParams->inputHeight = dmaienc->height;
@@ -217,7 +231,7 @@ static gboolean gstti_videnc1_create (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gst_tividenc1_destroy
+ * gstti_videnc1_destroy
  *     free codec resources
  *****************************************************************************/
 static void gstti_videnc1_destroy (GstTIDmaienc *dmaienc)
@@ -227,9 +241,15 @@ static void gstti_videnc1_destroy (GstTIDmaienc *dmaienc)
     Venc1_delete(dmaienc->hCodec);
 }
 
+/******************************************************************************
+ * gstti_videnc1_get_outBufSize
+ ******************************************************************************/
+static gint gstti_videnc1_get_outBufSize(GstTIDmaienc *dmaienc){
+    return Venc1_getOutBufSize(dmaienc->hCodec);
+}
 
 /******************************************************************************
- * gst_tividenc1_process
+ * gstti_videnc1_process
  ******************************************************************************/
 static gboolean gstti_videnc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
@@ -254,9 +274,10 @@ struct gstti_encoder_ops gstti_videnc1_ops = {
     .codec_type = VIDEO,
     .default_setup_params = gstti_videnc1_setup_params,
     .set_codec_caps = gstti_videnc1_set_codec_caps,
-    .install_properties = gstt_videnc1_install_properties,
+    .install_properties = gstti_videnc1_install_properties,
     .set_property = gstti_videnc1_set_property,
     .get_property = gstti_videnc1_get_property,
+    .codec_get_outBufSize = gstti_videnc1_get_outBufSize,
     .codec_create = gstti_videnc1_create,
     .codec_destroy = gstti_videnc1_destroy,
     .codec_process = gstti_videnc1_process,

@@ -27,6 +27,20 @@ gboolean ti_mpeg4enc_params(GstElement *);
 void ti_mpeg4enc_install_properties(GObjectClass *);
 void ti_mpeg4enc_set_property(GObject *, guint, const GValue *, GParamSpec *);
 void ti_mpeg4enc_get_property(GObject *, guint, GValue *, GParamSpec *);
+void ti_mpeg4enc_set_codec_caps(GstElement *);
+
+#define TI_MPEG4_ENC_CUSTOM_DATA \
+    { .codec_name = "mpeg4enc", \
+      .data = { \
+        .sinkCaps = &gstti_D1_uyvy_caps, \
+        .srcCaps = &gstti_D1_mpeg4_src_caps, \
+        .setup_params = ti_mpeg4enc_params, \
+        .set_codec_caps = ti_mpeg4enc_set_codec_caps, \
+        .install_properties = ti_mpeg4enc_install_properties, \
+        .set_property = ti_mpeg4enc_set_property, \
+        .get_property = ti_mpeg4enc_get_property, \
+      }, \
+    }
 
 #endif
 

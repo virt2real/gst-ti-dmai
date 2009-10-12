@@ -35,6 +35,27 @@ GST_DEBUG_CATEGORY_EXTERN(gst_tidmaienc_debug);
 #define GST_CAT_DEFAULT gst_tidmaienc_debug
 
 #ifdef MPEG4_C64X_TI_ENCODER
+enum
+{
+    PROP_200 = 200,
+    PROP_PROFILELEVEL,
+    PROP_RCALGO,
+    PROP_MAXDELAY,
+    PROP_VBVBUFFERSIZE,
+    PROP_USEVOS,
+    PROP_USEGOV,
+    PROP_USERVLC,
+    PROP_RSYNCINTERVAL,
+    PROP_HECINTERVAL,
+    PROP_AIRRATE,
+    PROP_MIRRATE,
+    PROP_QPINTRA,
+    PROP_QPINTER,
+    PROP_FCODE,
+    PROP_USEACPRED,
+    PROP_USEUMV,
+};
+
 gboolean ti_mpeg4enc_params(GstElement *element){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
     VIDENC1_Params *params;
@@ -58,9 +79,9 @@ gboolean ti_mpeg4enc_params(GstElement *element){
     GST_INFO("Configuring the codec with the TI MPEG4 Video encoder settings");
 
     params->inputChromaFormat = XDM_YUV_422ILE;
-    params->maxWidth = dynParams->inputWidth = dmaienc->width;
-    params->maxHeight = dynParams->inputHeight = dmaienc->height;
-    dynParams->targetBitRate  = params->maxBitRate;
+    params->maxInterFrameInterval = 1;
+
+    dynParams->targetBitRate = params->maxBitRate;
 
     params->size = sizeof (IMP4VENC_Params);
     dynParams->size = sizeof (IMP4VENC_DynamicParams);
@@ -92,26 +113,14 @@ gboolean ti_mpeg4enc_params(GstElement *element){
     return TRUE;
 }
 
-enum
-{
-    PROP_200 = 200,
-    PROP_PROFILELEVEL,
-    PROP_RCALGO,
-    PROP_MAXDELAY,
-    PROP_VBVBUFFERSIZE,
-    PROP_USEVOS,
-    PROP_USEGOV,
-    PROP_USERVLC,
-    PROP_RSYNCINTERVAL,
-    PROP_HECINTERVAL,
-    PROP_AIRRATE,
-    PROP_MIRRATE,
-    PROP_QPINTRA,
-    PROP_QPINTER,
-    PROP_FCODE,
-    PROP_USEACPRED,
-    PROP_USEUMV,
-};
+void ti_mpeg4enc_set_codec_caps(GstElement *element){
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
+    VIDENC1_Params *params = (VIDENC1_Params *)dmaienc->params;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;;
+
+    params->maxWidth = dynParams->inputWidth = dmaienc->width;
+    params->maxHeight = dynParams->inputHeight = dmaienc->height;
+}
 
 void ti_mpeg4enc_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_PROFILELEVEL,

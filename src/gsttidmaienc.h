@@ -74,6 +74,7 @@ struct _GstTIDmaienc
     /* Buffer management */
     GstAdapter          *adapter;
     gint                outBufSize;
+    gint                singleOutBufSize;
     gint                inBufSize;
     gint                adapterSize;
     gint                outBufMultiple;
@@ -82,7 +83,6 @@ struct _GstTIDmaienc
     gint                head;
     gint                tail;
     gint                headWrap;
-    gboolean            require_configure;
 
     /* Audio Data */
     gint                channels;
@@ -121,6 +121,7 @@ struct gstti_encoder_ops {
     /* Functions to manipulate codecs */
     gboolean                (* default_setup_params)(GstTIDmaienc *);
     void                    (* set_codec_caps)(GstTIDmaienc *);
+    gint                    (* codec_get_outBufSize) (GstTIDmaienc *);
     gboolean                (* codec_create) (GstTIDmaienc *);
     void                    (* codec_destroy) (GstTIDmaienc *);
     gboolean                (* codec_process)
