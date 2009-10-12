@@ -1369,7 +1369,7 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
     }
 */
     if (dmaidec->metaTab) {
-        for (i = 0; i  < dmaidec->numInputBufs; i++) {
+        for (i = 0; i  < dmaidec->numOutputBufs; i++) {
             GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
         }
     }
