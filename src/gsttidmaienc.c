@@ -720,6 +720,8 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     if (!ret)
         return ret;
 
+    dmaienc->firstBuffer = TRUE;
+
     if (!dmaienc->singleOutBufSize){
         dmaienc->singleOutBufSize = encoder->eops->codec_get_outBufSize(dmaienc);
     }
@@ -1209,11 +1211,30 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     }
 
     if (dmaienc->copyOutput) {
-	GstBuffer *buf = gst_buffer_copy(outBuf);
-	gst_buffer_unref(outBuf);
-	outBuf = buf;
+        GstBuffer *buf = gst_buffer_copy(outBuf);
+        gst_buffer_unref(outBuf);
+        outBuf = buf;
     }
 
+    if (dmaienc->firstBuffer) {
+        dmaienc->firstBuffer = FALSE;
+        if (encoder->parser && encoder->parser->generate_codec_data){
+            GstBuffer *codec_data = encoder->parser->generate_codec_data(outBuf);
+            if (codec_data){
+                GstCaps *caps = gst_caps_make_writable(
+                    gst_caps_ref (GST_PAD_CAPS(dmaienc->srcpad)));
+                GST_DEBUG("Setting codec_data on the caps");
+                gst_caps_set_simple (caps, "codec_data",
+                    GST_TYPE_BUFFER, codec_data, (char *)NULL);
+                gst_pad_set_caps(dmaienc->srcpad,caps);
+                gst_buffer_unref (codec_data);
+            } else {
+                GST_DEBUG("codec_data not found on the first buffer");
+            }
+        }
+    }
+
+    gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));
     if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
            	("Failed to push to pad buffer"));

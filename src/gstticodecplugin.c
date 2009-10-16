@@ -218,6 +218,7 @@ GstTIDmaiencData encoders[] = {
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
         .eops = &gstti_videnc1_ops,
+        .parser = &gstti_h264_parser,
     },
 #elif defined(ENABLE_H264ENC_XDM0)
     {
@@ -227,6 +228,7 @@ GstTIDmaiencData encoders[] = {
         .engineName = ENCODEENGINE,
         .codecName = "h264enc",
         .eops = &gstti_videnc0_ops,
+        .parser = &gstti_h264_parser,
     },
 #endif
 #ifdef ENABLE_MPEG4ENC_XDM1
@@ -241,6 +243,7 @@ GstTIDmaiencData encoders[] = {
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
         .eops = &gstti_videnc1_ops,
+        .parser = &gstti_mpeg4_parser,
     },
 #elif defined(ENABLE_MPEG4ENC_XDM0)
     {
@@ -250,6 +253,7 @@ GstTIDmaiencData encoders[] = {
         .engineName = ENCODEENGINE,
         .codecName = "mpeg4enc",
         .eops = &gstti_videnc0_ops,
+        .parser = &gstti_mpeg4_parser,
     },
 #endif
 

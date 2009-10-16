@@ -30,6 +30,7 @@
 #include <gst/base/gstadapter.h>
 #include <pthread.h>
 #include "gstticommonutils.h"
+#include "gsttiparsers.h"
 
 #include <xdc/std.h>
 #include <ti/sdo/ce/Engine.h>
@@ -70,6 +71,7 @@ struct _GstTIDmaienc
     gboolean            printDspLoad;
     gboolean            copyOutput;
     guint32             counter;
+    gboolean            firstBuffer;
 
     /* Buffer management */
     GstAdapter          *adapter;
@@ -137,6 +139,7 @@ struct _GstTIDmaiencData
     const gchar                 *engineName;
     const gchar                 *codecName;
     struct gstti_encoder_ops    *eops;
+    struct gstti_parser_ops     *parser;
 };
 
 /* Function to initialize the decoders */

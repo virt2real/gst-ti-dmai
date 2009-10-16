@@ -50,13 +50,6 @@ static gboolean gst_mpeg4_valid_quicktime_header (GstBuffer *buf);
 /* Function to read sps and pps data field from avcc header */
 static GstBuffer * gst_mpeg4_get_header (GstBuffer *buf);
 
-static gboolean  mpeg4_init(void *);
-static gboolean  mpeg4_clean(void *);
-static GstBuffer *mpeg4_parse(GstBuffer *, void *,BufTab_Handle);
-static GstBuffer *mpeg4_drain(void *,BufTab_Handle);
-static void mpeg4_flush_stop(void *);
-static void mpeg4_flush_start(void *);
-
 /*
  * We have separate caps for src and sink, since we need
  * to accept ASP divx profile...
@@ -84,15 +77,27 @@ GstStaticCaps gstti_mpeg4_src_caps = GST_STATIC_CAPS(
     "   height=(int)[ 1, MAX ] ;"
 );
 
-struct gstti_parser_ops gstti_mpeg4_parser = {
-    .init  = mpeg4_init,
-    .clean = mpeg4_clean,
-    .parse = mpeg4_parse,
-    .drain = mpeg4_drain,
-    .flush_start = mpeg4_flush_start,
-    .flush_stop = mpeg4_flush_stop,
-};
+static GstBuffer *mpeg4_generate_codec_data (GstBuffer *buffer){
+    guchar *data = GST_BUFFER_DATA(buffer);
+    gint i;
+    GstBuffer *codec_data = NULL;
 
+    for (i = 0; i < GST_BUFFER_SIZE(buffer) - 4; ++i) {
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1
+            && data[i + 3] == 0xB6) {
+            break;
+        }
+    }
+
+    if ((i != (GST_BUFFER_SIZE(buffer) - 4)) &&
+        (i != 0)) {
+        /* We found a codec data */
+        codec_data = gst_buffer_new_and_alloc(i);
+        memcpy(GST_BUFFER_DATA(codec_data),data,i);
+    }
+
+    return codec_data;
+}
 
 /******************************************************************************
  * Init the parser
@@ -457,6 +462,15 @@ static gboolean gst_mpeg4_valid_quicktime_header (GstBuffer *buf)
     return TRUE;
 }
 
+struct gstti_parser_ops gstti_mpeg4_parser = {
+    .init  = mpeg4_init,
+    .clean = mpeg4_clean,
+    .parse = mpeg4_parse,
+    .drain = mpeg4_drain,
+    .flush_start = mpeg4_flush_start,
+    .flush_stop = mpeg4_flush_stop,
+    .generate_codec_data = mpeg4_generate_codec_data,
+};
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

@@ -62,13 +62,6 @@ static guint8 gst_h264_get_nal_length (GstBuffer *buf);
 /* Function to get predefind NAL prefix code */
 static GstBuffer* gst_h264_get_nal_prefix_code (void);
 
-static gboolean  h264_init(void *);
-static gboolean  h264_clean(void *);
-static GstBuffer *h264_parse(GstBuffer *, void *,BufTab_Handle);
-static GstBuffer *h264_drain(void *,BufTab_Handle);
-static void h264_flush_stop(void *);
-static void h264_flush_start(void *);
-
 GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
     "video/x-h264, "
     "   framerate=(fraction)[ 0, MAX ], "
@@ -76,15 +69,32 @@ GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
     "   height=(int)[ 1, MAX ]"
 );
 
-struct gstti_parser_ops gstti_h264_parser = {
-    .init  = h264_init,
-    .clean = h264_clean,
-    .parse = h264_parse,
-    .drain = h264_drain,
-    .flush_start = h264_flush_start,
-    .flush_stop = h264_flush_stop,
-};
 
+static GstBuffer *h264_generate_codec_data (GstBuffer *buffer){
+    guchar *data = GST_BUFFER_DATA(buffer);
+    gint i;
+    GstBuffer *codec_data = NULL;
+
+    for (i = 0; i < GST_BUFFER_SIZE(buffer) - 5; ++i) {
+        if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0
+            && data[i + 3] == 1) { /* Find a NAL header */
+            gint nal_type = data[i+4]&0x1f;
+
+            if (nal_type >= 1 && nal_type <= 5){
+                break;
+            }
+        }
+    }
+
+    if ((i != (GST_BUFFER_SIZE(buffer) - 4)) &&
+        (i != 0)) {
+        /* We found a codec data */
+        codec_data = gst_buffer_new_and_alloc(i);
+        memcpy(GST_BUFFER_DATA(codec_data),data,i);
+    }
+
+    return codec_data;
+}
 
 /******************************************************************************
  * Init the parser
@@ -689,6 +699,15 @@ static int gst_h264_sps_pps_calBufSize (GstBuffer *codec_data)
     return sps_pps_size;
 }
 
+struct gstti_parser_ops gstti_h264_parser = {
+    .init  = h264_init,
+    .clean = h264_clean,
+    .parse = h264_parse,
+    .drain = h264_drain,
+    .flush_start = h264_flush_start,
+    .flush_stop = h264_flush_stop,
+    .generate_codec_data = h264_generate_codec_data,
+};
 
 /******************************************************************************
  * Custom ViM Settings for editing this file

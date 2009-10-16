@@ -30,6 +30,7 @@ typedef GstBuffer * (* parser_function) (GstBuffer *, void *, BufTab_Handle);
 typedef GstBuffer * (* parser_drain) (void *, BufTab_Handle);
 typedef void (* parser_flush) (void *);
 typedef gboolean (* parser_init) (void *);
+typedef GstBuffer * (* parse_codec_data) (GstBuffer *);
 
 struct gstti_parser_ops {
     /*
@@ -82,6 +83,12 @@ struct gstti_parser_ops {
      * This function makes the parser stop flushing contents.
      */
     parser_flush	flush_stop;
+    /*
+     * This is a function for encoders, not decoders.
+     * It receives the first gst buffer and if finds a codec data it
+     * returns a gst buffer with it
+     */
+    parse_codec_data generate_codec_data;
 };
 
 #endif
