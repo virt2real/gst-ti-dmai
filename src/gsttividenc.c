@@ -185,9 +185,6 @@ static void gstti_videnc0_set_codec_caps(GstTIDmaienc *dmaienc){
     switch (dmaienc->colorSpace) {
         case ColorSpace_UYVY:
             params->inputChromaFormat = XDM_YUV_422ILE;
-#if PLATFORM == dm355
-            params->reconChromaFormat = XDM_YUV_420P;
-#endif
             break;
         case ColorSpace_YUV422PSEMI:
             params->inputChromaFormat = XDM_YUV_420P;
