@@ -44,6 +44,8 @@ enum
   ARG_SOURCE_HEIGHT,
   ARG_TARGET_WIDTH,
   ARG_TARGET_HEIGHT,
+  ARG_TARGET_WIDTH_MAX,
+  ARG_TARGET_HEIGHT_MAX,
   ARG_ASPECT_RADIO,
   ARG_NUMBER_OUTPUT_BUFFERS,
 };
@@ -138,6 +140,20 @@ gst_dmai_resizer_class_init (GstTIDmaiResizerClass * klass)
           G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
+      ARG_TARGET_WIDTH_MAX,
+      g_param_spec_int ("target-width-max",
+          "target-width-max",
+          "Target buffer max width (must be multiple of 16)", 0, G_MAXINT, 0,
+          G_PARAM_READWRITE));
+
+  g_object_class_install_property (G_OBJECT_CLASS (klass),
+      ARG_TARGET_HEIGHT_MAX,
+      g_param_spec_int ("target-height-max",
+          "target-height-max",
+          "Target buffermax height (must be multiple of 16)", 0, G_MAXINT, 0,
+          G_PARAM_READWRITE));
+
+  g_object_class_install_property (G_OBJECT_CLASS (klass),
       ARG_ASPECT_RADIO,
       g_param_spec_boolean ("aspect-radio",
           "aspect-radio", "Keep aspect radio", TRUE, G_PARAM_READWRITE));
@@ -178,6 +194,14 @@ gst_dmai_resizer_get_property (GObject * object, guint prop_id,
     }
     case ARG_TARGET_HEIGHT:{
       g_value_set_int (value, dmairesizer->target_height);
+      break;
+    }
+    case ARG_TARGET_WIDTH_MAX:{
+      g_value_set_int (value, dmairesizer->target_width_max);
+      break;
+    }
+    case ARG_TARGET_HEIGHT_MAX:{
+      g_value_set_int (value, dmairesizer->target_height_max);
       break;
     }
     case ARG_ASPECT_RADIO:{
@@ -227,8 +251,10 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->outBufHeight = 0;
   dmairesizer->target_width = 0;
   dmairesizer->target_height = 0;
-  dmairesizer->aspect_radio = TRUE;
-  dmairesizer->caps_are_set = FALSE;
+  dmairesizer->target_width_max = 0;
+  dmairesizer->target_height_max = 0;
+  dmairesizer->aspect_radio = FALSE;
+  dmairesizer->caps_is_first_time = TRUE;
 
 #if PLATFORM == dm6467
   dmairesizer->numOutBuf = 5;
@@ -244,17 +270,39 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   BufferGfx_Attrs gfxAttrs = BufferGfx_Attrs_DEFAULT;
   Rendezvous_Attrs rzvAttrs = Rendezvous_Attrs_DEFAULT;
 
-  if (!dmairesizer->caps_are_set)
-    return FALSE;
+  /***************************************************************
+   * If target width/height MAX is set, the outbuffer is created 
+   * using the target width/height max values
+   *
+   * If target width/height MAX is zero (or lees than) and target 
+   * width/height is set, the out buffer is created using target 
+   * width/height values
+   *
+   * If target width/height MAX is zero (or lees than) and target 
+   * width/height also, the out buffer is created using 
+   * width/height of src caps
+   *
+   ***************************************************************/
 
-  if (dmairesizer->target_width == 0) {
+  /*WIDTH*/
+  if (!dmairesizer->target_width)
     dmairesizer->target_width = dmairesizer->width;
+
+  if(dmairesizer->target_width_max > 0){
+    dmairesizer->outBufWidth = dmairesizer->target_width_max;
+  } else {
+    dmairesizer->outBufWidth = dmairesizer->target_width;
   }
-  if (dmairesizer->target_height == 0) {
+
+  /*HEIGHT*/
+  if (!dmairesizer->target_height)
     dmairesizer->target_height = dmairesizer->height;
+
+  if(dmairesizer->target_height_max > 0){
+    dmairesizer->outBufHeight = dmairesizer->target_height_max;
+  } else {
+    dmairesizer->outBufHeight = dmairesizer->target_height;
   }
-  dmairesizer->outBufWidth = dmairesizer->target_width;
-  dmairesizer->outBufHeight = dmairesizer->target_height;
 
   if (dmairesizer->outBufTab) {
     BufTab_delete (dmairesizer->outBufTab);
@@ -323,6 +371,14 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
     }
     case ARG_TARGET_WIDTH:{
       dmairesizer->target_width = g_value_get_int (value);
+
+      if (dmairesizer->outBufWidth &&
+          (dmairesizer->outBufWidth < dmairesizer->target_width)) {
+        dmairesizer->target_width = dmairesizer->outBufWidth;
+        GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
+           ("Truncating the target width to the max buffer available"));
+      }
+
       if (dmairesizer->target_width & 0xF) {
         dmairesizer->target_width &= ~0xF;
         GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
@@ -330,23 +386,28 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
                 dmairesizer->target_width));
       }
 
-      if (GST_PAD_CAPS (dmairesizer->srcpad)) {
-        caps = gst_caps_make_writable (GST_PAD_CAPS (dmairesizer->srcpad));
+      if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
+        caps = gst_caps_make_writable (
+            gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
         capStruct = gst_caps_get_structure (caps, 0);
         gst_structure_set (capStruct,
             "width", G_TYPE_INT, dmairesizer->target_width, (char *) NULL);
-        gst_caps_unref (GST_PAD_CAPS (dmairesizer->srcpad));
         gst_pad_set_caps (dmairesizer->srcpad, caps);
         gst_caps_unref (caps);
       }
 
-      if (dmairesizer->outBufWidth < dmairesizer->target_width) {
-        setup_outputBuf (dmairesizer);
-      }
       break;
     }
     case ARG_TARGET_HEIGHT:{
       dmairesizer->target_height = g_value_get_int (value);
+
+      if (dmairesizer->outBufHeight &&
+          (dmairesizer->outBufHeight < dmairesizer->target_height)) {
+        dmairesizer->target_height = dmairesizer->outBufHeight;
+        GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
+           ("Truncating the target height to the max buffer available"));
+      }
+
       if (dmairesizer->target_height & 0xF) {
         dmairesizer->target_height &= ~0xF;
         GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
@@ -354,18 +415,35 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
                 dmairesizer->target_height));
       }
 
-      if (GST_PAD_CAPS (dmairesizer->srcpad)) {
-        caps = gst_caps_make_writable (GST_PAD_CAPS (dmairesizer->srcpad));
+      if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
+        caps = gst_caps_make_writable (
+             gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
         capStruct = gst_caps_get_structure (caps, 0);
         gst_structure_set (capStruct,
             "height", G_TYPE_INT, dmairesizer->target_height, (char *) NULL);
-        gst_caps_unref (GST_PAD_CAPS (dmairesizer->srcpad));
         gst_pad_set_caps (dmairesizer->srcpad, caps);
         gst_caps_unref (caps);
       }
 
-      if (dmairesizer->outBufHeight < dmairesizer->target_height) {
-        setup_outputBuf (dmairesizer);
+      break;
+    }
+    case ARG_TARGET_WIDTH_MAX:{
+      dmairesizer->target_width_max = g_value_get_int (value);
+      if (dmairesizer->target_width_max & 0xF) {
+        dmairesizer->target_width_max &= ~0xF;
+        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
+            ("Rounding target width max to %d (step 16)",
+                dmairesizer->target_width_max));
+      }
+      break;
+    }
+    case ARG_TARGET_HEIGHT_MAX:{
+      dmairesizer->target_height_max = g_value_get_int (value);
+      if (dmairesizer->target_height_max & 0xF) {
+        dmairesizer->target_height_max &= ~0xF;
+        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
+            ("Rounding target height to %d (step 16)",
+                dmairesizer->target_height));
       }
       break;
     }
@@ -391,7 +469,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   GstTIDmaiResizer *dmairesizer;
   GstStructure *structure, *capStruct;
   gboolean ret = FALSE;
-  Resize_Attrs rszAttrs = Resize_Attrs_DEFAULT;
   dmairesizer = GST_DMAI_RESIZER (gst_pad_get_parent (pad));
 
   if (!GST_PAD_IS_SINK (pad))
@@ -417,12 +494,13 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   dmairesizer->colorSpace = ColorSpace_UYVY;
 #endif
   dmairesizer->inBufSize = 0;
-  dmairesizer->caps_are_set = TRUE;
 
   /*Setting output buffer */
-  if (!setup_outputBuf (dmairesizer)) {
-    GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
-        ("Failed to set output buffers"));
+  if(dmairesizer->caps_is_first_time){
+    setup_outputBuf (dmairesizer);
+    dmairesizer->caps_is_first_time = FALSE;
+  }else{
+    dmairesizer->count_checking_outBuf = dmairesizer->numOutBuf;
   }
 
   gst_caps_ref(caps);
@@ -433,8 +511,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       "width", G_TYPE_INT, dmairesizer->target_width, (char *) NULL);
   ret = gst_pad_set_caps (dmairesizer->srcpad, caps);
   gst_caps_unref (caps);
-
-  dmairesizer->Resizer = Resize_create (&rszAttrs);
 
   gst_object_unref (dmairesizer);
   return ret;
@@ -465,6 +541,20 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
           ("failed to get a free contiguous buffer from BufTab"));
     }
+  }
+
+  if(dmairesizer->count_checking_outBuf > 0){
+    BufferGfx_Dimensions dim;
+
+    GST_DEBUG ("Setting output buffers\n");
+    BufferGfx_getDimensions(DstBuf, &dim);
+    if ((dmairesizer->target_width != dim.width) ||
+        (dmairesizer->target_height != dim.height)) {
+      dim.width = dmairesizer->target_width;
+      dim.height = dmairesizer->target_height;
+      dmairesizer->count_checking_outBuf--;
+    }
+    BufferGfx_setDimensions(DstBuf, &dim);
   }
 
   /* Configure resizer */
@@ -682,16 +772,39 @@ gst_dmai_resizer_change_state (GstElement * element, GstStateChange transition)
 {
 
   GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-  GstTIDmaiResizer *dmairesizer;
-  dmairesizer = GST_DMAI_RESIZER (GST_ELEMENT (element));
-  ret = parent_class->change_state (element, transition);
+  GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (GST_ELEMENT (element));
 
-  switch (transition) {
-    case GST_STATE_CHANGE_READY_TO_NULL:
-      free_buffers (dmairesizer);
-      break;
+    /* Handle ramp-up state changes */
+    switch (transition) {
+    case GST_STATE_CHANGE_NULL_TO_READY:
+        /* Init decoder */
+        GST_DEBUG("GST_STATE_CHANGE_NULL_TO_READY");
+
+        Resize_Attrs rszAttrs = Resize_Attrs_DEFAULT;
+        dmairesizer->Resizer = Resize_create (&rszAttrs);
+        if (!dmairesizer->Resizer)
+            return GST_STATE_CHANGE_FAILURE;
+        break;
     default:
-      break;
-  }
+        break;
+    }
+
+    /* Pass state changes to base class */
+    ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
+
+    if (ret == GST_STATE_CHANGE_FAILURE)
+        return ret;
+
+    /* Handle ramp-down state changes */
+    switch (transition) {
+    case GST_STATE_CHANGE_READY_TO_NULL:
+        free_buffers(dmairesizer);
+        if (dmairesizer->Resizer)
+          Resize_delete(dmairesizer->Resizer);
+        break;
+    default:
+        break;
+    }
+
   return ret;
 }

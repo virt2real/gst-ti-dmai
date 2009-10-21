@@ -62,7 +62,8 @@ struct _GstTIDmaiResizer
   gint fps_n;
   gint fps_d;
   ColorSpace_Type colorSpace;
-  gboolean caps_are_set;
+  gboolean caps_is_first_time;
+  gint count_checking_outBuf;
 
   /*Buffers */
   BufTab_Handle outBufTab;
@@ -80,6 +81,8 @@ struct _GstTIDmaiResizer
   gint source_height;
   gint target_width;
   gint target_height;
+  gint target_width_max;
+  gint target_height_max;
   gint aspect_radio;
 
   /*Resizer */
