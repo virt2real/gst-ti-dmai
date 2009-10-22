@@ -30,7 +30,6 @@
 #include <gst/base/gstadapter.h>
 #include <pthread.h>
 #include "gstticommonutils.h"
-#include "gsttiparsers.h"
 
 #include <xdc/std.h>
 #include <ti/sdo/ce/Engine.h>
@@ -48,6 +47,8 @@ G_BEGIN_DECLS
 typedef struct _GstTIDmaienc      GstTIDmaienc;
 typedef struct _GstTIDmaiencData  GstTIDmaiencData;
 typedef struct _GstTIDmaiencClass GstTIDmaiencClass;
+
+#include "gsttiparsers.h"
 
 /* _GstTIDmaienc object */
 struct _GstTIDmaienc

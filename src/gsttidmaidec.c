@@ -1078,7 +1078,7 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
         gst_event_parse_qos(event,&proportion,&diff,&timestamp);
 
         dmaidec->qos_value = (int)ceil(proportion);
-        GST_DEBUG("QOS event: QOSvalue %d, %E",dmaidec->qos_value,
+        GST_INFO("QOS event: QOSvalue %d, %E",dmaidec->qos_value,
             proportion);
 
         ret = gst_pad_event_default(pad, event);
@@ -1562,9 +1562,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         }
     }
     
-    ///
-    GST_WARNING("test point");
-
     /* Release buffers no longer in use by the codec */
     if (decoder->dops->codec_get_free_buffers){
         hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);

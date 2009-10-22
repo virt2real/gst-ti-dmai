@@ -65,7 +65,8 @@ GstStaticCaps gstti_mpeg4_src_caps = GST_STATIC_CAPS(
     "   height=(int)[ 1, MAX ] ;"
 );
 
-static GstBuffer *mpeg4_generate_codec_data (GstBuffer *buffer){
+static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc, 
+    GstBuffer *buffer){
     guchar *data = GST_BUFFER_DATA(buffer);
     gint i;
     GstBuffer *codec_data = NULL;

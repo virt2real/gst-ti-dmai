@@ -26,6 +26,7 @@
 #include <gst/gst.h>
 #include <ti/sdo/dmai/BufTab.h>
 #include "gsttidmaidec.h"
+#include "gsttidmaienc.h"
 
 struct gstti_parser_ops {
     /* Defines the size of the input circular buffer required by this parser 
@@ -65,7 +66,7 @@ struct gstti_parser_ops {
      * It receives the first gst buffer and if finds a codec data it
      * returns a gst buffer with it
      */
-    GstBuffer       *(* generate_codec_data)(GstBuffer *);
+    GstBuffer       *(* generate_codec_data)(GstTIDmaienc *,GstBuffer *);
 };
 
 #endif

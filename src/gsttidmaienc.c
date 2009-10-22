@@ -1224,7 +1224,8 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     if (dmaienc->firstBuffer) {
         dmaienc->firstBuffer = FALSE;
         if (encoder->parser && encoder->parser->generate_codec_data){
-            GstBuffer *codec_data = encoder->parser->generate_codec_data(outBuf);
+            GstBuffer *codec_data = 
+                encoder->parser->generate_codec_data(dmaienc,outBuf);
             if (codec_data){
                 GstCaps *caps = gst_caps_make_writable(
                     gst_caps_ref (GST_PAD_CAPS(dmaienc->srcpad)));

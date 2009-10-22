@@ -72,7 +72,8 @@ GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
 );
 
 
-static GstBuffer *h264_generate_codec_data (GstBuffer *buffer){
+static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc, 
+    GstBuffer *buffer){
     guchar *data = GST_BUFFER_DATA(buffer);
     gint i;
     GstBuffer *codec_data = NULL;

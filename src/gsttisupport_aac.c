@@ -42,8 +42,41 @@ GstStaticCaps gstti_aac_caps = GST_STATIC_CAPS(
     "framed = (boolean) true;"
 );
 
-static GstBuffer *aac_generate_codec_data (GstBuffer *buffer){
-    return NULL;
+gint rateIdx[] = {96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,
+    11025,8000,7350};
+
+static guint gst_get_aac_rateIdx (guint rate)
+{
+    gint i;
+    
+    for (i=0; i < 13; i++){
+        if (rate >= rateIdx[i])
+            return i;
+    }
+    
+    return 15;
+}
+
+static GstBuffer *aac_generate_codec_data (GstTIDmaienc *dmaienc,
+    GstBuffer *buffer){
+    GstBuffer *codec_data = NULL;
+    guchar *data;
+    guint sr_idx;
+   
+    codec_data = gst_buffer_new_and_alloc(2);
+    data = GST_BUFFER_DATA(codec_data);
+    /*
+     * Now create the codec data header, it goes like
+     * 5 bit: profile
+     * 4 bit: sample rate index
+     * 4 bit: number of channels
+     * 3 bit: unused 
+     */
+    sr_idx = gst_get_aac_rateIdx(dmaienc->rate);
+    data[0] = ((LC_PROFILE & 0x1F) << 3) | ((sr_idx & 0xE) >> 1);
+    data[1] = ((sr_idx & 0x1) << 7) | ((dmaienc->channels & 0xF) << 3);
+    
+    return codec_data;
 }
 
 static gboolean aac_init(GstTIDmaidec *dmaidec){
@@ -121,37 +154,6 @@ static void aac_flush_stop(void *private){
  * gst_get_acc_rateIdx - This function calculate sampling index rate using
  * the lookup table defined in ISO/IEC 13818-7 Part7: Advanced Audio Coding.
  */
-static guint gst_get_aac_rateIdx (guint rate)
-{
-    if (rate >= 96000)
-        return 0;
-    else if (rate >= 88200)
-        return 1;
-    else if (rate >= 64000)
-        return 2;
-    else if (rate >= 48000)
-        return 3;
-    else if (rate >= 44100)
-        return 4;
-    else if (rate >= 32000)
-        return 5;
-    else if (rate >= 24000)
-        return 6;
-    else if (rate >= 22050)
-        return 7;
-    else if (rate >= 16000)
-        return 8;
-    else if (rate >= 12000)
-        return 9;
-    else if (rate >= 11025)
-        return 10;
-    else if (rate >= 8000)
-        return 11;
-    else if (rate >= 7350)
-        return 12;
-    else
-        return 15;              
-}
 
 static GstBuffer *aac_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
 {
