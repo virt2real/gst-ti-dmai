@@ -1,5 +1,5 @@
 /*
- * gsttisupport_mpeg4.h
+ * gsttisupport_generic.h
  *
  * Original Author:
  *     Diego Dompe, RidgeRun
@@ -15,25 +15,14 @@
  *
  */
 
-#ifndef __GSTTI_SUPPORT_MPEG4_H__
-#define __GSTTI_SUPPORT_MPEG4_H__
+#ifndef __GSTTI_SUPPORT_GENERIC_H__
+#define __GSTTI_SUPPORT_GENERIC_H__
 
 #include <gst/gst.h>
 
-/* Caps for mpeg4 */
-extern GstStaticCaps gstti_mpeg4_src_caps;
-extern GstStaticCaps gstti_mpeg4_sink_caps;
+extern struct gstti_parser_ops gstti_generic_parser;
 
-/* MPEG4 Parser */
-struct gstti_mpeg4_parser_private {
-    gboolean framed;
-    gboolean firstVOP;
-    gboolean flushing;
-};
-
-extern struct gstti_parser_ops gstti_mpeg4_parser;
-
-#endif /* __GSTTI_SUPPORT_MPEG4_H__ */
+#endif /* __GSTTI_SUPPORT_GENERIC_H__ */
 
 
 /******************************************************************************

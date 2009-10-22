@@ -24,7 +24,6 @@
 #define __GST_TIDMAIDEC_H__
 
 #include <gst/gst.h>
-#include "gsttiparsers.h"
 #include "gstticommonutils.h"
 
 #include <xdc/std.h>
@@ -45,14 +44,15 @@ typedef struct _GstTIDmaidec      GstTIDmaidec;
 typedef struct _GstTIDmaidecData  GstTIDmaidecData;
 typedef struct _GstTIDmaidecClass GstTIDmaidecClass;
 
+#include "gsttiparsers.h"
+
 /* _GstTIDmaidec object */
 struct _GstTIDmaidec
 {
     /* gStreamer infrastructure */
-    GstElement     element;
-    GstPad        *sinkpad;
-    GstPad        *srcpad;
-    GstCaps       *outCaps;
+    GstElement          element;
+    GstPad              *sinkpad;
+    GstPad              *srcpad;
 
     /* Element properties */
     const gchar*        engineName;
@@ -69,12 +69,16 @@ struct _GstTIDmaidec
     Rendezvous_Handle   waitOnOutBufTab;
     gint16              outputUseMask;
 
-    /* Framerate (Num/Den) */
+    /* Video Information */
     gint                framerateNum;
     gint                framerateDen;
     GstClockTime        frameDuration;
     gint                height;
     gint                width;
+    
+    /* Audio Information */
+    gint                channels;
+    gint                rate;
 
     /* Event information */
     gint64              segment_start;
@@ -86,12 +90,22 @@ struct _GstTIDmaidec
     gint                skip_frames, skip_done; /* QOS skip to next I Frame */
 
     /* Buffer management */
+    Buffer_Handle       circBuf;
+    GList               *circMeta;
+    gint                head;
+    gint                tail;
+    gint                marker;
+    gint                end;
+    gboolean            codec_data_parsed;
+    gboolean            firstMarkerFound;
     UInt32              numInputBufs;
-    BufTab_Handle       hInBufTab;
     UInt32              numOutputBufs;
     BufTab_Handle       hOutBufTab;
+    gint                outBufSize;
+    gint                inBufSize;
     GstBuffer           *metaTab;
     gboolean            require_configure;
+    gboolean            shutdown;
 
     /* Parser structures */
     void                *parser_private;
@@ -114,6 +128,7 @@ struct gstti_decoder_ops {
     const gchar             *xdmversion;
     enum dmai_codec_type    codec_type;
     gboolean                (* codec_create) (GstTIDmaidec *);
+    void                    (* set_outBufTab) (GstTIDmaidec *,BufTab_Handle);
     void                    (* codec_destroy) (GstTIDmaidec *);
     gboolean                (* codec_process)
                                 (GstTIDmaidec *, GstBuffer *,
@@ -122,6 +137,10 @@ struct gstti_decoder_ops {
     /* Advanced functions for video decoders */
     void                    (* codec_flush) (GstTIDmaidec *);
     Buffer_Handle           (* codec_get_free_buffers)(GstTIDmaidec *);
+    /* Get the minimal input buffer sizes */
+    gint                    (* get_in_buffer_size)(GstTIDmaidec *);
+    gint                    (* get_out_buffer_size)(GstTIDmaidec *);
+    gint16                  outputUseMask;
 };
 
 /* Data definition for each instance of decoder */

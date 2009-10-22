@@ -45,6 +45,7 @@
 GST_DEBUG_CATEGORY_STATIC (gst_tisupport_h264_debug);
 #define GST_CAT_DEFAULT gst_tisupport_h264_debug
 
+#if 0
 /* NAL start code length (in byte) */
 #define NAL_START_CODE_LENGTH 4
 /* NAL start code */
@@ -61,6 +62,7 @@ static GstBuffer* gst_h264_get_sps_pps_data (GstBuffer *buf);
 static guint8 gst_h264_get_nal_length (GstBuffer *buf);
 /* Function to get predefind NAL prefix code */
 static GstBuffer* gst_h264_get_nal_prefix_code (void);
+#endif
 
 GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
     "video/x-h264, "
@@ -96,11 +98,7 @@ static GstBuffer *h264_generate_codec_data (GstBuffer *buffer){
     return codec_data;
 }
 
-/******************************************************************************
- * Init the parser
- ******************************************************************************/
-static gboolean h264_init(void *arg){
-    GstTIDmaidec *dmaidec = (GstTIDmaidec *)arg;
+static gboolean h264_init(GstTIDmaidec *dmaidec){
     struct gstti_h264_parser_private *priv;
 
     /* Initialize GST_LOG for this object */
@@ -111,7 +109,6 @@ static gboolean h264_init(void *arg){
     g_assert(priv != NULL);
 
     memset(priv,0,sizeof(struct gstti_h264_parser_private));
-    priv->firstBuffer = TRUE;
 
     if (dmaidec->parser_private){
         g_free(dmaidec->parser_private);
@@ -126,8 +123,7 @@ static gboolean h264_init(void *arg){
 /******************************************************************************
  * Clean the parser
  ******************************************************************************/
-static gboolean h264_clean(void *arg){
-    GstTIDmaidec *dmaidec = (GstTIDmaidec *)arg;
+static gboolean h264_clean(GstTIDmaidec *dmaidec){
     struct gstti_h264_parser_private *priv =
         (struct gstti_h264_parser_private *) dmaidec->parser_private;
 
@@ -151,10 +147,8 @@ static gboolean h264_clean(void *arg){
 }
 
 
-/******************************************************************************
- * Parse the h264 stream
- ******************************************************************************/
-static GstBuffer *h264_parse(GstBuffer *buf, void *private, BufTab_Handle hInBufTab){
+static gint h264_parse(GstTIDmaidec *dmaidec){
+#if 0    
     struct gstti_h264_parser_private *priv =
         (struct gstti_h264_parser_private *)private;
     guchar *dest;
@@ -362,86 +356,23 @@ static GstBuffer *h264_parse(GstBuffer *buf, void *private, BufTab_Handle hInBuf
     }
 
     return NULL;
+#else
+    return -1;
+#endif
 }
 
 
-/******************************************************************************
- * Drain the buffer
- ******************************************************************************/
-static GstBuffer *h264_drain(void *private, BufTab_Handle hInBufTab){
-    struct gstti_h264_parser_private *priv =
-        (struct gstti_h264_parser_private *)private;
-    GstBuffer 		*outbuf = NULL;
-    Buffer_Handle	houtbuf;
-
-    if (priv->outbuf){
-        GST_DEBUG("Parser drain, returning accumulated data");
-        /* Set the number of bytes used, required by the DMAI APIs*/
-        Buffer_setNumBytesUsed(priv->outbuf, priv->out_offset);
-
-        outbuf = (GstBuffer*)gst_tidmaibuffertransport_new(priv->outbuf,NULL);
-        priv->outbuf = NULL;
-        GST_BUFFER_SIZE(outbuf) = priv->out_offset;
-        if (priv->current){
-			gst_buffer_unref(priv->current);
-			priv->current = NULL;
-		}
-
-        return outbuf;
-    } else {
-        /*
-          * If we don't have nothing accumulated, return a zero size buffer
-          */
-         houtbuf = BufTab_getFreeBuf(hInBufTab);
-         if (!houtbuf){
-             GST_ERROR(
-                 "failed to get a free buffer when notified it was available");
-             return NULL;
-         }
-
-        Buffer_setNumBytesUsed(houtbuf,1);
-        outbuf = (GstBuffer*)
-            gst_tidmaibuffertransport_new(houtbuf,NULL);
-        GST_BUFFER_SIZE(outbuf) = 0;
-
-        /* Release any buffer reference we hold */
-        if (priv->current) {
-            gst_buffer_unref(priv->current);
-            priv->current = NULL;
-        }
-
-        GST_DEBUG("Parser drained");
-    }
-    priv->access_unit_found = FALSE;
-
-    return outbuf;
-}
-
-
-/******************************************************************************
- * Flush the buffer
- ******************************************************************************/
 static void h264_flush_start(void *private){
-    struct gstti_h264_parser_private *priv =
-        (struct gstti_h264_parser_private *)private;
-
-    priv->flushing = TRUE;
-    priv->access_unit_found = FALSE;
-
     GST_DEBUG("Parser flushed");
     return;
 }
 
 static void h264_flush_stop(void *private){
-    struct gstti_h264_parser_private *priv =
-        (struct gstti_h264_parser_private *)private;
-
-    priv->flushing = FALSE;
     GST_DEBUG("Parser flush stopped");
     return;
 }
 
-
+#if 0
 /******************************************************************************
  * gst_h264_get_sps_pps_data - This function returns SPS and PPS NAL unit
  * syntax by parsing the codec_data field. This is used to construct
@@ -698,12 +629,13 @@ static int gst_h264_sps_pps_calBufSize (GstBuffer *codec_data)
 
     return sps_pps_size;
 }
+#endif
 
 struct gstti_parser_ops gstti_h264_parser = {
+    .numInputBufs = 1,
     .init  = h264_init,
     .clean = h264_clean,
     .parse = h264_parse,
-    .drain = h264_drain,
     .flush_start = h264_flush_start,
     .flush_stop = h264_flush_stop,
     .generate_codec_data = h264_generate_codec_data,

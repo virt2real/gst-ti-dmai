@@ -2,11 +2,13 @@
  * gsttisupport_aac.h
  *
  * Original Author:
- *     Diego Dompe, RidgeRun
+ *     Brijesh Singh, Texas Instruments, Inc.
  *
  * Contributor:
+ *     Diego Dompe, RidgeRun
  *     Cristina Murillo, RidgeRun
  *
+ * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,6 +27,43 @@
 
 /* Caps for aac */
 extern GstStaticCaps gstti_aac_caps;
+
+/* AAC Parser */
+struct gstti_aac_parser_private {
+    gboolean    flushing;
+    gboolean    framed;
+};
+
+extern struct gstti_parser_ops gstti_aac_parser;
+
+/* Define maximum number of bytes in ADIF header */
+#define MAX_AAC_HEADER_LENGTH 20
+
+/* Write id field in ADIF header */
+#define ADIF_SET_ID(header, value) \
+    memcpy(GST_BUFFER_DATA(header), value, 4);
+
+/* Clear copyright_id_present field in ADIF header */
+#define ADIF_CLEAR_COPYRIGHT_ID_PRESENT(header) \
+    GST_BUFFER_DATA(header)[4] &=  ~0x1;
+
+/* Write profile value in ADIF header */
+#define ADIF_SET_PROFILE(header, value) \
+    GST_BUFFER_DATA(header)[10] |= (value & 0x2); \
+    GST_BUFFER_DATA(header)[11] |= ((value & 0x1) << 7);
+
+/* Write sampling frequency index value in ADIF header */
+#define ADIF_SET_SAMPLING_FREQUENCY_INDEX(header, value) \
+    GST_BUFFER_DATA(header)[11] |= (value << 3);    
+
+/* Write front_channel_element value in ADIF header */
+#define ADIF_SET_FRONT_CHANNEL_ELEMENT(header, value) \
+    GST_BUFFER_DATA(header)[11] |= (value >> 1); \
+    GST_BUFFER_DATA(header)[12] |= ((value & 0x1) << 7);
+    
+/* Write comment field value in ADIF header */
+#define ADIF_SET_COMMENT_FIELD(header, value) \
+    GST_BUFFER_DATA(header)[16] |= value;
 
 #endif /* __GSTTI_SUPPORT_AAC_H__ */
 

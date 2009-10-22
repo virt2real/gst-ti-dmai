@@ -4,9 +4,9 @@ plugin_LTLIBRARIES  = libgstticodecplugin.la
 # sources used to compile this plug-in
 libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttidmaibuffertransport.c \
 gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c gsttidmaiaccel.c \
-gsttividdec2.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
-gsttisupport_mpeg4.c gsttisupport_h264.c  \
-gsttiaudenc1.c gsttiaudenc.c \
+gsttividdec2.c gsttividdec.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
+gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c \
+gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c \
 gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c \
 gstticommonutils.c @XDC_CONFIG_BASENAME@.c ti_encoders.c caps.c
 
@@ -22,10 +22,11 @@ libgstticodecplugin_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) \
 -Wl,@XDC_CONFIG_BASENAME@/linker.cmd
 
 # headers we need but don't want installed
-noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h gsttiparsers.h \
-gsttisupport_h264.h gsttisupport_mpeg4.h gsttisupport_aac.h gsttisupport_mp3.h \
-gsttisupport_wma.h ti_encoders.h caps.h \
-gsttidmaidec.h gsttidmaienc.h gsttidmaiaccel.h
+noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h \
+gsttiparsers.h gsttisupport_generic.h gsttisupport_h264.h \
+gsttisupport_mpeg4.h gsttisupport_aac.h gsttisupport_mp3.h \
+gsttisupport_wma.h ti_encoders.h caps.h gsttidmaidec.h \
+gsttidmaienc.h gsttidmaiaccel.h
 
 if ENABLE_ITTIAM_CODECS
 libgstticodecplugin_la_SOURCES +=ittiam_encoders.c ittiam_caps.c

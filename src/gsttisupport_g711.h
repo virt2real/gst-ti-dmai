@@ -1,8 +1,11 @@
 /*
- * gsttisupport_mpeg4.h
+ * gsttisupport_mp3.h
  *
  * Original Author:
  *     Diego Dompe, RidgeRun
+ *
+ * Contributor:
+ *     Cristina Murillo, RidgeRun
  *
  * Copyright (C) 2009 RidgeRun
  *
@@ -15,25 +18,15 @@
  *
  */
 
-#ifndef __GSTTI_SUPPORT_MPEG4_H__
-#define __GSTTI_SUPPORT_MPEG4_H__
+#ifndef __GSTTI_SUPPORT_G711_H__
+#define __GSTTI_SUPPORT_G711_H__
 
 #include <gst/gst.h>
 
-/* Caps for mpeg4 */
-extern GstStaticCaps gstti_mpeg4_src_caps;
-extern GstStaticCaps gstti_mpeg4_sink_caps;
+/* Caps for g711 */
+extern GstStaticCaps gstti_g711_caps;
 
-/* MPEG4 Parser */
-struct gstti_mpeg4_parser_private {
-    gboolean framed;
-    gboolean firstVOP;
-    gboolean flushing;
-};
-
-extern struct gstti_parser_ops gstti_mpeg4_parser;
-
-#endif /* __GSTTI_SUPPORT_MPEG4_H__ */
+#endif /* __GSTTI_SUPPORT_G711_H__ */
 
 
 /******************************************************************************

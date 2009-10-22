@@ -41,11 +41,13 @@
 #include "gsttidmaidec.h"
 #include "gsttidmaienc.h"
 #include "gsttidmaivideosink.h"
+#include "gsttisupport_generic.h"
 #include "gsttisupport_h264.h"
 #include "gsttisupport_mpeg4.h"
 #include "gsttisupport_aac.h"
 #include "gsttisupport_mp3.h"
 #include "gsttisupport_wma.h"
+#include "gsttisupport_g711.h"
 #include "gsttidmairesizer.h"
 #include "gsttidmaiaccel.h"
 
@@ -86,11 +88,22 @@ static GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
     "   height=(int)[ 1, MAX ] "
 );
 
+GstStaticCaps gstti_mpeg2_caps = GST_STATIC_CAPS(
+    "video/mpeg, "
+    "   mpegversion=(int) 2, "
+    "   systemstream=(boolean)false, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] ;"
+);
+
 extern struct gstti_decoder_ops gstti_viddec2_ops;
 extern struct gstti_decoder_ops gstti_viddec0_ops;
+extern struct gstti_decoder_ops gstti_auddec0_ops;
+extern struct gstti_decoder_ops gstti_auddec1_ops;
+
 extern struct gstti_encoder_ops gstti_videnc1_ops;
 extern struct gstti_encoder_ops gstti_videnc0_ops;
-
 extern struct gstti_encoder_ops gstti_audenc0_ops;
 extern struct gstti_encoder_ops gstti_audenc1_ops;
 
@@ -164,10 +177,29 @@ GstTIDmaidecData decoders[] = {
         .parser = &gstti_mpeg4_parser,
     },
 #endif
+#ifdef ENABLE_MPEG2DEC_XDM2
+    {
+        .streamtype = "mpeg2",
+        .sinkCaps = &gstti_mpeg2_caps,
+        .srcCaps = &gstti_uyvy_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "mpeg2dec",
+        .dops = &gstti_viddec2_ops,
+        .parser = &gstti_generic_parser,
+    },
+#elif defined(ENABLE_MPEG2DEC_XDM0)
+    {
+        .streamtype = "mpeg2",
+        .sinkCaps = &gstti_mpeg2_caps,
+        .srcCaps = &gstti_uyvy_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "mpeg2dec",
+        .dops = &gstti_viddec0_ops,
+        .parser = &gstti_generic_parser,
+    },
+#endif
 
 /* Audio decoders */
-
-/*
 #ifdef ENABLE_AACDEC_XDM1
     {
         .streamtype = "aac",
@@ -178,7 +210,7 @@ GstTIDmaidecData decoders[] = {
         .dops = &gstti_auddec1_ops,
         .parser = &gstti_aac_parser,
     },
-#elif defined(ENABLE_AAC4DEC_XDM0)
+#elif defined(ENABLE_AACDEC_XDM0)
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_aac_caps,
@@ -189,8 +221,71 @@ GstTIDmaidecData decoders[] = {
         .parser = &gstti_aac_parser,
     },
 #endif
-#endif*/
-
+#ifdef ENABLE_MP3DEC_XDM1
+    {
+        .streamtype = "mp3",
+        .sinkCaps = &gstti_mp3_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "mp3dec",
+        .dops = &gstti_auddec1_ops,
+        .parser = &gstti_generic_parser,
+    },
+#elif defined(ENABLE_MP3DEC_XDM0)
+    {
+        .streamtype = "mp3",
+        .sinkCaps = &gstti_mp3_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "mp3dec",
+        .dops = &gstti_auddec0_ops,
+        .parser = &gstti_generic_parser,
+    },
+#endif
+#ifdef ENABLE_WMADEC_XDM1
+    {
+        .streamtype = "wma",
+        .sinkCaps = &gstti_wma_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "wmadec",
+        .dops = &gstti_auddec1_ops,
+        .parser = &gstti_generic_parser,
+    },
+#elif defined(ENABLE_WMADEC_XDM0)
+    {
+        .streamtype = "wma",
+        .sinkCaps = &gstti_wma_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "wmadec",
+        .dops = &gstti_auddec0_ops,
+        .parser = &gstti_generic_parser,
+    },
+#endif
+/*
+#ifdef ENABLE_G711DEC_XDM1
+    {
+        .streamtype = "g711",
+        .sinkCaps = &gstti_g711_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "g711dec",
+        .dops = &gstti_sphdec1_ops,
+        .parser = &gstti_generic_parser,
+    },
+#elif defined(ENABLE_G711DEC_XDM0)
+    {
+        .streamtype = "g711",
+        .sinkCaps = &gstti_g711_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "g711dec",
+        .dops = &gstti_sphdec0_ops,
+        .parser = &gstti_generic_parser,
+    },
+#endif
+*/
     { .streamtype = NULL },
 
     /* Dummy entry to avoid build errors when no element
@@ -256,6 +351,25 @@ GstTIDmaiencData encoders[] = {
         .parser = &gstti_mpeg4_parser,
     },
 #endif
+#ifdef ENABLE_MPEG2ENC_XDM1
+    {
+        .streamtype = "mpeg2",
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_mpeg2_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "mpeg2enc",
+        .eops = &gstti_videnc1_ops,
+    },
+#elif defined(ENABLE_MPEG2ENC_XDM0)
+    {
+        .streamtype = "mpeg2",
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_mpeg2_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "mpeg2enc",
+        .eops = &gstti_videnc0_ops,
+    },
+#endif
 
 /* Audio encoders */
 
@@ -278,25 +392,6 @@ GstTIDmaiencData encoders[] = {
         .eops = &gstti_audenc0_ops,
     },
 #endif
-#ifdef ENABLE_WMAENC_XDM1
-    {
-        .streamtype = "wma",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_wma_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "wmaenc",
-        .eops = &gstti_audenc1_ops,
-    },
-#elif defined(ENABLE_WMAENC_XDM0)
-    {
-        .streamtype = "wma",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_wma_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "wmaenc",
-        .eops = &gstti_audenc0_ops,
-    },
-#endif
 #ifdef ENABLE_MP3ENC_XDM1
     {
         .streamtype = "mp3",
@@ -316,6 +411,46 @@ GstTIDmaiencData encoders[] = {
         .eops = &gstti_audenc0_ops,
     },
 #endif
+#ifdef ENABLE_WMAENC_XDM1
+    {
+        .streamtype = "wma",
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_wma_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "wmaenc",
+        .eops = &gstti_audenc1_ops,
+    },
+#elif defined(ENABLE_WMAENC_XDM0)
+    {
+        .streamtype = "wma",
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_wma_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "wmaenc",
+        .eops = &gstti_audenc0_ops,
+    },
+#endif
+/*
+#ifdef ENABLE_G711ENC_XDM1
+    {
+        .streamtype = "g711",
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_g711_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "g711enc",
+        .eops = &gstti_sphenc1_ops,
+    },
+#elif defined(ENABLE_G711ENC_XDM0)
+    {
+        .streamtype = "g711",
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_g711_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "g711enc",
+        .eops = &gstti_sphenc0_ops,
+    },
+#endif
+*/
     { .streamtype = NULL },
     /* Dummy entry to avoid build errors when no element
        is enabled using the src or sink caps

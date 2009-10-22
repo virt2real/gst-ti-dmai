@@ -8,7 +8,9 @@
  *
  * Contributors:
  *    Cristina Murillo, RidgeRun
+ *    Brijesh Singh, Texas Instruments, Inc.
  *
+ * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
  *
  * This program is free software; you can redistribute it and/or modify
@@ -31,13 +33,200 @@
 #include "gsttisupport_aac.h"
 #include "gsttidmaibuffertransport.h"
 
+GST_DEBUG_CATEGORY_STATIC (gst_tisupport_aac_debug);
+#define GST_CAT_DEFAULT gst_tisupport_aac_debug
 
 GstStaticCaps gstti_aac_caps = GST_STATIC_CAPS(
     "audio/mpeg, "
-    "mpegversion=(int) 4, "
-    "channels= (int)[ 1, MAX ], "
-    "rate = (int)[ 8000, MAX ]; "
+    "mpegversion=(int) {2, 4}, "
+    "framed = (boolean) true;"
 );
+
+static GstBuffer *aac_generate_codec_data (GstBuffer *buffer){
+    return NULL;
+}
+
+static gboolean aac_init(GstTIDmaidec *dmaidec){
+    struct gstti_aac_parser_private *priv;
+
+    /* Initialize GST_LOG for this object */
+    GST_DEBUG_CATEGORY_INIT(gst_tisupport_aac_debug, "TISupportAAC", 0,
+        "DMAI plugins AAC Support functions");
+
+    priv = g_malloc(sizeof(struct gstti_aac_parser_private));
+    g_assert(priv != NULL);
+
+    memset(priv,0,sizeof(struct gstti_aac_parser_private));
+    priv->flushing = FALSE;
+    priv->framed = FALSE;
+
+    if (dmaidec->parser_private){
+        g_free(dmaidec->parser_private);
+    }
+    dmaidec->parser_private = priv;
+
+    GST_DEBUG("Parser initialized");
+    return TRUE;
+}
+
+static gboolean aac_clean(GstTIDmaidec *dmaidec){
+    if (dmaidec->parser_private){
+        GST_DEBUG("Freeing parser private");
+        g_free(dmaidec->parser_private);
+        dmaidec->parser_private = NULL;
+    }
+
+    return TRUE;
+}
+
+static gint aac_parse(GstTIDmaidec *dmaidec){
+    struct gstti_aac_parser_private *priv =
+        (struct gstti_aac_parser_private *) dmaidec->parser_private;
+
+    if (priv->framed){
+        /*
+         * When we have a codec_data structure we know we got full frames
+         */
+        if (dmaidec->head != dmaidec->tail){
+            return dmaidec->head;
+        }
+    } else {
+        gint avail = dmaidec->head - dmaidec->tail;
+        return (avail >= dmaidec->inBufSize) ? 
+            (dmaidec->inBufSize + dmaidec->tail) : -1;
+    }
+    
+    return -1;
+}
+
+static void aac_flush_start(void *private){
+    struct gstti_aac_parser_private *priv =
+        (struct gstti_aac_parser_private *) private;
+
+    priv->flushing = TRUE;
+    GST_DEBUG("Parser flushed");
+    return;
+}
+
+static void aac_flush_stop(void *private){
+    struct gstti_aac_parser_private *priv =
+        (struct gstti_aac_parser_private *) private;
+
+    priv->flushing = FALSE;
+    GST_DEBUG("Parser flush stopped");
+    return;
+}
+
+/*
+ * gst_get_acc_rateIdx - This function calculate sampling index rate using
+ * the lookup table defined in ISO/IEC 13818-7 Part7: Advanced Audio Coding.
+ */
+static guint gst_get_aac_rateIdx (guint rate)
+{
+    if (rate >= 96000)
+        return 0;
+    else if (rate >= 88200)
+        return 1;
+    else if (rate >= 64000)
+        return 2;
+    else if (rate >= 48000)
+        return 3;
+    else if (rate >= 44100)
+        return 4;
+    else if (rate >= 32000)
+        return 5;
+    else if (rate >= 24000)
+        return 6;
+    else if (rate >= 22050)
+        return 7;
+    else if (rate >= 16000)
+        return 8;
+    else if (rate >= 12000)
+        return 9;
+    else if (rate >= 11025)
+        return 10;
+    else if (rate >= 8000)
+        return 11;
+    else if (rate >= 7350)
+        return 12;
+    else
+        return 15;              
+}
+
+static GstBuffer *aac_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
+{
+    struct gstti_aac_parser_private *priv =
+        (struct gstti_aac_parser_private *) dmaidec->parser_private;
+    GstBuffer *aac_header_buf = NULL;
+    GstStructure *capStruct;
+    GstCaps      *caps = GST_BUFFER_CAPS(buf);
+    guint8 *data = GST_BUFFER_DATA(buf);
+
+    /* Find if we got a framed stream */
+    if (!caps)
+        goto check_header;
+    
+    capStruct = gst_caps_get_structure(caps,0);
+    if (!capStruct)
+        goto check_header;
+
+    gst_structure_get_boolean(capStruct, "framed", &priv->framed);
+    GST_DEBUG("The stream is %s framed",priv->framed ? "" : "not");
+
+check_header:
+    /* Now check if we already have some ADIF or ADTS header */
+    if (data[0] == 'A' && data[1] == 'D' && data[2] == 'I'
+         && data[3] == 'F') {
+        return NULL;
+    }
+    if ((data[0] == 0xff) && ((data[1] >> 4) == 0xf)) {
+        return NULL;
+    }
+    
+    /* Allocate buffer to store AAC ADIF header */
+    aac_header_buf = gst_buffer_new_and_alloc(MAX_AAC_HEADER_LENGTH);
+    if (aac_header_buf == NULL) {
+        GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
+            ("Failed to allocate buffer for aac header"));
+        return NULL;
+    }
+
+    memset(GST_BUFFER_DATA(aac_header_buf), 0, MAX_AAC_HEADER_LENGTH);
+
+    /* Set adif_id field in ADIF header  - Always "ADIF"  (32-bit long) */
+    ADIF_SET_ID(aac_header_buf, "ADIF");
+
+    /* Disable copyright id  field in ADIF header - (1-bit long) */
+    ADIF_CLEAR_COPYRIGHT_ID_PRESENT(aac_header_buf);
+
+    /* Set profile field in ADIF header - (2-bit long)
+     * 0 - MAIN, 1 - LC,  2 - SCR  3 - LTR (2-bit long) 
+     */
+    ADIF_SET_PROFILE(aac_header_buf, 0x1);
+
+    /* Set sampling rate index field in ADIF header - (4-bit long) */ 
+    ADIF_SET_SAMPLING_FREQUENCY_INDEX(aac_header_buf, 
+                                    gst_get_aac_rateIdx(dmaidec->rate));
+
+    /* Set front_channel_element field in ADIF header - (4-bit long) */
+    ADIF_SET_FRONT_CHANNEL_ELEMENT(aac_header_buf, dmaidec->channels);
+   
+    /* Set comment field in ADIF header (8-bit long) */
+    ADIF_SET_COMMENT_FIELD(aac_header_buf, 0x3);
+    
+    return aac_header_buf;
+}
+
+struct gstti_parser_ops gstti_aac_parser = {
+    .numInputBufs = 1,
+    .init  = aac_init,
+    .clean = aac_clean,
+    .parse = aac_parse,
+    .flush_start = aac_flush_start,
+    .flush_stop = aac_flush_stop,
+    .generate_codec_data = aac_generate_codec_data,
+    .get_stream_prefix = aac_get_stream_prefix,
+};
 
 
 /******************************************************************************

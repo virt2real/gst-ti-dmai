@@ -25,70 +25,47 @@
 
 #include <gst/gst.h>
 #include <ti/sdo/dmai/BufTab.h>
-
-typedef GstBuffer * (* parser_function) (GstBuffer *, void *, BufTab_Handle);
-typedef GstBuffer * (* parser_drain) (void *, BufTab_Handle);
-typedef void (* parser_flush) (void *);
-typedef gboolean (* parser_init) (void *);
-typedef GstBuffer * (* parse_codec_data) (GstBuffer *);
+#include "gsttidmaidec.h"
 
 struct gstti_parser_ops {
+    /* Defines the size of the input circular buffer required by this parser 
+     * defined in the number of times the size of one output buffer
+     */
+    gint            numInputBufs;
     /*
      * Parser init
      * This function initializes any data structures required by the parser
-     * Receives the private data structure for the parser
      */
-    parser_init		init;
+    gboolean        (* init) (GstTIDmaidec *dec);
     /*
      * Cleans any data structure allocated by the parser
      */
-    parser_init     clean;
+    gboolean        (* clean) (GstTIDmaidec *);
     /*
      * Parser function
-     * The parser function receives a GstBuffer and is responsible for parsing his
-     * contents and create a GstTIDmaiBufferTransport with a full frame of data
-     * to return to the chain function (which will feed it into the decoder).
-     * This function is responsible for unref the incoming GstBuffer after it finish
-     * using the buffer data.
-     * If no full frame is available, it should return NULL.
-     * This function should be called continuously until it returns NULL, since
-     * a single buffer may contain several frames. It will be called with the
-     * same buffer pointer until it returns NULL
-     *
-     * The buffer returned should be gsttidmaibuffertransport with the numBytesUsed
-     * value set to be processed by the _process function.
-     *
-     * private data is a data structure used to provide
+     * Identifies where the start or end of a frame is
      */
-    parser_function	parse;
-    /*
-     * Parser drain
-     * This function drains the parser and returns whatever data is on it.
-     * This function should be synchronous and shouldn't sleep on any conditional.
-     * This function should be called continously until it returns a buffer of size
-     * zero. Even if the size of the buffer is zero, the pointer must be a valid
-     * allocated buffer of size 1. This will be used on a dummy call to the procesing
-     * element for flush the buffer.
-     * In case of error it returns NULL
-     */
-    parser_drain	drain;
+    gint            (* parse) (GstTIDmaidec *);
     /*
      * Parser flush start
-     * This function flushes the parser contents and make the parser discard
-     * any further data
+     * This function flushes the parser internal state
      */
-    parser_flush	flush_start;
+    void            (* flush_start) (void *);
     /*
      * Parser flush stop
-     * This function makes the parser stop flushing contents.
      */
-    parser_flush	flush_stop;
+    void            (* flush_stop) (void *);
+    /*
+     * It receives the first gst buffer, and if any prefix is required
+     * on the stream it generates it
+     */
+    GstBuffer       *(* get_stream_prefix)(GstTIDmaidec *, GstBuffer *);
     /*
      * This is a function for encoders, not decoders.
      * It receives the first gst buffer and if finds a codec data it
      * returns a gst buffer with it
      */
-    parse_codec_data generate_codec_data;
+    GstBuffer       *(* generate_codec_data)(GstBuffer *);
 };
 
 #endif

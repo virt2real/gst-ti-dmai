@@ -1234,7 +1234,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
                 gst_pad_set_caps(dmaienc->srcpad,caps);
                 gst_buffer_unref (codec_data);
             } else {
-                GST_DEBUG("codec_data not found on the first buffer");
+                GST_DEBUG("no codec_data generated");
             }
         }
     }

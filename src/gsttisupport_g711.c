@@ -1,40 +1,44 @@
 /*
- * gsttisupport_mpeg4.h
+ * gsttisupport_mp3.c
+ *
+ * This file parses mp3 streams
  *
  * Original Author:
  *     Diego Dompe, RidgeRun
  *
+ * Contributor:
+ *     Cristina Murillo, RidgeRun
+ *
  * Copyright (C) 2009 RidgeRun
+ * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation version 2.1 of the License.
- * whether express or implied; without even the implied warranty of *
+ *
+ * This program is distributed #as is# WITHOUT ANY WARRANTY of any kind,
+ * whether express or implied; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- *
  */
 
-#ifndef __GSTTI_SUPPORT_MPEG4_H__
-#define __GSTTI_SUPPORT_MPEG4_H__
-
+#include <stdio.h>
+#include <string.h>
 #include <gst/gst.h>
 
-/* Caps for mpeg4 */
-extern GstStaticCaps gstti_mpeg4_src_caps;
-extern GstStaticCaps gstti_mpeg4_sink_caps;
+#include "gsttidmaidec.h"
+#include "gsttiparsers.h"
+#include "gsttisupport_mp3.h"
+#include "gsttidmaibuffertransport.h"
 
-/* MPEG4 Parser */
-struct gstti_mpeg4_parser_private {
-    gboolean framed;
-    gboolean firstVOP;
-    gboolean flushing;
-};
-
-extern struct gstti_parser_ops gstti_mpeg4_parser;
-
-#endif /* __GSTTI_SUPPORT_MPEG4_H__ */
-
+GstStaticCaps gstti_g711_caps = GST_STATIC_CAPS(
+    "audio/x-alaw,"
+	"  rate= (int) [ 8000, MAX], "
+	"  channels= (int)[ 1, 2 ]; "
+    "audio/x-mulaw,"
+    "   rate= (int) [ 8000, MAX], "
+    "   channels= (int)[ 1, 2 ]; "
+);
 
 /******************************************************************************
  * Custom ViM Settings for editing this file
@@ -45,3 +49,4 @@ extern struct gstti_parser_ops gstti_mpeg4_parser;
  vim:set shiftwidth=4:   /* Use 4 spaces for >> operations */
  vim:set expandtab:      /* Expand tabs into white spaces  */
 #endif
+

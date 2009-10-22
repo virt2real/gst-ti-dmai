@@ -44,10 +44,6 @@
 GST_DEBUG_CATEGORY_STATIC (gst_tividdec2_debug);
 #define GST_CAT_DEFAULT gst_tividdec2_debug
 
-/******************************************************************************
- * gst_tividdec2_create
- *     Initialize codec
- *****************************************************************************/
 static gboolean gstti_viddec2_create (GstTIDmaidec *dmaidec)
 {
     VIDDEC2_Params         params    = Vdec2_Params_DEFAULT;
@@ -79,17 +75,15 @@ static gboolean gstti_viddec2_create (GstTIDmaidec *dmaidec)
         return FALSE;
     }
 
-    /* Tell the Vdec module that hOutBufTab will be used for display buffers */
-    Vdec2_setBufTab(dmaidec->hCodec, dmaidec->hOutBufTab);
-
     return TRUE;
 }
 
+static void gstti_viddec2_set_outBufTab(GstTIDmaidec *dmaidec, 
+    BufTab_Handle hOutBufTab){
 
-/******************************************************************************
- * gst_tividdec2_destroy
- *     free codec resources
- *****************************************************************************/
+    Vdec2_setBufTab(dmaidec->hCodec, hOutBufTab);
+}
+
 static void gstti_viddec2_destroy (GstTIDmaidec *dmaidec)
 {
     g_assert (dmaidec->hCodec);
@@ -97,10 +91,6 @@ static void gstti_viddec2_destroy (GstTIDmaidec *dmaidec)
     Vdec2_delete(dmaidec->hCodec);
 }
 
-
-/******************************************************************************
- * gst_tividdec2_process
- ******************************************************************************/
 static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
                     Buffer_Handle hDstBuf,gboolean codecFlushed){
     Buffer_Handle   hEncData = NULL;
@@ -139,39 +129,39 @@ static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
     return TRUE;
 }
 
-
-/******************************************************************************
- * gst_tividdec2_get_data
- ******************************************************************************/
 static Buffer_Handle gstti_viddec2_get_data(GstTIDmaidec *dmaidec){
     return Vdec2_getDisplayBuf(dmaidec->hCodec);
 }
 
-
-/******************************************************************************
- * gst_tividdec2_get_data
- ******************************************************************************/
 static Buffer_Handle gstti_viddec2_get_free_buffers(GstTIDmaidec *dmaidec){
     return Vdec2_getFreeBuf(dmaidec->hCodec);
 }
 
-
-/******************************************************************************
- * gst_tividdec2_flush
- ******************************************************************************/
 static void gstti_viddec2_flush(GstTIDmaidec *dmaidec){
     Vdec2_flush(dmaidec->hCodec);
+}
+
+static gint gstti_viddec2_get_in_buffer_size(GstTIDmaidec *dmaidec){
+    return Vdec2_getInBufSize(dmaidec->hCodec);
+}
+
+static gint gstti_viddec2_get_out_buffer_size(GstTIDmaidec *dmaidec){
+    return Vdec2_getOutBufSize(dmaidec->hCodec);
 }
 
 struct gstti_decoder_ops gstti_viddec2_ops = {
     .xdmversion = "xDM 1.2",
     .codec_type = VIDEO,
     .codec_create = gstti_viddec2_create,
+    .set_outBufTab = gstti_viddec2_set_outBufTab,
     .codec_destroy = gstti_viddec2_destroy,
     .codec_process = gstti_viddec2_process,
     .codec_get_data = gstti_viddec2_get_data,
     .codec_flush = gstti_viddec2_flush,
     .codec_get_free_buffers = gstti_viddec2_get_free_buffers,
+    .get_in_buffer_size = gstti_viddec2_get_in_buffer_size,
+    .get_out_buffer_size = gstti_viddec2_get_out_buffer_size,
+    .outputUseMask = gst_tidmaidec_CODEC_FREE,
 };
 
 /******************************************************************************

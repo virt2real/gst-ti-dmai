@@ -137,7 +137,7 @@ AC_ARG_WITH(preset,
 	[Select a preset (autoselects the platform and plugins):                                       
 		dm355 (dvsdk 1.30 or 2.00), dm355s (dvsdk2.0 + DM355s codecs),
 		dm357 (dvsdk 2.00), dm365 (dvsdk 2.10)
-		dm6446 (dvsdk 1.30), dm6446_2 (dvsdk 2.00),                                       
+		dm6446 (dvsdk 2.00),                                       
 		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00)
 	])],
 	[preset=$withval]
@@ -149,7 +149,6 @@ if test "x$preset" = "xomap35x" ; then
   	enable_h264dec_xdm2=1;
   	enable_mpeg2dec_xdm2=1;
   	enable_aacdec_xdm1=1;
-  	enable_mp3dec_xdm1=1;
   	enable_wmadec_xdm1=1;
   	enable_jpegdec_xdm1=1;
 	enable_mpeg4enc_xdm1=1;
@@ -218,19 +217,6 @@ fi
 
 if test "x$preset" = "xdm6446" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	enable_mpeg4dec_xdm0=1;
-  	enable_h264dec_xdm0=1;
-  	enable_mpeg2dec_xdm0=1;
-  	enable_aacdec_xdm0=1;
-  	enable_mp3dec_xdm0=1;
-  	enable_g711dec_xdm0=1;
-	enable_resizer=1;
-  	enable_videosink=1;
-  	with_platform=dm6446;
-fi
-
-if test "x$preset" = "xdm6446_2" ; then
-	AC_MSG_NOTICE(The following preset has been selected: $preset);
 	enable_mpeg4dec_xdm2=1;
   	enable_h264dec_xdm2=1;
   	enable_mpeg2dec_xdm2=1;
@@ -238,7 +224,6 @@ if test "x$preset" = "xdm6446_2" ; then
 	AC_DEFINE([MPEG4_C64X_TI_ENCODER],[1],[TI DSP MPEG4 Encoder])
 	enable_h264enc_xdm1=1;
   	enable_aacdec_xdm1=1;
-  	enable_mp3dec_xdm1=1;
   	enable_g711dec_xdm1=1;
 	enable_g711enc_xdm1=1;
 	enable_resizer=1;
