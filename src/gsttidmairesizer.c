@@ -348,7 +348,6 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
     case ARG_SOURCE_X:{
       dmairesizer->source_x = BufferGfx_calcLineLength (g_value_get_int (value), dmairesizer->colorSpace);
       /*Working for dm6446, not tested for other platforms*/
-      dmairesizer->source_x = GST_ROUND_UP_4(dmairesizer->source_x);
       break;
     }
     case ARG_SOURCE_Y:{
