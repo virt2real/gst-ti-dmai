@@ -428,7 +428,6 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->awidth             = 0;
     dmaienc->rate               = 0;
 
-    dmaienc->basets             = GST_CLOCK_TIME_NONE;
     dmaienc->asampleSize        = GST_CLOCK_TIME_NONE;
     dmaienc->asampleTime        = GST_CLOCK_TIME_NONE;
 }
@@ -653,6 +652,7 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
     }
 
     /* Status variables */
+    dmaienc->basets = GST_CLOCK_TIME_NONE;
     dmaienc->head = 0;
     dmaienc->tail = 0;
 
