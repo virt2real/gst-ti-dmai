@@ -72,13 +72,10 @@ static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc,
     GstBuffer *codec_data = NULL;
 
     for (i = 0; i < GST_BUFFER_SIZE(buffer) - 4; ++i) {
-        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1
-            && 
-            (data[i + 3] == 0xB0 ||
-             data[i + 3] == 0xB5 ||
-             data[i + 3] <= 0x2f)
-            ) {
-            break;
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
+            guchar type = data[i+3];
+            if ((type == 0xB5) || (type == 0xB6))
+                break;
         }
     }
 
