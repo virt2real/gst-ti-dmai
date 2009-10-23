@@ -105,7 +105,6 @@ struct _GstTIDmaidec
     gint                inBufSize;
     GstBuffer           *metaTab;
     gboolean            require_configure;
-    gboolean            shutdown;
 
     /* Parser structures */
     void                *parser_private;
