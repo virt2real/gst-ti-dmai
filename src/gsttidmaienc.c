@@ -633,6 +633,12 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
         return FALSE;
     }
 
+    if (!encoder->eops->codec_create(dmaienc)) {
+        GST_ELEMENT_ERROR(dmaienc,STREAM,CODEC_NOT_FOUND,(NULL),
+            ("failed to open codec engine \"%s\"", dmaienc->engineName));
+        return FALSE;
+    }
+
     if (!dmaienc->hDsp && dmaienc->printDspLoad){
         dmaienc->hDsp = Engine_getServer(dmaienc->hEngine);
         if (!dmaienc->hDsp){
@@ -687,6 +693,12 @@ static gboolean gst_tidmaienc_exit_encoder(GstTIDmaienc *dmaienc)
         Engine_close(dmaienc->hEngine);
         dmaienc->hEngine = NULL;
     }
+    
+    if (dmaienc->hCodec) {
+        GST_LOG("closing video encoder\n");
+        encoder->eops->codec_destroy(dmaienc);
+        dmaienc->hCodec = NULL;
+    }
 
     if (dmaienc->hDsp){
         dmaienc->hDsp = NULL;
@@ -705,17 +717,12 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     Buffer_Attrs           Attrs     = Buffer_Attrs_DEFAULT;
     GstTIDmaiencClass      *gclass;
     GstTIDmaiencData       *encoder;
-    gboolean ret;
 
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     GST_DEBUG("Init\n");
-
-    ret = encoder->eops->codec_create(dmaienc);
-    if (!ret)
-        return ret;
 
     dmaienc->firstBuffer = TRUE;
 
@@ -743,7 +750,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     }
     GST_DEBUG("Output buffer handler: %p\n",dmaienc->outBuf);
 
-    return ret;
+    return TRUE;
 }
 
 
@@ -760,12 +767,6 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
-
-    if (dmaienc->hCodec) {
-        GST_LOG("closing video encoder\n");
-        encoder->eops->codec_destroy(dmaienc);
-        dmaienc->hCodec = NULL;
-    }
 
     /* Wait for free all downstream buffers */
     while (dmaienc->head != dmaienc->tail){
@@ -971,16 +972,22 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
         GST_EVENT_TYPE_NAME(event));
 
     switch (GST_EVENT_TYPE(event)) {
+    case GST_EVENT_EOS:
+        /* Release the buffers */
+        gst_tidmaienc_deconfigure_codec(dmaienc);
+
+        ret = gst_pad_push_event(dmaienc->srcpad, event);
+        break;
     case GST_EVENT_FLUSH_START:
         /* Flush the adapter */
         gst_adapter_clear(dmaienc->adapter);
-        ret = TRUE;
-        goto done;
+        
+        ret = gst_pad_push_event(dmaienc->srcpad, event);
+        break;
     default:
         ret = gst_pad_push_event(dmaienc->srcpad, event);
     }
 
-done:
     gst_object_unref(dmaienc);
     return ret;
 }

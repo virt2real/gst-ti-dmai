@@ -553,14 +553,15 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
             ("failed to open codec engine \"%s\"", dmaidec->engineName));
         return FALSE;
     }
+    
+    /* Create codec */
+    if (!decoder->dops->codec_create(dmaidec)){
+        GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
+            ("Failed to create codec"));
+        return FALSE;
+    }
 
-    /*
-     * Create the input buffers
-     *
-     * We are using a dummy algorithm here for memory allocation to start with
-     * this could be improved by providing a way to on-runtime ajust the buffer
-     * sizes based on some decent heuristics to reduce memory consumption.
-     */
+    /* Query the parser for the required number of buffers */
     if (dmaidec->numInputBufs == 0) {
         dmaidec->numInputBufs = decoder->parser->numInputBufs;
     }
@@ -635,6 +636,12 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
         dmaidec->metaTab = NULL;
     }
 
+    if (dmaidec->hCodec) {
+        GST_LOG("closing video decoder\n");
+        decoder->dops->codec_destroy(dmaidec);
+        dmaidec->hCodec = NULL;
+    }
+
     if (dmaidec->hEngine) {
         GST_DEBUG("closing codec engine\n");
         Engine_close(dmaidec->hEngine);
@@ -661,12 +668,6 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
     GST_DEBUG("Init\n");
-
-    /* Create codec */
-    if (!decoder->dops->codec_create(dmaidec)){
-        GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
-            ("Failed to create codec"));
-    }
 
     /* Get the buffer sizes */
     dmaidec->outBufSize = decoder->dops->get_out_buffer_size(dmaidec);
@@ -776,12 +777,6 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
     dmaidec->require_configure = TRUE;
-
-    if (dmaidec->hCodec) {
-        GST_LOG("closing video decoder\n");
-        decoder->dops->codec_destroy(dmaidec);
-        dmaidec->hCodec = NULL;
-    }
 
     if (dmaidec->parser_started){
         decoder->parser->clean(dmaidec);
@@ -997,6 +992,8 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
                 break;
         }
 
+        gst_tidmaidec_deconfigure_codec(dmaidec);
+        
         ret = gst_pad_event_default(pad, event);
         goto done;
     case GST_EVENT_FLUSH_START:
