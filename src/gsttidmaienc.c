@@ -1229,13 +1229,13 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
             if (codec_data){
                 GstCaps *caps = gst_caps_make_writable(
                     gst_caps_ref (GST_PAD_CAPS(dmaienc->srcpad)));
-                GST_DEBUG("Setting codec_data on the caps");
+                GST_INFO("Setting codec_data on the caps");
                 gst_caps_set_simple (caps, "codec_data",
                     GST_TYPE_BUFFER, codec_data, (char *)NULL);
                 gst_pad_set_caps(dmaienc->srcpad,caps);
                 gst_buffer_unref (codec_data);
             } else {
-                GST_DEBUG("no codec_data generated");
+                GST_WARNING("no codec_data generated");
             }
         }
     }
