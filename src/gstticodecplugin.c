@@ -109,19 +109,14 @@ extern struct gstti_encoder_ops gstti_audenc1_ops;
 
 
 #if PLATFORM == dm357
-# ifndef DECODEENGINE
 #  define DECODEENGINE "hmjcp"
-# endif
-# ifndef ENCODEENGINE
 #  define ENCODEENGINE "hmjcp"
-# endif
+#elif PLATFORM == omap35x
+#  define DECODEENGINE "demoEngine"
+#  define ENCODEENGINE "demoEngine"
 #else
-# ifndef DECODEENGINE
 #  define DECODEENGINE "decode"
-# endif
-# ifndef ENCODEENGINE
 #  define ENCODEENGINE "encode"
-# endif
 #endif
 
 /* Video decoders */
@@ -203,7 +198,7 @@ GstTIDmaidecData decoders[] = {
 #ifdef ENABLE_AACDEC_XDM1
     {
         .streamtype = "aac",
-        .sinkCaps = &gstti_aac_caps,
+        .sinkCaps = &gstti_aac_sink_caps,
         .srcCaps = &gstti_pcm_caps,
         .engineName = DECODEENGINE,
         .codecName = "aachedec",
@@ -213,7 +208,7 @@ GstTIDmaidecData decoders[] = {
 #elif defined(ENABLE_AACDEC_XDM0)
     {
         .streamtype = "aac",
-        .sinkCaps = &gstti_aac_caps,
+        .sinkCaps = &gstti_aac_sink_caps,
         .srcCaps = &gstti_pcm_caps,
         .engineName = DECODEENGINE,
         .codecName = "aachedec",
@@ -377,18 +372,18 @@ GstTIDmaiencData encoders[] = {
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_aac_caps,
+        .srcCaps = &gstti_aac_src_caps,
         .engineName = ENCODEENGINE,
-        .codecName = "aacenc",
+        .codecName = "aacheenc",
         .eops = &gstti_audenc1_ops,
     },
 #elif defined(ENABLE_AACENC_XDM0)
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_aac_caps,
+        .srcCaps = &gstti_aac_src_caps,
         .engineName = ENCODEENGINE,
-        .codecName = "aacenc",
+        .codecName = "aacheenc",
         .eops = &gstti_audenc0_ops,
     },
 #endif

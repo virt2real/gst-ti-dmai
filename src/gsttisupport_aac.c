@@ -36,10 +36,15 @@
 GST_DEBUG_CATEGORY_STATIC (gst_tisupport_aac_debug);
 #define GST_CAT_DEFAULT gst_tisupport_aac_debug
 
-GstStaticCaps gstti_aac_caps = GST_STATIC_CAPS(
+GstStaticCaps gstti_aac_sink_caps = GST_STATIC_CAPS(
     "audio/mpeg, "
     "mpegversion=(int) {2, 4}, "
     "framed = (boolean) true;"
+);
+
+GstStaticCaps gstti_aac_src_caps = GST_STATIC_CAPS(
+    "audio/mpeg, "
+    "mpegversion=(int) 4;"
 );
 
 gint rateIdx[] = {96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,

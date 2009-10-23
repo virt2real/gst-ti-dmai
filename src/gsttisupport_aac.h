@@ -26,7 +26,8 @@
 #include <gst/gst.h>
 
 /* Caps for aac */
-extern GstStaticCaps gstti_aac_caps;
+extern GstStaticCaps gstti_aac_sink_caps;
+extern GstStaticCaps gstti_aac_src_caps;
 
 /* AAC Parser */
 struct gstti_aac_parser_private {
