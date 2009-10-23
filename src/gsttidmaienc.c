@@ -920,8 +920,6 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
            	("Failed to set the srcpad caps"));
     } else {
-	    gst_caps_unref(caps);
-
 	    /* Set the caps on the parameters of the encoder */
 	    encoder->eops->set_codec_caps(dmaienc);
 
