@@ -633,12 +633,6 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
         return FALSE;
     }
 
-    if (!encoder->eops->codec_create(dmaienc)) {
-        GST_ELEMENT_ERROR(dmaienc,STREAM,CODEC_NOT_FOUND,(NULL),
-            ("failed to open codec engine \"%s\"", dmaienc->engineName));
-        return FALSE;
-    }
-
     if (!dmaienc->hDsp && dmaienc->printDspLoad){
         dmaienc->hDsp = Engine_getServer(dmaienc->hEngine);
         if (!dmaienc->hDsp){
@@ -694,12 +688,6 @@ static gboolean gst_tidmaienc_exit_encoder(GstTIDmaienc *dmaienc)
         dmaienc->hEngine = NULL;
     }
     
-    if (dmaienc->hCodec) {
-        GST_LOG("closing video encoder\n");
-        encoder->eops->codec_destroy(dmaienc);
-        dmaienc->hCodec = NULL;
-    }
-
     if (dmaienc->hDsp){
         dmaienc->hDsp = NULL;
     }
@@ -723,6 +711,11 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     GST_DEBUG("Init\n");
+
+    /* We create the codec here since only at this point we got the custom args */
+    if (!encoder->eops->codec_create(dmaienc)) {
+        return FALSE;
+    }
 
     dmaienc->firstBuffer = TRUE;
 
@@ -785,6 +778,11 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
         dmaienc->inBuf = NULL;
     }
 
+    if (dmaienc->hCodec) {
+        GST_LOG("closing video encoder\n");
+        encoder->eops->codec_destroy(dmaienc);
+        dmaienc->hCodec = NULL;
+    }
     return TRUE;
 }
 
