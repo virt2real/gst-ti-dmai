@@ -561,6 +561,13 @@ static GstStateChangeReturn gst_tidmaienc_change_state(GstElement *element,
 
     /* Handle ramp-up state changes */
     switch (transition) {
+    case GST_STATE_CHANGE_NULL_TO_READY:
+        /* Init encoder */
+        GST_DEBUG("GST_STATE_CHANGE_NULL_TO_READY");
+        if (!gst_tidmaienc_init_encoder(dmaienc)) {
+            return GST_STATE_CHANGE_FAILURE;
+        }
+        break;
     default:
         break;
     }
@@ -572,13 +579,6 @@ static GstStateChangeReturn gst_tidmaienc_change_state(GstElement *element,
 
     /* Handle ramp-down state changes */
     switch (transition) {
-    case GST_STATE_CHANGE_NULL_TO_READY:
-        /* Init encoder */
-        GST_DEBUG("GST_STATE_CHANGE_NULL_TO_READY");
-        if (!gst_tidmaienc_init_encoder(dmaienc)) {
-            return GST_STATE_CHANGE_FAILURE;
-        }
-        break;
     case GST_STATE_CHANGE_READY_TO_NULL:
         GST_DEBUG("GST_STATE_CHANGE_READY_TO_NULL");
         /* Shut down encoder */
@@ -675,9 +675,6 @@ static gboolean gst_tidmaienc_exit_encoder(GstTIDmaienc *dmaienc)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     GST_DEBUG("begin exit_encoder\n");
-
-    /* Release the codec */
-    gst_tidmaienc_deconfigure_codec(dmaienc);
 
     if (dmaienc->adapter){
         gst_adapter_clear(dmaienc->adapter);

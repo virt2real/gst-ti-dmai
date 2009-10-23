@@ -371,7 +371,6 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->skip_frames        = 0;
     dmaidec->skip_done          = 0;
     dmaidec->qos                = FALSE;
-    dmaidec->shutdown           = FALSE;
 
     dmaidec->numOutputBufs      = 0UL;
     dmaidec->numInputBufs       = 0UL;
@@ -501,14 +500,11 @@ static GstStateChangeReturn gst_tidmaidec_change_state(GstElement *element,
     /* Handle ramp-down state changes */
     switch (transition) {
     case GST_STATE_CHANGE_READY_TO_NULL:
-        {
-            GstEvent *eos;
-            GST_DEBUG("GST_STATE_CHANGE_READY_TO_NULL");
-            dmaidec->shutdown = TRUE;
-            eos = gst_event_new_eos();
-            gst_pad_push_event(dmaidec->srcpad, eos);
-            break;
+        /* Shut down decoder */
+        if (!gst_tidmaidec_exit_decoder(dmaidec)) {
+            return GST_STATE_CHANGE_FAILURE;
         }
+        break;
     default:
         break;
     }
@@ -598,13 +594,6 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     /* Initialize rendezvous objects for making threads wait on conditions */
     dmaidec->waitOnOutBufTab = Rendezvous_create(2, &rzvAttrs);
 
-    /* Status variables */
-    dmaidec->flushing = FALSE;
-    dmaidec->current_timestamp  = 0;
-
-    /* Set up the output list */
-    dmaidec->outList = NULL;
-
     GST_DEBUG("end init_encoder\n");
     return TRUE;
 }
@@ -635,9 +624,6 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
         g_list_free(dmaidec->outList);
         dmaidec->outList = NULL;
     }
-
-    /* Release the codec */
-    gst_tidmaidec_deconfigure_codec(dmaidec);
 
     if (dmaidec->waitOnOutBufTab) {
         Rendezvous_delete(dmaidec->waitOnOutBufTab);
@@ -754,6 +740,8 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             ("failed to create input circular buffer"));
         return FALSE;
     }
+    
+    /* Circular queue functionality */
     dmaidec->head = 0;
     dmaidec->tail = 0;
     dmaidec->marker = 0;
@@ -811,6 +799,10 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         BufTab_delete(dmaidec->hOutBufTab);
         dmaidec->hOutBufTab = NULL;
     }
+
+    /* Status variables */
+    dmaidec->flushing = FALSE;
+    dmaidec->current_timestamp  = 0;
 
     return TRUE;
 }
@@ -983,18 +975,6 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
         goto done;
     }
     case GST_EVENT_EOS:
-        if (dmaidec->shutdown){
-            GST_INFO("Shutting down the element");
-            /* Shut down decoder */
-            if (!gst_tidmaidec_exit_decoder(dmaidec)) {
-                return GST_STATE_CHANGE_FAILURE;
-            }
-            
-            dmaidec->shutdown = FALSE;
-            gst_event_unref(event);
-            goto done;
-        }
-        
         /* end-of-stream: process any remaining encoded frame data */
         GST_DEBUG("EOS: draining remaining encoded data\n");
 
