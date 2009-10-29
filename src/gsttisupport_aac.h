@@ -37,9 +37,9 @@ struct gstti_aac_parser_private {
 
 extern struct gstti_parser_ops gstti_aac_parser;
 
-#define MAIN_PROFILE 0
-#define LC_PROFILE 1
-#define SSR_PROFILE 2
+#define MAIN_PROFILE 1
+#define LC_PROFILE 2
+#define SSR_PROFILE 3
 
 /* Define maximum number of bytes in ADIF header */
 #define MAX_AAC_HEADER_LENGTH 20
