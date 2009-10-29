@@ -26,9 +26,13 @@
 
 #include "gstticommonutils.h"
 #include "gsttidmaienc.h"
-#include <ti/sdo/dmai/ce/Venc1.h>
 #ifdef MPEG4_C64X_TI_ENCODER
+#include <ti/sdo/dmai/ce/Venc1.h>
 #include <ti/sdo/codecs/mpeg4enc/imp4venc.h>
+#endif
+#ifdef AACLC_C64X_TI_ENCODER
+#include <ti/sdo/dmai/ce/Aenc1.h>
+#include <ti/sdo/codecs/aaclcenc/iaacenc.h>
 #endif
 
 GST_DEBUG_CATEGORY_EXTERN(gst_tidmaienc_debug);
@@ -37,7 +41,7 @@ GST_DEBUG_CATEGORY_EXTERN(gst_tidmaienc_debug);
 #ifdef MPEG4_C64X_TI_ENCODER
 enum
 {
-    PROP_200 = 200,
+    PROP_MPEG4ENC_START = 200,
     PROP_PROFILELEVEL,
     PROP_RCALGO,
     PROP_MAXDELAY,
@@ -333,6 +337,196 @@ void ti_mpeg4enc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_USEUMV:
         g_value_set_boolean(value,dynParams->useUMV ? TRUE : FALSE);
+        break;
+    default:
+        break;
+    }
+}
+#endif
+
+#ifdef AACLC_C64X_TI_ENCODER
+enum
+{
+    PROP_AACLCENC_START = 200,
+    PROP_OUTPUTFORMAT,
+    PROP_USETNS,
+    PROP_USEPNS,
+    PROP_DOWNMIX,
+    PROP_VBRMODE,
+    PROP_ANCRATE,
+};
+
+gboolean ti_aaclcenc_params(GstElement *element){
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
+    AUDENC1_Params *params;
+    AUDENC1_DynamicParams *dynParams;
+    IAACENC_Params *eparams;
+    IAACENC_DynamicParams *edynParams;
+
+    if (!dmaienc->params){
+        dmaienc->params = g_malloc(sizeof (IAACENC_Params));
+    }
+    if (!dmaienc->dynParams){
+        dmaienc->dynParams = g_malloc(sizeof (IAACENC_DynamicParams));
+    }
+    params = (AUDENC1_Params *)dmaienc->params;
+    dynParams = (AUDENC1_DynamicParams *)dmaienc->dynParams;
+    *params = Aenc1_Params_DEFAULT;
+    *dynParams = Aenc1_DynamicParams_DEFAULT;
+    eparams = (IAACENC_Params *)dmaienc->params;
+    edynParams = (IAACENC_DynamicParams *)dmaienc->dynParams;
+
+    GST_INFO("Configuring the codec with the TI AAC LC Video encoder settings");
+
+    params->size = sizeof (IAACENC_Params);
+    dynParams->size = sizeof (IAACENC_DynamicParams);
+
+    eparams->outObjectType = AACENC_OBJ_TYP_LC;
+    eparams->outFileFormat = AACENC_TT_ADTS;
+    eparams->useTns = AACENC_TRUE;
+    eparams->usePns = AACENC_TRUE;
+    eparams->downMixFlag = AACENC_FALSE;
+    eparams->bitRateMode = AACENC_BR_MODE_VBR_5;
+    eparams->ancRate = -1;
+
+    params->bitRate = dynParams->bitRate = 128000;
+    params->maxBitRate = 128000;
+
+    edynParams->useTns = AACENC_TRUE;
+    edynParams->usePns = AACENC_TRUE;
+    edynParams->downMixFlag = AACENC_FALSE;
+    edynParams->ancFlag = AACENC_FALSE;
+    edynParams->ancRate = -1;
+
+    return TRUE;
+}
+
+void ti_aaclcenc_set_codec_caps(GstElement *element){
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
+    AUDENC1_Params *params = (AUDENC1_Params *)dmaienc->params;
+    AUDENC1_DynamicParams *dynParams = (AUDENC1_DynamicParams *)dmaienc->dynParams;;
+
+    params->sampleRate = dynParams->sampleRate = dmaienc->rate;
+    switch (dmaienc->channels) {
+        case (1):
+            params->channelMode = IAUDIO_1_0;
+            break;
+        case (2):
+            params->channelMode = IAUDIO_2_0;
+            break;
+        default:
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FORMAT,(NULL),
+                ("Unsupported number of channels: %d\n", dmaienc->channels));
+            return;
+    }
+    dynParams->channelMode = params->channelMode;
+    params->inputBitsPerSample = dynParams->inputBitsPerSample = dmaienc->awidth;
+}
+
+void ti_aaclcenc_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_OUTPUTFORMAT,
+        g_param_spec_int("outputformat",
+            "AAC output format",
+            "Output format: 0 - RAW, 1 - ADIF, 2 - ADTS",
+             0, 2, 2, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_USETNS,
+        g_param_spec_boolean("tns",
+            "Use TNS",
+            "Use TNS",
+            TRUE, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_USEPNS,
+        g_param_spec_boolean("pns",
+            "Use PNS",
+            "Use PNS",
+            TRUE, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_DOWNMIX,
+        g_param_spec_boolean("downmix",
+            "Down mixing",
+            "Enable downmixing of channels",
+            FALSE, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_VBRMODE,
+        g_param_spec_int("vbrmode",
+            "VBR Mode",
+            "Bit Rate mode: 1 lower quality, 5 higher quality",
+             1, 5, 5, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_ANCRATE,
+        g_param_spec_int("ancrate",
+            "ANC rate",
+            "Ancillary data rate: should be less than or equal to 15% of the bitrate, -1 to disable",
+             -1, 19199, -1, G_PARAM_READWRITE));
+}
+
+
+void ti_aaclcenc_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    IAACENC_Params *eparams = (IAACENC_Params *)dmaienc->params;
+    IAACENC_DynamicParams *edynParams = (IAACENC_DynamicParams *)dmaienc->dynParams;
+     
+    switch (prop_id) {
+    case PROP_OUTPUTFORMAT:
+        eparams->outFileFormat = g_value_get_int(value);
+        break;
+    case PROP_VBRMODE:
+        eparams->bitRateMode = g_value_get_int(value);
+        break;
+    case PROP_USETNS:
+        eparams->useTns = g_value_get_boolean(value)?AACENC_TRUE:AACENC_FALSE;
+        edynParams->useTns = eparams->useTns;
+        break;
+    case PROP_USEPNS:
+        eparams->usePns = g_value_get_boolean(value)?AACENC_TRUE:AACENC_FALSE;
+        edynParams->usePns = eparams->usePns;
+        break;
+    case PROP_DOWNMIX:
+        eparams->downMixFlag = g_value_get_boolean(value)?AACENC_TRUE:AACENC_FALSE;
+        edynParams->downMixFlag = eparams->downMixFlag;
+        break;
+    case PROP_ANCRATE:
+        edynParams->ancRate = g_value_get_int(value);
+        eparams->ancRate = edynParams->ancRate;
+        if (edynParams->ancRate >= 0){
+            edynParams->ancFlag = AACENC_TRUE;
+        } else {
+            edynParams->ancFlag = AACENC_FALSE; 
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+
+void ti_aaclcenc_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    IAACENC_Params *eparams = (IAACENC_Params *)dmaienc->params;
+    IAACENC_DynamicParams *edynParams = (IAACENC_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_OUTPUTFORMAT:
+        g_value_set_int(value,eparams->outFileFormat);
+        break;
+    case PROP_VBRMODE:
+        g_value_set_int(value,eparams->bitRateMode);
+        break;
+    case PROP_USETNS:
+        g_value_set_boolean(value,eparams->useTns ? TRUE : FALSE);
+        break;
+    case PROP_USEPNS:
+        g_value_set_boolean(value,eparams->usePns ? TRUE : FALSE);
+         break;
+    case PROP_DOWNMIX:
+        g_value_set_boolean(value,eparams->downMixFlag ? TRUE : FALSE);
+         break;
+    case PROP_ANCRATE:
+        if (edynParams->ancFlag == AACENC_TRUE){
+            g_value_set_int(value,edynParams->ancRate);
+        } else {
+            g_value_set_int(value,-1);
+        }
         break;
     default:
         break;

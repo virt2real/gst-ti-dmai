@@ -178,8 +178,6 @@ static gboolean gstti_audenc1_create (GstTIDmaienc *dmaienc)
          Aenc1_create(dmaienc->hEngine, (Char*)dmaienc->codecName,
                     (AUDENC1_Params *)dmaienc->params, 
                     (AUDENC1_DynamicParams *)dmaienc->dynParams);
-                    
-	
 	
 	if (dmaienc->hCodec == NULL) {
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,OPEN_READ_WRITE,(NULL),

@@ -762,8 +762,9 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     /* Wait for free all downstream buffers */
-    while (dmaienc->head != dmaienc->tail){
-        GST_WARNING("Not all downstream buffers are free... tail != head\n");
+    if (dmaienc->head != dmaienc->tail){
+        GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
+            ("Not all downstream buffers are free... tail != head\n"));
     }
 
     if (dmaienc->outBuf) {
@@ -969,10 +970,10 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
 
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
+        ret = gst_pad_push_event(dmaienc->srcpad, event);
+
         /* Release the buffers */
         gst_tidmaienc_deconfigure_codec(dmaienc);
-
-        ret = gst_pad_push_event(dmaienc->srcpad, event);
         break;
     case GST_EVENT_FLUSH_START:
         /* Flush the adapter */

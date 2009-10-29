@@ -42,6 +42,22 @@ void ti_mpeg4enc_set_codec_caps(GstElement *);
       }, \
     }
 
+gboolean ti_aaclcenc_params(GstElement *);
+void ti_aaclcenc_install_properties(GObjectClass *);
+void ti_aaclcenc_set_property(GObject *, guint, const GValue *, GParamSpec *);
+void ti_aaclcenc_get_property(GObject *, guint, GValue *, GParamSpec *);
+void ti_aaclcenc_set_codec_caps(GstElement *);
+#define TI_AAC_ENC_CUSTOM_DATA \
+    { .codec_name = "aaclcenc", \
+      .data = { \
+        .setup_params = ti_aaclcenc_params, \
+        .set_codec_caps = ti_aaclcenc_set_codec_caps, \
+        .install_properties = ti_aaclcenc_install_properties, \
+        .set_property = ti_aaclcenc_set_property, \
+        .get_property = ti_aaclcenc_get_property, \
+      }, \
+    }
+
 #endif
 
 /******************************************************************************

@@ -107,7 +107,6 @@ extern struct gstti_encoder_ops gstti_videnc0_ops;
 extern struct gstti_encoder_ops gstti_audenc0_ops;
 extern struct gstti_encoder_ops gstti_audenc1_ops;
 
-
 #if PLATFORM == dm357
 #  define DECODEENGINE "hmjcp"
 #  define ENCODEENGINE "hmjcp"
@@ -195,7 +194,7 @@ GstTIDmaidecData decoders[] = {
 #endif
 
 /* Audio decoders */
-#ifdef ENABLE_AACDEC_XDM1
+#ifdef ENABLE_AACHEDEC_XDM1
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_aac_sink_caps,
@@ -205,13 +204,34 @@ GstTIDmaidecData decoders[] = {
         .dops = &gstti_auddec1_ops,
         .parser = &gstti_aac_parser,
     },
-#elif defined(ENABLE_AACDEC_XDM0)
+#elif defined(ENABLE_AACHEDEC_XDM0)
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_aac_sink_caps,
         .srcCaps = &gstti_pcm_caps,
         .engineName = DECODEENGINE,
         .codecName = "aachedec",
+        .dops = &gstti_auddec0_ops,
+        .parser = &gstti_aac_parser,
+    },
+#endif
+#ifdef ENABLE_AACLCDEC_XDM1
+    {
+        .streamtype = "aac",
+        .sinkCaps = &gstti_aac_sink_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "aaclcdec",
+        .dops = &gstti_auddec1_ops,
+        .parser = &gstti_aac_parser,
+    },
+#elif defined(ENABLE_AACLCDEC_XDM0)
+    {
+        .streamtype = "aac",
+        .sinkCaps = &gstti_aac_sink_caps,
+        .srcCaps = &gstti_pcm_caps,
+        .engineName = DECODEENGINE,
+        .codecName = "aaclcdec",
         .dops = &gstti_auddec0_ops,
         .parser = &gstti_aac_parser,
     },
@@ -368,7 +388,7 @@ GstTIDmaiencData encoders[] = {
 
 /* Audio encoders */
 
-#ifdef ENABLE_AACENC_XDM1
+#ifdef ENABLE_AACHEENC_XDM1
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_pcm_caps,
@@ -376,8 +396,9 @@ GstTIDmaiencData encoders[] = {
         .engineName = ENCODEENGINE,
         .codecName = "aacheenc",
         .eops = &gstti_audenc1_ops,
+        .parser = &gstti_aac_parser,
     },
-#elif defined(ENABLE_AACENC_XDM0)
+#elif defined(ENABLE_AACHEENC_XDM0)
     {
         .streamtype = "aac",
         .sinkCaps = &gstti_pcm_caps,
@@ -385,6 +406,28 @@ GstTIDmaiencData encoders[] = {
         .engineName = ENCODEENGINE,
         .codecName = "aacheenc",
         .eops = &gstti_audenc0_ops,
+        .parser = &gstti_aac_parser,
+    },
+#endif
+#ifdef ENABLE_AACLCENC_XDM1
+    {
+        .streamtype = "aac",
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_aac_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "aaclcenc",
+        .eops = &gstti_audenc1_ops,
+        .parser = &gstti_aac_parser,
+    },
+#elif defined(ENABLE_AACLCENC_XDM0)
+    {
+        .streamtype = "aac",
+        .sinkCaps = &gstti_pcm_caps,
+        .srcCaps = &gstti_aac_src_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "aaclcenc",
+        .eops = &gstti_audenc0_ops,
+        .parser = &gstti_aac_parser,
     },
 #endif
 #ifdef ENABLE_MP3ENC_XDM1
