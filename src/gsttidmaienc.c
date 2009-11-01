@@ -897,13 +897,13 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     "rate",G_TYPE_INT,dmaienc->rate,
                                     (char *)NULL);
 
-		/* By default process up to 1024 samples per channel */
-        dmaienc->adapterSize = 1024 * (dmaienc->awidth >> 3) * dmaienc->channels;
+		/* By default process up to 2048 samples per channel */
+        dmaienc->adapterSize = 2048 * (dmaienc->awidth >> 3) * dmaienc->channels;
         dmaienc->inBufSize = dmaienc->adapterSize;
         dmaienc->singleOutBufSize = dmaienc->inBufSize;
         dmaienc->asampleSize = (dmaienc->awidth >> 3) * dmaienc->channels;
         dmaienc->asampleTime = 1000000000l / dmaienc->rate;
-
+        
         if (gclass->codec_data && gclass->codec_data->max_samples) {
    			dmaienc->adapterSize = gclass->codec_data->max_samples *
    				(dmaienc->awidth >> 3) * dmaienc->channels;
@@ -1202,6 +1202,8 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 	} else if (encoder->eops->codec_type == AUDIO) {
 		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
 			* dmaienc->asampleTime;
+GST_DEBUG("%d, %ld ,%ld = %ld",ret,(long)dmaienc->asampleSize,(long)dmaienc->asampleTime,
+    (long)GST_BUFFER_DURATION(outBuf));
 	}
 
     gst_buffer_unref(rawData);

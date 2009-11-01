@@ -50,6 +50,8 @@
 #include "gsttisupport_g711.h"
 #include "gsttidmairesizer.h"
 #include "gsttidmaiaccel.h"
+#include "ti_encoders.h"
+#include "ittiam_encoders.h"
 
 /* Audio caps */
 static GstStaticCaps gstti_pcm_caps = GST_STATIC_CAPS(
@@ -116,6 +118,13 @@ extern struct gstti_encoder_ops gstti_audenc1_ops;
 #else
 #  define DECODEENGINE "decode"
 #  define ENCODEENGINE "encode"
+#endif
+
+#ifdef CUSTOM_CODEC_SERVER
+#undef DECODEENGINE
+#undef ENCODEENGINE
+#define DECODEENGINE CUSTOM_CODEC_SERVER
+#define ENCODEENGINE CUSTOM_CODEC_SERVER
 #endif
 
 /* Video decoders */
@@ -497,6 +506,19 @@ GstTIDmaiencData encoders[] = {
       .srcCaps = &gstti_pcm_caps,
       .sinkCaps = &gstti_pcm_caps,
     },
+};
+
+/*
+ * Custom extended parameters for known codecs
+ * The preset will define whenever a particular codec combo uses one of this
+ */
+struct codec_custom_data_entry codec_custom_data[] = {                                                                  
+    TI_C64X_MPEG4_ENC_CUSTOM_DATA
+    TI_C64X_AACHE_ENC_CUSTOM_DATA
+    TI_C64X_AACLC_ENC_CUSTOM_DATA
+    ITTIAM_ARM_AACLC_ENC_CUSTOM_DATA
+    ITTIAM_ARM_MP3_ENC_CUSTOM_DATA
+    { .codec_name = NULL },
 };
 
 /* entry point to initialize the plug-in

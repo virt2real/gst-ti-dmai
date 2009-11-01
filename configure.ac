@@ -173,7 +173,8 @@ fi
 
 if test "x$preset" = "xdm355s" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	AC_DEFINE([DM355s_CODECS],[1],[ITTIAM Encoders])
+	AC_DEFINE([AACLC_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM AACLC Encoder])
+	AC_DEFINE([MP3_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM MP3 Encoder])
 	enable_mpeg4dec_xdm2=1;
   	enable_jpegdec_xdm1=1;
 	enable_mpeg4enc_xdm1=1;

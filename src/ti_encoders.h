@@ -23,13 +23,16 @@
 #ifndef __GST_TIC64ENC_H__
 #define __GST_TIC64ENC_H__
 
+#ifdef MPEG4_C64X_TI_ENCODER
+#include "caps.h"
+#include "gsttisupport_mpeg4.h"
 gboolean ti_mpeg4enc_params(GstElement *);
 void ti_mpeg4enc_install_properties(GObjectClass *);
 void ti_mpeg4enc_set_property(GObject *, guint, const GValue *, GParamSpec *);
 void ti_mpeg4enc_get_property(GObject *, guint, GValue *, GParamSpec *);
 void ti_mpeg4enc_set_codec_caps(GstElement *);
 
-#define TI_MPEG4_ENC_CUSTOM_DATA \
+#define TI_C64X_MPEG4_ENC_CUSTOM_DATA \
     { .codec_name = "mpeg4enc", \
       .data = { \
         .sinkCaps = &gstti_D1_uyvy_caps, \
@@ -40,23 +43,55 @@ void ti_mpeg4enc_set_codec_caps(GstElement *);
         .set_property = ti_mpeg4enc_set_property, \
         .get_property = ti_mpeg4enc_get_property, \
       }, \
-    }
+    },
+#else
+#define TI_C64X_MPEG4_ENC_CUSTOM_DATA
+#endif
+
+#if defined(AACLC_C64X_TI_ENCODER) || defined(AACHE_C64X_TI_ENCODER)
+#include "gsttisupport_aac.h"
+
+extern GstStaticCaps gstti_tiaac_pcm_caps;
 
 gboolean ti_aaclcenc_params(GstElement *);
 void ti_aaclcenc_install_properties(GObjectClass *);
 void ti_aaclcenc_set_property(GObject *, guint, const GValue *, GParamSpec *);
 void ti_aaclcenc_get_property(GObject *, guint, GValue *, GParamSpec *);
 void ti_aaclcenc_set_codec_caps(GstElement *);
-#define TI_AAC_ENC_CUSTOM_DATA \
+#define TI_C64X_AACLC_ENC_CUSTOM_DATA \
     { .codec_name = "aaclcenc", \
       .data = { \
         .setup_params = ti_aaclcenc_params, \
+        .sinkCaps = &gstti_tiaac_pcm_caps, \
         .set_codec_caps = ti_aaclcenc_set_codec_caps, \
         .install_properties = ti_aaclcenc_install_properties, \
         .set_property = ti_aaclcenc_set_property, \
         .get_property = ti_aaclcenc_get_property, \
+        .max_samples = 1024, \
       }, \
-    }
+    },
+
+gboolean ti_aacheenc_params(GstElement *);
+void ti_aacheenc_install_properties(GObjectClass *);
+void ti_aacheenc_set_property(GObject *, guint, const GValue *, GParamSpec *);
+void ti_aacheenc_get_property(GObject *, guint, GValue *, GParamSpec *);
+void ti_aacheenc_set_codec_caps(GstElement *);
+#define TI_C64X_AACHE_ENC_CUSTOM_DATA \
+    { .codec_name = "aacheenc", \
+      .data = { \
+        .setup_params = ti_aacheenc_params, \
+        .sinkCaps = &gstti_tiaac_pcm_caps, \
+        .set_codec_caps = ti_aacheenc_set_codec_caps, \
+        .install_properties = ti_aacheenc_install_properties, \
+        .set_property = ti_aacheenc_set_property, \
+        .get_property = ti_aacheenc_get_property, \
+        .max_samples = 2048, \
+      }, \
+    },
+#else
+#define TI_C64X_AACLC_ENC_CUSTOM_DATA
+#define TI_C64X_AACHE_ENC_CUSTOM_DATA
+#endif
 
 #endif
 

@@ -1,8 +1,7 @@
 /*
  * ittiam_encoders.c
  *
- * This file provides custom codec properties shared by most of TI
- * encoders
+ * This file provides custom codec properties shared Ittiam encoders
  *
  * Author:
  *     Diego Dompe, RidgeRun
@@ -30,8 +29,10 @@
 #include "gstticommonutils.h"
 #include "gsttidmaienc.h"
 #include <ti/sdo/dmai/ce/Aenc1.h>
-#ifdef DM355s_CODECS 
+#ifdef AACLC_ARM_ITTIAM_ENCODER 
 #include <ittiam/codecs/aaclc_enc/ieaacplusenc.h>
+#endif
+#ifdef MP3_ARM_ITTIAM_ENCODER 
 #include <ittiam/codecs/mp3_enc/imp3enc.h>   
 #endif
 
@@ -39,8 +40,7 @@
 GST_DEBUG_CATEGORY_EXTERN(gst_tidmaienc_debug);
 #define GST_CAT_DEFAULT gst_tidmaienc_debug
 
-#ifdef DM355s_CODECS
-
+#ifdef AACLC_ARM_ITTIAM_ENCODER
 gboolean ittiam_aacenc_params(GstElement *element){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
     AUDENC1_Params *params;
@@ -225,9 +225,9 @@ void ittiam_aacenc_get_property(GObject *object, guint prop_id,
         break;
     }
 }
+#endif
 
-
-/*********************** MP3 encoder  **************************/
+#ifdef MP3_ARM_ITTIAM_ENCODER
 gboolean ittiam_mp3enc_params(GstElement *element){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
     AUDENC1_Params *params;
@@ -307,7 +307,7 @@ void ittiam_mp3enc_get_property(GObject *object, guint prop_id,
         break;
     }
 }
-
+#endif
 
 #endif
 

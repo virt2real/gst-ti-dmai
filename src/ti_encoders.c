@@ -30,7 +30,7 @@
 #include <ti/sdo/dmai/ce/Venc1.h>
 #include <ti/sdo/codecs/mpeg4enc/imp4venc.h>
 #endif
-#ifdef AACLC_C64X_TI_ENCODER
+#if defined(AACLC_C64X_TI_ENCODER) || defined(AACHE_C64X_TI_ENCODER)
 #include <ti/sdo/dmai/ce/Aenc1.h>
 #include <ti/sdo/codecs/aaclcenc/iaacenc.h>
 #endif
@@ -344,7 +344,7 @@ void ti_mpeg4enc_get_property(GObject *object, guint prop_id,
 }
 #endif
 
-#ifdef AACLC_C64X_TI_ENCODER
+#if defined(AACLC_C64X_TI_ENCODER) || defined(AACHE_C64X_TI_ENCODER)
 enum
 {
     PROP_AACLCENC_START = 200,
@@ -354,7 +354,12 @@ enum
     PROP_DOWNMIX,
     PROP_VBRMODE,
     PROP_ANCRATE,
+    PROP_AACPROFILE,
 };
+
+/*
+ * AAC LC encoder properties
+ */
 
 gboolean ti_aaclcenc_params(GstElement *element){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
@@ -376,13 +381,13 @@ gboolean ti_aaclcenc_params(GstElement *element){
     eparams = (IAACENC_Params *)dmaienc->params;
     edynParams = (IAACENC_DynamicParams *)dmaienc->dynParams;
 
-    GST_INFO("Configuring the codec with the TI AAC LC Video encoder settings");
+    GST_INFO("Configuring the codec with the TI AAC Audio encoder settings");
 
     params->size = sizeof (IAACENC_Params);
     dynParams->size = sizeof (IAACENC_DynamicParams);
 
     eparams->outObjectType = AACENC_OBJ_TYP_LC;
-    eparams->outFileFormat = AACENC_TT_ADTS;
+    eparams->outFileFormat = AACENC_TT_RAW;
     eparams->useTns = AACENC_TRUE;
     eparams->usePns = AACENC_TRUE;
     eparams->downMixFlag = AACENC_FALSE;
@@ -428,7 +433,7 @@ void ti_aaclcenc_install_properties(GObjectClass *gobject_class){
         g_param_spec_int("outputformat",
             "AAC output format",
             "Output format: 0 - RAW, 1 - ADIF, 2 - ADTS",
-             0, 2, 2, G_PARAM_READWRITE));
+             0, 2, 0, G_PARAM_READWRITE));
     g_object_class_install_property(gobject_class, PROP_USETNS,
         g_param_spec_boolean("tns",
             "Use TNS",
@@ -437,12 +442,12 @@ void ti_aaclcenc_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_USEPNS,
         g_param_spec_boolean("pns",
             "Use PNS",
-            "Use PNS",
+            "Use PNS (ignored with HEv2 AAC profile)",
             TRUE, G_PARAM_READWRITE));
     g_object_class_install_property(gobject_class, PROP_DOWNMIX,
         g_param_spec_boolean("downmix",
             "Down mixing",
-            "Enable downmixing of channels",
+            "Enable downmixing of channels (only on LC profile)",
             FALSE, G_PARAM_READWRITE));
     g_object_class_install_property(gobject_class, PROP_VBRMODE,
         g_param_spec_int("vbrmode",
@@ -532,6 +537,109 @@ void ti_aaclcenc_get_property(GObject *object, guint prop_id,
         break;
     }
 }
+
+/*
+ * AAC HE Encoder properties, just a small extension over the LC ones
+ */
+
+gboolean ti_aacheenc_params(GstElement *element){
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
+    IAACENC_Params *eparams;
+    IAACENC_DynamicParams *edynParams;
+
+    if (!ti_aaclcenc_params(element))
+        return FALSE;
+    
+    eparams = (IAACENC_Params *)dmaienc->params;
+    edynParams = (IAACENC_DynamicParams *)dmaienc->dynParams;
+    eparams->outObjectType = AACENC_OBJ_TYP_PS;
+    eparams->audenc_params.maxBitRate = 64000;
+    eparams->audenc_params.bitRate = 
+        edynParams->audenc_dynamicparams.bitRate = 64000;
+    return TRUE;
+}
+
+void ti_aacheenc_set_codec_caps(GstElement *element){
+    ti_aaclcenc_set_codec_caps(element);
+}
+
+void ti_aacheenc_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_AACPROFILE,
+        g_param_spec_int("aacprofile",
+            "AAC profile",
+            "AAC profile: 0 - LC, 1 - HE (SBR), 2 - HEv2 (SBR+PS)",
+             0, 2, 2, G_PARAM_READWRITE));
+
+    ti_aaclcenc_install_properties(gobject_class);
+}
+
+
+void ti_aacheenc_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    IAACENC_Params *eparams = (IAACENC_Params *)dmaienc->params;
+    gint tmp;
+     
+    switch (prop_id) {
+    case PROP_AACPROFILE:
+        tmp = g_value_get_int(value);
+        switch (tmp){
+        case 0:
+            eparams->outObjectType = AACENC_OBJ_TYP_LC;
+            break;
+        case 1:
+            eparams->outObjectType = AACENC_OBJ_TYP_HEAAC;
+            break;
+        case 2:
+            eparams->outObjectType = AACENC_OBJ_TYP_PS;
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        return ti_aaclcenc_set_property(object,prop_id,value,pspec);
+    }
+}
+
+
+void ti_aacheenc_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    IAACENC_Params *eparams = (IAACENC_Params *)dmaienc->params;
+    gint tmp = 0;
+    
+    switch (prop_id) {
+    case PROP_AACPROFILE:
+        switch (eparams->outObjectType){
+        case AACENC_OBJ_TYP_LC:
+            tmp = 0;
+            break;
+        case AACENC_OBJ_TYP_HEAAC:
+            tmp = 1;
+            break;
+        case AACENC_OBJ_TYP_PS:
+            tmp = 2;
+            break;
+        }
+        g_value_set_int(value,tmp);
+        break;
+    default:
+        return ti_aaclcenc_get_property(object,prop_id,value,pspec);
+    }
+}
+
+GstStaticCaps gstti_tiaac_pcm_caps = GST_STATIC_CAPS(
+    "audio/x-raw-int, "
+    "   width = (int) 16, "
+    "   depth = (int) 16, "
+    "   endianness = (int) BYTE_ORDER, "
+    "   channels = (int) [ 1, 2 ], "
+    "   rate = (int) [ 8000, 96000 ]"
+);
+
 #endif
 
 /******************************************************************************

@@ -8,7 +8,7 @@ gsttividdec2.c gsttividdec.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
 gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c \
 gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c \
 gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c \
-gstticommonutils.c @XDC_CONFIG_BASENAME@.c ti_encoders.c caps.c
+gstticommonutils.c ti_encoders.c caps.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
