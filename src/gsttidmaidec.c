@@ -673,9 +673,10 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->outBufSize = decoder->dops->get_out_buffer_size(dmaidec);
     dmaidec->inBufSize = decoder->dops->get_in_buffer_size(dmaidec);
 
+    GST_DEBUG("Codec input buffer size %d\n",dmaidec->inBufSize);
+    GST_DEBUG("Codec output buffer size %d\n",dmaidec->outBufSize);
+
     /* Create codec output buffers */
-    GST_DEBUG("creating output buffer table\n");
-    
     switch (decoder->dops->codec_type) {
     case VIDEO: 
     {
@@ -1436,8 +1437,11 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
 
-    if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed))
+    if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed)){
+        GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
+            ("Failed to decode buffer"));
         goto failure;
+    }
 
     gstti_dmaidec_circ_buffer_flush(dmaidec,
         Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encData)));
