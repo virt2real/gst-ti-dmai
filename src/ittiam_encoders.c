@@ -309,8 +309,6 @@ void ittiam_mp3enc_get_property(GObject *object, guint prop_id,
 }
 #endif
 
-#endif
-
 /******************************************************************************
  * Custom ViM Settings for editing this file
  ******************************************************************************/
