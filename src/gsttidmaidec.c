@@ -1327,12 +1327,12 @@ static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
  * buffer
  */
 static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
-    GstBuffer *buf;
+    GstBuffer *buf = NULL;
     
     GST_DEBUG("Draining the circular buffer");
     if (dmaidec->tail != dmaidec->head){
         buf = __gstti_dmaidec_circ_buffer_peek(dmaidec,dmaidec->head);
-    } else {
+    } else if (dmaidec->circBuf){
         Buffer_Attrs Attrs = Buffer_Attrs_DEFAULT;
         Buffer_Handle hBuf;
         
