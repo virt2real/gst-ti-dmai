@@ -227,12 +227,31 @@ static gboolean gstti_audenc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
 
 }
 
+
+/******************************************************************************
+ * gstti_audenc1_get_outBufSize
+ ******************************************************************************/
+static gint gstti_audenc1_get_outBufSize(GstTIDmaienc *dmaienc){
+    return Aenc1_getOutBufSize(dmaienc->hCodec);
+}
+
+
+/******************************************************************************
+ * gstti_audenc1_get_inBufSize
+ ******************************************************************************/
+static gint gstti_audenc1_get_inBufSize(GstTIDmaienc *dmaienc){
+    return Aenc1_getInBufSize(dmaienc->hCodec);
+}
+
+
 struct gstti_encoder_ops gstti_audenc1_ops = {
     .xdmversion = "xDM 1.0",
     .codec_type = AUDIO,
     .default_setup_params = gstti_audenc1_setup_params,
     .set_codec_caps = gstti_audenc1_set_codec_caps,
     .install_properties = gstti_audenc1_install_properties,
+    .codec_get_inBufSize = gstti_audenc1_get_inBufSize,
+    .codec_get_outBufSize = gstti_audenc1_get_outBufSize,
     .set_property = gstti_audenc1_set_property,
     .get_property = gstti_audenc1_get_property,
     .codec_create = gstti_audenc1_create,

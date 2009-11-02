@@ -67,7 +67,6 @@ void ittiam_mp3enc_get_property(GObject *, guint, GValue *, GParamSpec *);
         .install_properties = ittiam_mp3enc_install_properties, \
         .set_property = ittiam_mp3enc_set_property, \
         .get_property = ittiam_mp3enc_get_property, \
-        .max_samples = 1152, \
       }, \
     },
 #else

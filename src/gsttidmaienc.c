@@ -29,11 +29,8 @@
 /*
  * TODO LIST
  *
- *  * Add codec_data handling
- *  * Add pad-alloc functionality
- *  * Reduce minimal input buffer requirements to 1 frame size and
- *    implement heuristics to break down the input tab into smaller chunks.
- *  * Allow custom properties for the class.
+ * - Image encoding
+ * - Speech encoding
  */
 
 #ifdef HAVE_CONFIG_H
@@ -410,7 +407,6 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
 
     dmaienc->outBuf             = NULL;
     dmaienc->inBuf              = NULL;
-    dmaienc->adapterSize        = 0;
     dmaienc->inBufSize          = 0;
     dmaienc->singleOutBufSize   = 0;
 
@@ -722,6 +718,9 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     if (!dmaienc->singleOutBufSize){
         dmaienc->singleOutBufSize = encoder->eops->codec_get_outBufSize(dmaienc);
     }
+    if (!dmaienc->inBufSize){
+        dmaienc->inBufSize = encoder->eops->codec_get_inBufSize(dmaienc);
+    }
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
@@ -862,10 +861,10 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
 
         dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
             dmaienc->colorSpace) * dmaienc->height;
-        /* We will set this value after configuring the codec below */
+        /* We need to ask the codec for the outbuffer size, even if we could
+         * guess a safe value, some encoders may have their own ideas...
+         */
         dmaienc->singleOutBufSize = 0;
-        dmaienc->adapterSize = dmaienc->inBufSize;
-
     } else if(!strncmp(mime, "audio/", 6)){
         /* Generic Audio Properties */
 
@@ -897,18 +896,19 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     "rate",G_TYPE_INT,dmaienc->rate,
                                     (char *)NULL);
 
-		/* By default process up to 2048 samples per channel */
-        dmaienc->adapterSize = 2048 * (dmaienc->awidth >> 3) * dmaienc->channels;
-        dmaienc->inBufSize = dmaienc->adapterSize;
-        dmaienc->singleOutBufSize = dmaienc->inBufSize;
+        /* Calculate some properties */
         dmaienc->asampleSize = (dmaienc->awidth >> 3) * dmaienc->channels;
         dmaienc->asampleTime = 1000000000l / dmaienc->rate;
-        
+
+        /* Ask the codec for the input and output buffer size */
+        dmaienc->inBufSize = 0;
+        dmaienc->singleOutBufSize = 0;
+
         if (gclass->codec_data && gclass->codec_data->max_samples) {
-   			dmaienc->adapterSize = gclass->codec_data->max_samples *
-   				(dmaienc->awidth >> 3) * dmaienc->channels;
-   			GST_DEBUG("Codec can process at most %d samples per call",
-   				gclass->codec_data->max_samples);
+               dmaienc->inBufSize = gclass->codec_data->max_samples *
+                   (dmaienc->awidth >> 3) * dmaienc->channels;
+               GST_DEBUG("Codec can process at most %d samples per call",
+                   gclass->codec_data->max_samples);
         }
     } else { //Add support for images
         return FALSE;
@@ -1202,8 +1202,6 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 	} else if (encoder->eops->codec_type == AUDIO) {
 		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
 			* dmaienc->asampleTime;
-GST_DEBUG("%d, %ld ,%ld = %ld",ret,(long)dmaienc->asampleSize,(long)dmaienc->asampleTime,
-    (long)GST_BUFFER_DURATION(outBuf));
 	}
 
     gst_buffer_unref(rawData);
@@ -1262,18 +1260,18 @@ static GstBuffer *adapter_get_buffer(GstTIDmaienc *dmaienc,
 	const guint8 *buffer = NULL;
 
     if (encoder->eops->codec_type == AUDIO){
-    	buffer = gst_adapter_peek(dmaienc->adapter,dmaienc->adapterSize);
+    	buffer = gst_adapter_peek(dmaienc->adapter,dmaienc->inBufSize);
 		buf = gst_buffer_new();
 		GST_BUFFER_DATA(buf) = (guint8 *)buffer;
-		GST_BUFFER_SIZE(buf) = dmaienc->adapterSize;
+		GST_BUFFER_SIZE(buf) = dmaienc->inBufSize;
 		GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
-		GST_BUFFER_DURATION(buf) = (dmaienc->adapterSize / dmaienc->asampleSize)
+		GST_BUFFER_DURATION(buf) = (dmaienc->inBufSize / dmaienc->asampleSize)
 			* dmaienc->asampleTime;
     } else {
     	/* For Video processing we want to use gst_adapter_take_buffer
     	 * because it keeps the timestamps
     	 */
-      	buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->adapterSize);
+      	buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->inBufSize);
     }
 
     return buf;
@@ -1308,7 +1306,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
         /* Push the buffer into the adapter*/
         gst_adapter_push(dmaienc->adapter,buf);
 
-        if (gst_adapter_available(dmaienc->adapter) >= dmaienc->adapterSize){
+        if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
 			buf = adapter_get_buffer(dmaienc,encoder);
         } else {
         	buf = NULL;
@@ -1338,7 +1336,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 					* dmaienc->asampleTime;
 			}
 
-			if (gst_adapter_available(dmaienc->adapter) >= dmaienc->adapterSize){
+			if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
 				buf = adapter_get_buffer(dmaienc,encoder);
 			}
        	}

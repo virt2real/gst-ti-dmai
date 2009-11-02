@@ -79,7 +79,6 @@ struct _GstTIDmaienc
     gint                outBufSize;
     gint                singleOutBufSize;
     gint                inBufSize;
-    gint                adapterSize;
     gint                outBufMultiple;
     Buffer_Handle       outBuf;
     Buffer_Handle       inBuf;
@@ -125,6 +124,7 @@ struct gstti_encoder_ops {
     gboolean                (* default_setup_params)(GstTIDmaienc *);
     void                    (* set_codec_caps)(GstTIDmaienc *);
     gint                    (* codec_get_outBufSize) (GstTIDmaienc *);
+    gint                    (* codec_get_inBufSize) (GstTIDmaienc *);
     gboolean                (* codec_create) (GstTIDmaienc *);
     void                    (* codec_destroy) (GstTIDmaienc *);
     gboolean                (* codec_process)

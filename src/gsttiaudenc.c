@@ -105,7 +105,7 @@ static void gstti_audenc0_get_property(GObject *object, guint prop_id,
 
 
 /******************************************************************************
- * gst_tividenc0_set_codec_caps
+ * gst_tiaudenc0_set_codec_caps
  *****************************************************************************/
 static void gstti_audenc0_set_codec_caps(GstTIDmaienc *dmaienc){
     AUDENC_Params *params = (AUDENC_Params *)dmaienc->params;
@@ -223,6 +223,20 @@ static gboolean gstti_audenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     return TRUE;
 }
 
+/******************************************************************************
+ * gstti_audenc0_get_outBufSize
+ ******************************************************************************/
+static gint gstti_audenc0_get_outBufSize(GstTIDmaienc *dmaienc){
+    return Aenc_getOutBufSize(dmaienc->hCodec);
+}
+
+/******************************************************************************
+ * gstti_audenc0_get_inBufSize
+ ******************************************************************************/
+static gint gstti_audenc0_get_inBufSize(GstTIDmaienc *dmaienc){
+    return Aenc_getInBufSize(dmaienc->hCodec);
+}
+
 /* Support for xDM 0.9 */
 struct gstti_encoder_ops gstti_audenc0_ops = {
     .xdmversion = "xDM 0.9",
@@ -230,6 +244,8 @@ struct gstti_encoder_ops gstti_audenc0_ops = {
     .default_setup_params = gstti_audenc0_setup_params,
     .set_codec_caps = gstti_audenc0_set_codec_caps,
     .install_properties = gstti_audenc0_install_properties,
+    .codec_get_inBufSize = gstti_audenc0_get_inBufSize,
+    .codec_get_outBufSize = gstti_audenc0_get_outBufSize,
     .set_property = gstti_audenc0_set_property,
     .get_property = gstti_audenc0_get_property,
     .codec_create = gstti_audenc0_create,
