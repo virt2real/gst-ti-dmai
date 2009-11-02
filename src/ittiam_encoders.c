@@ -76,9 +76,9 @@ gboolean ittiam_aacenc_params(GstElement *element){
     eparams->downmix = 0;
     eparams->useSpeechConfig = 0;
     eparams->fNoStereoPreprocessing = 0;
-    eparams->invQuant = 2;
+    eparams->invQuant = 0;
     eparams->useTns = 1;
-    eparams->use_ADTS = 1;
+    eparams->use_ADTS = 0;
     eparams->use_ADIF = 0;
     eparams->full_bandwidth = 0;
     
@@ -98,8 +98,7 @@ enum
     PROP_FNOSTEREOPREPROCESSING,
     PROP_INVQUANT,
     PROP_TNS,
-    PROP_ADTS,
-    PROP_ADIF,
+    PROP_OUTPUTFORMAT,
     PROP_FULLBANDWIDTH,
 };
 
@@ -112,12 +111,17 @@ void ittiam_aacenc_set_codec_caps(GstElement *element){
 }
 
 void ittiam_aacenc_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_OUTPUTFORMAT,
+        g_param_spec_int("outputformat",
+            "AAC output format",
+            "Output format: 0 - RAW, 1 - ADIF, 2 - ADTS",
+             0, 2, 0, G_PARAM_READWRITE));
+    
     g_object_class_install_property(gobject_class, PROP_DOWNMIX,
         g_param_spec_boolean("downmix",
             "Downmix",
             "Option to enable downmix",
             FALSE, G_PARAM_READWRITE));
-
 
     g_object_class_install_property(gobject_class, PROP_FNOSTEREOPREPROCESSING,
         g_param_spec_boolean("fnostereoprocessing",
@@ -137,18 +141,6 @@ void ittiam_aacenc_install_properties(GObjectClass *gobject_class){
             "TNS enable",
             "Flag for TNS enable",
              TRUE, G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_ADTS,
-        g_param_spec_boolean("adts",
-            "Enable ADTS header inclusion.",
-            "Flag to enable ADTS header inclusion",
-             TRUE, G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_ADIF,
-        g_param_spec_boolean("adif",
-            "Enable ADIF header inclusion",
-            "Flag to enable ADIF header inclusion ",
-             FALSE, G_PARAM_READWRITE));
              
     g_object_class_install_property(gobject_class, PROP_FULLBANDWIDTH,
         g_param_spec_boolean("fullbandwidth",
@@ -164,6 +156,7 @@ void ittiam_aacenc_set_property(GObject *object, guint prop_id,
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
     ITTIAM_EAACPLUSENC_Params *params = (ITTIAM_EAACPLUSENC_Params *)dmaienc->params;
+    gint tmp;
 
     switch (prop_id) {
     case PROP_DOWNMIX:
@@ -178,11 +171,22 @@ void ittiam_aacenc_set_property(GObject *object, guint prop_id,
     case PROP_TNS:
         params->useTns = g_value_get_boolean(value);
         break;
-    case PROP_ADTS:
-        params->use_ADTS = g_value_get_boolean(value);
-        break;
-    case PROP_ADIF:
-        params->use_ADIF = g_value_get_boolean(value);
+    case PROP_OUTPUTFORMAT:
+        tmp = g_value_get_int(value);
+        switch (tmp){
+        case 0:
+            params->use_ADTS = 0;
+            params->use_ADIF = 0;
+            break;
+        case 1:
+            params->use_ADTS = 0;
+            params->use_ADIF = 1;
+            break;
+        case 2:
+            params->use_ADTS = 1;
+            params->use_ADIF = 0;
+            break;            
+        }
         break;
     case PROP_FULLBANDWIDTH:
         params->full_bandwidth = g_value_get_boolean(value);
@@ -198,7 +202,8 @@ void ittiam_aacenc_get_property(GObject *object, guint prop_id,
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
     ITTIAM_EAACPLUSENC_Params *params = (ITTIAM_EAACPLUSENC_Params *)dmaienc->params;
-
+    gint tmp;
+    
     switch (prop_id) {
     case PROP_DOWNMIX:
         g_value_set_boolean(value,params->downmix ? TRUE : FALSE);
@@ -212,11 +217,15 @@ void ittiam_aacenc_get_property(GObject *object, guint prop_id,
     case PROP_TNS:
         g_value_set_boolean(value,params->useTns ? TRUE : FALSE);
         break;
-    case PROP_ADTS:
-        g_value_set_boolean(value,params->use_ADTS ? TRUE : FALSE);
-        break;
-    case PROP_ADIF:
-        g_value_set_boolean(value,params->use_ADIF ? TRUE : FALSE);
+    case PROP_OUTPUTFORMAT:
+        if (params->use_ADTS){
+            tmp = 2;
+        } else if (params->use_ADIF) {
+            tmp = 1;
+        } else {
+            tmp = 0;
+        }
+        g_value_set_int(value,tmp);
         break;
     case PROP_FULLBANDWIDTH:
         g_value_set_boolean(value,params->full_bandwidth ? TRUE : FALSE);
