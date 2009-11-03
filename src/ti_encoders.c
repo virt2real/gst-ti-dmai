@@ -587,6 +587,10 @@ void ti_aacheenc_set_property(GObject *object, guint prop_id,
         switch (tmp){
         case 0:
             eparams->outObjectType = AACENC_OBJ_TYP_LC;
+            /* If we use PNS with LC type, then we will hear mono with
+             * HEv1 decoders...
+             */
+            eparams->usePns = AACENC_FALSE;
             break;
         case 1:
             eparams->outObjectType = AACENC_OBJ_TYP_HEAAC;

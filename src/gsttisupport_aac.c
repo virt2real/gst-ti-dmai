@@ -64,12 +64,47 @@ static guint gst_get_aac_rateIdx (guint rate)
 
 static GstBuffer *aac_generate_codec_data (GstTIDmaienc *dmaienc,
     GstBuffer *buffer){
+    GstTIDmaiencData *encoder;
     GstBuffer *codec_data = NULL;
     guchar *data;
     guint sr_idx;
+    gchar profile = 0xff;
    
-    codec_data = gst_buffer_new_and_alloc(2);
-    data = GST_BUFFER_DATA(codec_data);
+    encoder = (GstTIDmaiencData *)
+        g_type_get_qdata(
+            G_OBJECT_CLASS_TYPE(G_OBJECT_GET_CLASS (dmaienc)),
+            GST_TIDMAIENC_PARAMS_QDATA);
+
+    if (!g_strcmp0("aaclcenc",encoder->codecName)) {
+        profile = LC_PROFILE;
+    } else if (!g_strcmp0("aacheenc",encoder->codecName)) {
+        GParamSpec *property = g_object_class_find_property(
+            G_OBJECT_GET_CLASS (dmaienc),"aacprofile");
+
+        if (property){
+            gint aacprofile;
+            GValue gvalue = { 0, };
+            
+            g_value_init (&gvalue, property->value_type);
+            g_object_get_property(G_OBJECT(dmaienc),"aacprofile",&gvalue);
+            aacprofile = g_value_get_int(&gvalue);
+            switch (aacprofile){
+            case 0:
+                profile = LC_PROFILE;
+                break;
+            case 1:
+            case 2:
+                profile = HEAAC_PROFILE;
+                break;
+            }
+        }
+    }
+    
+    if (profile == 0xff) {
+        GST_WARNING("Unknown AAC codec type, not providing codec data");
+        return NULL;
+    }
+    
     /*
      * Now create the codec data header, it goes like
      * 5 bit: profile
@@ -78,7 +113,9 @@ static GstBuffer *aac_generate_codec_data (GstTIDmaienc *dmaienc,
      * 3 bit: unused 
      */
     sr_idx = gst_get_aac_rateIdx(dmaienc->rate);
-    data[0] = ((LC_PROFILE & 0x1F) << 3) | ((sr_idx & 0xE) >> 1);
+    codec_data = gst_buffer_new_and_alloc(2);
+    data = GST_BUFFER_DATA(codec_data);
+    data[0] = ((profile & 0x1F) << 3) | ((sr_idx & 0xE) >> 1);
     data[1] = ((sr_idx & 0x1) << 7) | ((dmaienc->channels & 0xF) << 3);
     
     return codec_data;
@@ -166,8 +203,11 @@ static GstBuffer *aac_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
         (struct gstti_aac_parser_private *) dmaidec->parser_private;
     GstBuffer *aac_header_buf = NULL;
     GstStructure *capStruct;
+    GstBuffer    *codec_data = NULL;
+    const GValue *value;
     GstCaps      *caps = GST_BUFFER_CAPS(buf);
     guint8 *data = GST_BUFFER_DATA(buf);
+    guint aacprofile = 0x1;
 
     /* Find if we got a framed stream */
     if (!caps)
@@ -179,6 +219,16 @@ static GstBuffer *aac_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
 
     gst_structure_get_boolean(capStruct, "framed", &priv->framed);
     GST_DEBUG("The stream is %s framed",priv->framed ? "" : "not");
+    
+    if (!(value = gst_structure_get_value(capStruct, "codec_data"))){
+        GST_WARNING("No codec_data found, assuming an AAC LC stream");
+    }
+    codec_data = gst_value_get_buffer(value);
+    
+    aacprofile = (GST_BUFFER_DATA(codec_data)[0] >> 3) - 1;
+    GST_INFO("AAC profile is %d",aacprofile);
+    
+    gst_buffer_unref(codec_data);
 
 check_header:
     /* Now check if we already have some ADIF or ADTS header */
@@ -209,7 +259,7 @@ check_header:
     /* Set profile field in ADIF header - (2-bit long)
      * 0 - MAIN, 1 - LC,  2 - SCR  3 - LTR (2-bit long) 
      */
-    ADIF_SET_PROFILE(aac_header_buf, 0x1);
+    ADIF_SET_PROFILE(aac_header_buf, aacprofile);
 
     /* Set sampling rate index field in ADIF header - (4-bit long) */ 
     ADIF_SET_SAMPLING_FREQUENCY_INDEX(aac_header_buf, 

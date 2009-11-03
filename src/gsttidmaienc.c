@@ -68,8 +68,6 @@ enum
     PROP_COPY_OUTPUT,     /* copyOutput    (boolean) */
 };
 
-#define GST_TIDMAIENC_PARAMS_QDATA g_quark_from_static_string("dmaienc-params")
-
 /* Declare a global pointer to our element base class */
 static GstElementClass *parent_class = NULL;
 

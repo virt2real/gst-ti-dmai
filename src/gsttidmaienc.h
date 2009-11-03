@@ -43,6 +43,8 @@
 
 G_BEGIN_DECLS
 
+#define GST_TIDMAIENC_PARAMS_QDATA g_quark_from_static_string("dmaienc-params")
+
 /* Constants */
 typedef struct _GstTIDmaienc      GstTIDmaienc;
 typedef struct _GstTIDmaiencData  GstTIDmaiencData;
