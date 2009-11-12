@@ -73,12 +73,12 @@ GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
 
 
 static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc, 
-    GstBuffer *buffer){
+    GstBuffer **buffer){
     guchar *data = GST_BUFFER_DATA(buffer);
     gint i;
     GstBuffer *codec_data = NULL;
 
-    for (i = 0; i < GST_BUFFER_SIZE(buffer) - 5; ++i) {
+    for (i = 0; i < GST_BUFFER_SIZE(*buffer) - 5; ++i) {
         if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0
             && data[i + 3] == 1) { /* Find a NAL header */
             gint nal_type = data[i+4]&0x1f;
@@ -89,7 +89,7 @@ static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc,
         }
     }
 
-    if ((i != (GST_BUFFER_SIZE(buffer) - 4)) &&
+    if ((i != (GST_BUFFER_SIZE(*buffer) - 4)) &&
         (i != 0)) {
         /* We found a codec data */
         codec_data = gst_buffer_new_and_alloc(i);

@@ -63,7 +63,7 @@ static guint gst_get_aac_rateIdx (guint rate)
 }
 
 static GstBuffer *aac_generate_codec_data (GstTIDmaienc *dmaienc,
-    GstBuffer *buffer){
+    GstBuffer **buffer){
     GstTIDmaiencData *encoder;
     GstBuffer *codec_data = NULL;
     guchar *data;

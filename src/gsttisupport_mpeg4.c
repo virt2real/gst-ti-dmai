@@ -66,25 +66,40 @@ GstStaticCaps gstti_mpeg4_src_caps = GST_STATIC_CAPS(
 );
 
 static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc, 
-    GstBuffer *buffer){
-    guchar *data = GST_BUFFER_DATA(buffer);
+    GstBuffer **buffer){
+    guchar *data = GST_BUFFER_DATA(*buffer);
     gint i;
     GstBuffer *codec_data = NULL;
 
-    for (i = 0; i < GST_BUFFER_SIZE(buffer) - 4; ++i) {
+    /* TODO, isn't working */
+    return NULL;
+    
+    /* Search the object layer start code */
+    for (i = 0; i < GST_BUFFER_SIZE(*buffer) - 4; ++i) {
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && 
-            data[i + 3] == 0xB6) {
+            data[i + 3] == 0x20) {
+                break;
+        }
+    }
+    i++;
+    /* Search next start code */
+    for (; i < GST_BUFFER_SIZE(*buffer) - 4; ++i) {
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
                 break;
         }
     }
 
-    if ((i != (GST_BUFFER_SIZE(buffer) - 4)) &&
+    if ((i != (GST_BUFFER_SIZE(*buffer) - 4)) &&
         (i != 0)) {
         /* We found a codec data */
         codec_data = gst_buffer_new_and_alloc(i);
         memcpy(GST_BUFFER_DATA(codec_data),data,i);
-    }
 
+        /* Remove the codec data info from the output buffer */
+        GST_BUFFER_DATA(*buffer) = &data[i];
+        GST_BUFFER_SIZE(*buffer) -= i;
+    }
+    
     return codec_data;
 }
 
@@ -209,6 +224,9 @@ static GstBuffer *mpeg4_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
 
     codec_data = gst_value_get_buffer(value);
     priv->framed = TRUE;
+    
+    GST_DEBUG("Dumping the codec data");
+    gst_util_dump_mem(GST_BUFFER_DATA(codec_data),GST_BUFFER_SIZE(codec_data));
 
     return codec_data;
 
