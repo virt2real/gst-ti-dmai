@@ -247,7 +247,7 @@ check_header:
             ("Failed to allocate buffer for aac header"));
         return NULL;
     }
-
+    
     memset(GST_BUFFER_DATA(aac_header_buf), 0, MAX_AAC_HEADER_LENGTH);
 
     /* Set adif_id field in ADIF header  - Always "ADIF"  (32-bit long) */
@@ -270,6 +270,9 @@ check_header:
    
     /* Set comment field in ADIF header (8-bit long) */
     ADIF_SET_COMMENT_FIELD(aac_header_buf, 0x3);
+
+    GST_INFO("Generating ADIF header: profile %d, channels %d,rate %d",
+        aacprofile,dmaidec->channels,dmaidec->rate);
     
     return aac_header_buf;
 }
