@@ -499,9 +499,19 @@ static GstStateChangeReturn gst_tidmaidec_change_state(GstElement *element,
 
     /* Handle ramp-down state changes */
     switch (transition) {
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+        /* Release any stream specific allocations */
+        if (!gst_tidmaidec_deconfigure_codec(dmaidec)) {
+            GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
+                ("Failed to deconfigure codec"));
+            return GST_STATE_CHANGE_FAILURE;
+        }
+        break;
     case GST_STATE_CHANGE_READY_TO_NULL:
         /* Shut down decoder */
         if (!gst_tidmaidec_exit_decoder(dmaidec)) {
+            GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
+                ("Failed to destroy codec"));
             return GST_STATE_CHANGE_FAILURE;
         }
         break;
@@ -551,13 +561,6 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     if (dmaidec->hEngine == NULL) {
         GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
             ("failed to open codec engine \"%s\"", dmaidec->engineName));
-        return FALSE;
-    }
-    
-    /* Create codec */
-    if (!decoder->dops->codec_create(dmaidec)){
-        GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
-            ("Failed to create codec"));
         return FALSE;
     }
 
@@ -636,12 +639,6 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
         dmaidec->metaTab = NULL;
     }
 
-    if (dmaidec->hCodec) {
-        GST_LOG("closing video decoder\n");
-        decoder->dops->codec_destroy(dmaidec);
-        dmaidec->hCodec = NULL;
-    }
-
     if (dmaidec->hEngine) {
         GST_DEBUG("closing codec engine\n");
         Engine_close(dmaidec->hEngine);
@@ -668,13 +665,17 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
     GST_DEBUG("Init\n");
+    
+    /* Create codec */
+    if (!decoder->dops->codec_create(dmaidec)){
+        GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
+            ("Failed to create codec"));
+        return FALSE;
+    }
 
     /* Get the buffer sizes */
     dmaidec->outBufSize = decoder->dops->get_out_buffer_size(dmaidec);
     dmaidec->inBufSize = decoder->dops->get_in_buffer_size(dmaidec);
-
-    GST_DEBUG("Codec input buffer size %d\n",dmaidec->inBufSize);
-    GST_DEBUG("Codec output buffer size %d\n",dmaidec->outBufSize);
 
     /* Create codec output buffers */
     switch (decoder->dops->codec_type) {
@@ -697,6 +698,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             decoder->dops->outputUseMask;
 
         dmaidec->outBufSize = gfxAttrs.dim.lineLength * dmaidec->height;
+        dmaidec->inBufSize = dmaidec->outBufSize;
 
         dmaidec->hOutBufTab =
             BufTab_create(dmaidec->numOutputBufs, dmaidec->outBufSize,
@@ -718,6 +720,8 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             ("Unknown codec type, can't parse the caps"));
         return FALSE;
     }
+    GST_DEBUG("Codec input buffer size %d\n",dmaidec->inBufSize);
+    GST_DEBUG("Codec output buffer size %d\n",dmaidec->outBufSize);
 
     if (dmaidec->hOutBufTab == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -794,6 +798,12 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         GST_DEBUG("freeing output buffers\n");
         BufTab_delete(dmaidec->hOutBufTab);
         dmaidec->hOutBufTab = NULL;
+    }
+
+    if (dmaidec->hCodec) {
+        GST_LOG("closing video decoder\n");
+        decoder->dops->codec_destroy(dmaidec);
+        dmaidec->hCodec = NULL;
     }
 
     /* Status variables */
@@ -972,7 +982,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
     }
     case GST_EVENT_EOS:
         /* end-of-stream: process any remaining encoded frame data */
-        GST_DEBUG("EOS: draining remaining encoded data\n");
+        GST_INFO("EOS: draining remaining encoded data\n");
 
         /* We will generate a new EOS event upon exhausting the current
          * packets
@@ -993,8 +1003,6 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
                 break;
         }
 
-        gst_tidmaidec_deconfigure_codec(dmaidec);
-        
         ret = gst_pad_event_default(pad, event);
         goto done;
     case GST_EVENT_FLUSH_START:
