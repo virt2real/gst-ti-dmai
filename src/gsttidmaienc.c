@@ -574,8 +574,17 @@ static GstStateChangeReturn gst_tidmaienc_change_state(GstElement *element,
     switch (transition) {
     case GST_STATE_CHANGE_READY_TO_NULL:
         GST_DEBUG("GST_STATE_CHANGE_READY_TO_NULL");
+        /* Deconfigure the encoder */
+        if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+                ("Failed to deconfigure codec"));
+            return GST_STATE_CHANGE_FAILURE;
+        }
+        
         /* Shut down encoder */
         if (!gst_tidmaienc_exit_encoder(dmaienc)) {
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+                ("Failed to destroy codec"));
             return GST_STATE_CHANGE_FAILURE;
         }
         break;
@@ -968,10 +977,11 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
 
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_EOS:
+        /* TODO 
+         * Empty the adapter
+         */
+        
         ret = gst_pad_push_event(dmaienc->srcpad, event);
-
-        /* Release the buffers */
-        gst_tidmaienc_deconfigure_codec(dmaienc);
         break;
     case GST_EVENT_FLUSH_START:
         /* Flush the adapter */
