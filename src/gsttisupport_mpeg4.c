@@ -225,9 +225,6 @@ static GstBuffer *mpeg4_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
     codec_data = gst_value_get_buffer(value);
     priv->framed = TRUE;
     
-    GST_DEBUG("Dumping the codec data");
-    gst_util_dump_mem(GST_BUFFER_DATA(codec_data),GST_BUFFER_SIZE(codec_data));
-
     return codec_data;
 
 no_data:
