@@ -63,7 +63,9 @@ struct _GstTIDmaiResizer
   gint fps_d;
   ColorSpace_Type colorSpace;
   gboolean caps_is_first_time;
-  gint count_checking_outBuf;
+  gboolean flushing;
+  BufferGfx_Dimensions *dim;
+  gboolean *flagToClean;
 
   /*Buffers */
   BufTab_Handle outBufTab;
