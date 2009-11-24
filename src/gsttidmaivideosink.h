@@ -43,6 +43,10 @@ G_BEGIN_DECLS
 #define V4L2 "v4l2"
 #define FBDEV "fbdev"
 
+#define CLEANED 0
+#define NOT_CLEANED 1
+#define UYVY_BLACK 0x10801080
+
 #define GST_TYPE_TIDMAIVIDEOSINK \
   (gst_tidmaivideosink_get_type())
 #define GST_TIDMAIVIDEOSINK(obj) \
@@ -84,9 +88,14 @@ struct _GstTIDmaiVideoSink {
   gint          rotation;
   gint          x_position;
   gint          y_position;
+  gint          x_centering;
+  gint          y_centering;
   gboolean      resizer;
   gboolean      autoselect;
   gboolean      contiguousInputFrame;
+  gint          numBufClean; 
+  gint          numDispBuf; 
+  gint          *cleanBufCtrl;
 
   Display_Handle    hDisplay;
   Display_Attrs     dAttrs;

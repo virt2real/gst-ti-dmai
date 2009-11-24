@@ -148,6 +148,8 @@ static gboolean
 static GstStateChangeReturn
  gst_tidmaivideosink_change_state(GstElement * element,
      GstStateChange transition);
+static gboolean 
+ gst_tidmaivideosink_start(GstBaseSink *sink);
 static GstFlowReturn
  gst_tidmaivideosink_preroll(GstBaseSink * bsink, GstBuffer * buffer);
 static int
@@ -165,6 +167,10 @@ static gboolean
  gst_tidmaivideosink_event(GstBaseSink * bsink, GstEvent * event);
 static void
     gst_tidmaivideosink_init_env(GstTIDmaiVideoSink *sink);
+
+static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *sink);
+
+static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_Handle hBuf);
 
 static guint gst_tidmaivideosink_signals[LAST_SIGNAL] = { 0 };
 
@@ -281,11 +287,11 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
     /*Positioning*/
     g_object_class_install_property(gobject_class, PROP_X_POSITION,
         g_param_spec_int("x-position", "x position", "X positioning of"
-        " frame in display", -1, G_MAXINT, -1, G_PARAM_READWRITE));
+        " frame in display", G_MININT, G_MAXINT, -1, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_Y_POSITION,
         g_param_spec_int("y-position", "y position", "Y positioning of"
-        " frame in display", -1, G_MAXINT, -1, G_PARAM_READWRITE));
+        " frame in display", G_MININT, G_MAXINT, -1, G_PARAM_READWRITE));
 
     /**
     * GstTIDmaiVideoSink::handoff:
@@ -325,6 +331,8 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_get_caps);
     gstbase_sink_class->set_caps =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_set_caps);
+    gstbase_sink_class->start    =
+        GST_DEBUG_FUNCPTR(gst_tidmaivideosink_start);
     gstbase_sink_class->event    =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_event);
     gstbase_sink_class->preroll  =
@@ -421,7 +429,9 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->prevVideoStd   = 0;
     dmaisink->x_position     = -1;
     dmaisink->y_position     = -1;
-    
+    dmaisink->numBufClean    = 0;
+    dmaisink->x_centering = FALSE;
+    dmaisink->y_centering = FALSE;
 
     dmaisink->signal_handoffs = DEFAULT_SIGNAL_HANDOFFS;
 
@@ -444,6 +454,75 @@ static void gst_tidmaivideosink_string_cap(gchar * str)
     return;
 }
 
+
+/*******************************************************************************
+ * gst_tidmaivideosink_blackFill
+ * This funcion paints the display buffers after property or caps changes
+ *******************************************************************************/
+static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_Handle hBuf)
+{
+    switch (BufferGfx_getColorSpace(hBuf)) {
+        case ColorSpace_YUV422PSEMI:
+        {
+            Int8  *yPtr     = Buffer_getUserPtr(hBuf);
+            Int32  ySize    = Buffer_getSize(hBuf) / 2;
+            Int8  *cbcrPtr  = yPtr + ySize;
+            Int32  cbCrSize = Buffer_getSize(hBuf) - ySize;
+            Int    i;
+
+            /* Fill the Y plane */
+            for (i = 0; i < ySize; i++) {
+                yPtr[i] = 0x0;
+            }
+
+            for (i = 0; i < cbCrSize; i++) {
+                cbcrPtr[i] = 0x80;
+            }
+            break;
+        }
+
+        case ColorSpace_UYVY:
+        {
+            Int32 *bufPtr  = (Int32*)Buffer_getUserPtr(hBuf);
+            Int32  bufSize = Buffer_getSize(hBuf) / sizeof(Int32);
+            Int    i;
+
+            /* Make sure display buffer is 4-byte aligned */
+            assert((((UInt32) bufPtr) & 0x3) == 0);
+
+            for (i = 0; i < bufSize; i++) {
+                bufPtr[i] = UYVY_BLACK;
+            }
+            break;
+        }
+
+        case ColorSpace_RGB565:
+        {
+            memset(Buffer_getUserPtr(hBuf), 0, Buffer_getSize(hBuf));
+            break;
+        }
+
+        default:
+            GST_ELEMENT_WARNING(dmaisink, RESOURCE, SETTINGS, (NULL),  ("Unsupported color space, buffers not painted\n"));
+            break;
+    }
+}
+
+
+
+/*******************************************************************************
+ * gst_tidmaivideosink_clean_DisplayBuf
+ * This function paint completely of black the display buffers after change 
+ * of positioning or caps 
+*******************************************************************************/
+static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *dmaisink)
+{
+   int i;
+   dmaisink->numBufClean = dmaisink->numDispBuf;
+   for(i = 0; i < dmaisink->numDispBuf; i++){
+      dmaisink->cleanBufCtrl[i] = NOT_CLEANED;
+   }
+}
 
 /******************************************************************************
  * gst_tidmaivideosink_set_property
@@ -507,12 +586,15 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
             sink->contiguousInputFrame = g_value_get_boolean(value);
             break;
         case PROP_X_POSITION:
-            sink->x_position = g_value_get_int(value);
-            sink->x_position &= ~0xF;
+            sink->x_position = (g_value_get_int(value) & ~0x1);
+            /*Handling negative and positive number*/
+            sink->x_position = 
+              sink->x_position % 2 ?sink->x_position++:sink->x_position;
+            gst_tidmaivideosink_clean_DisplayBuf(sink);
             break;
         case PROP_Y_POSITION:
             sink->y_position = g_value_get_int(value);
-            sink->y_position &= ~0xF;
+            gst_tidmaivideosink_clean_DisplayBuf(sink);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1125,6 +1207,11 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
         sink->hDisplay = NULL;
     }
 
+    if(sink->cleanBufCtrl){
+      free(sink->cleanBufCtrl);
+    }
+
+
     GST_DEBUG("Finish\n");
 
     return TRUE;
@@ -1153,7 +1240,8 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
     Resize_Attrs rAttrs = Resize_Attrs_DEFAULT;
     Ccv_Attrs ccvAttrs = Ccv_Attrs_DEFAULT;
     Framecopy_Attrs fcAttrs = Framecopy_Attrs_DEFAULT;
-
+    BufTab_Handle hBufTab;
+    gint i;
 
     GST_DEBUG("Begin\n");
 
@@ -1176,11 +1264,23 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
         sink->hDisplay = Display_create(NULL, &sink->dAttrs);
 
         if ((sink->hDisplay == NULL) && (sink->autoselect == TRUE)) {
-            GST_DEBUG("Could not create display with videoStd %d.  Searching for next valid standard.\n",
+            GST_DEBUG("Could not create display with videoStd %d. " 
+              "Searching for next valid standard.\n",
             sink->dAttrs.videoStd);
             sink->prevVideoStd = sink->dAttrs.videoStd;
             continue;
         } else {
+             /* This code create a array to control the buffers cleaned after 
+              * change of capabilities or some properties 
+              *
+              */
+             hBufTab = Display_getBufTab(sink->hDisplay);
+             sink->numDispBuf = BufTab_getNumBufs(hBufTab);
+             sink->cleanBufCtrl = (int *)malloc(sink->numDispBuf * sizeof(int));
+             for(i=0; i < sink->numDispBuf; i++){
+                 sink->cleanBufCtrl[i] = CLEANED;
+             }
+             sink->numBufClean = 0;
             /* If the display was created, or failed to be created and
              * autoselect was not set break out of the loop.
              */
@@ -1255,7 +1355,7 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
     GstCaps              *temp_caps = GST_BUFFER_CAPS(buf);
     GstStructure         *structure = NULL;
     GstTIDmaiVideoSink   *sink      = GST_TIDMAIVIDEOSINK_CAST(bsink);
-    BufferGfx_Dimensions  dim;
+    BufferGfx_Dimensions  dim, inDim,inDimSave;
     gchar                 dur_str[64];
     gchar                 ts_str[64];
     gfloat                heightper;
@@ -1384,6 +1484,17 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
             goto cleanup;
         }
 
+        /*Removing garbage on display buffer*/
+        if(sink->numBufClean){
+           if(sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == NOT_CLEANED ){
+            gst_tidmaivideosink_blackFill(sink, hDispBuf);
+            sink->numBufClean--;
+            GST_LOG("Cleaning Display buffers: %d cleaned of %d buffers\n", sink->numDispBuf - sink->numBufClean , sink->numDispBuf);
+          }else{
+            GST_LOG("Display buffers had been cleaned");
+          }
+        }
+
         /* Retrieve the dimensions of the display buffer */
         BufferGfx_getDimensions(hDispBuf, &dim);
         GST_LOG("Display size %dx%d pitch %d\n",
@@ -1451,45 +1562,46 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
              * TODO: later add an option to resize the video.
              */
             /*WIDTH*/
-            if (width > dim.width) {
-                GST_INFO("Input image width (%d) greater than display width"
-                         " (%ld)\n Image cropped to fit screen\n",
-                         width, dim.width);
-                dim.x = 0;
-            } else {
-                if(sink->x_position >= 0){
-                   if(sink->x_position > dim.width || (sink->x_position + width  > dim.width)){
-                      dim.x     = dim.width - width;
-                      GST_INFO("X Positioning exceed limits, repositioning\n");
-                   }else{
-                      dim.x     = sink->x_position & ~1;
-                   }
-                }else{
-                  
-                   dim.x     = (((dim.width - width) / 2) & ~1) & ~0xF;
-                }
-                dim.width = width;
+
+            BufferGfx_getDimensions(inBuf, &inDim);
+            BufferGfx_getDimensions(inBuf, &inDimSave);
+            if(!sink->x_centering){
+               if(sink->x_position > 0){
+                  dim.x = sink->x_position;
+                  inDim.width = dim.width - sink->x_position;
+                  if(inDim.width > width){
+                     inDim.width = width;
+                  }else if(inDim.width < 0){
+                     inDim.width = 0;
+                  }
+               }else{
+                  dim.x = 0;
+                  inDim.width = sink->x_position + width > 0 ? sink->x_position + width : 0;
+                  inDim.x = -sink->x_position;// * inBufColorSpace);
+               }
+            }else{
+               dim.x = (dim.width-width)/2;
+            }
+            /*HEIGHT*/ 
+            if(!sink->y_centering){
+               if(sink->y_position > 0){
+                  dim.y = sink->y_position;
+                  inDim.height = dim.height - sink->y_position;
+                  if(inDim.height > height){
+                     inDim.height = height;
+                  }else if(inDim.height < 0){
+                     inDim.height = 0;
+                  }
+               }else{
+                  dim.y = 0;
+                  inDim.height = sink->y_position + height > 0 ? sink->y_position + height : 0;
+                  inDim.y = -sink->y_position;
+               }
+            }else{
+               dim.y = (dim.height-height)/2;
             }
 
-            /*HEIGHT*/
-            if (height > dim.height) {
-                GST_INFO("Input image height (%d) greater than display height"
-                         " (%ld)\n Image cropped to fit screen\n",
-                         height, dim.height);
-                dim.y = 0;
-            } else {
-                if(sink->y_position >= 0){
-                   if(sink->y_position > dim.height || (sink->y_position + height > dim.height)){
-                      dim.y     = dim.height - height;
-                      GST_INFO("Y Positioning exceed limits, repositioning\n");
-                   }else{
-                      dim.y     = sink->y_position;
-                   }
-                }else{
-                   dim.y     = ((dim.height - height) / 2);
-                }
-                dim.height = height;
-            }
+            BufferGfx_setDimensions(inBuf, &inDim);
             BufferGfx_setDimensions(hDispBuf, &dim);
 
             /* DM6467 Only: Color convert the 420Psemi decoded buffer from
@@ -1522,6 +1634,7 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
         }
 
         BufferGfx_resetDimensions(hDispBuf);
+        BufferGfx_setDimensions(inBuf, &inDimSave);
 
         /* Send filled buffer to display device driver to be displayed */
         if (Display_put(sink->hDisplay, hDispBuf) < 0) {
@@ -1652,6 +1765,26 @@ static GstCaps *gst_tidmaivideosink_get_caps(GstBaseSink * bsink)
     return gst_caps_copy(gst_pad_get_pad_template_caps
                (GST_VIDEO_SINK_PAD(sink)));
 }
+/*******************************************************************************
+ * gst_tidmaivideosink_start
+ *
+ * Function used to start some vars and apps.
+*******************************************************************************/
+
+static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
+{
+    GstTIDmaiVideoSink *dmaisink;
+    dmaisink = GST_TIDMAIVIDEOSINK(sink);
+
+    if(dmaisink->x_position == -1){
+      dmaisink->x_centering = TRUE;
+    } 
+    if(dmaisink->y_position == -1){
+      dmaisink->y_centering = TRUE;
+    } 
+    return TRUE;
+}
+
 
 
 /*******************************************************************************
@@ -1662,6 +1795,10 @@ static GstCaps *gst_tidmaivideosink_get_caps(GstBaseSink * bsink)
 static gboolean gst_tidmaivideosink_set_caps(GstBaseSink * bsink,
                     GstCaps * caps)
 {
+    GstTIDmaiVideoSink *sink;
+    sink = GST_TIDMAIVIDEOSINK(bsink);
+
+    gst_tidmaivideosink_clean_DisplayBuf(sink);
     /* Just return true for now.  I don't have anything to set here yet */
     return TRUE;
 }
