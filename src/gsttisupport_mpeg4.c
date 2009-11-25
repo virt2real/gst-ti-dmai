@@ -71,9 +71,6 @@ static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc,
     gint i;
     GstBuffer *codec_data = NULL;
 
-    /* TODO, isn't working */
-    return NULL;
-    
     /* Search the object layer start code */
     for (i = 0; i < GST_BUFFER_SIZE(*buffer) - 4; ++i) {
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && 
