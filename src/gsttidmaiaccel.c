@@ -331,14 +331,6 @@ static GstFlowReturn gst_tidmaiaccel_transform (GstBaseTransform *trans,
     return GST_FLOW_OK;
 }
 
-#if 0
-if (dmaidec->hOutBufTab) {
-    GST_DEBUG("freeing output buffers\n");
-    BufTab_delete(dmaidec->hOutBufTab);
-    dmaidec->hOutBufTab = NULL;
-}
-#endif
-
 /******************************************************************************
  * Custom ViM Settings for editing this file
  ******************************************************************************/
