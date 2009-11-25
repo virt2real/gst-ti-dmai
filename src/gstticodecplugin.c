@@ -50,6 +50,7 @@
 #include "gsttisupport_g711.h"
 #include "gsttidmairesizer.h"
 #include "gsttidmaiaccel.h"
+#include "gsttipriority.h"
 #include "ti_encoders.h"
 #include "ittiam_encoders.h"
 
@@ -546,6 +547,10 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
 
     if (!gst_element_register(TICodecPlugin, "dmaiaccel",
         GST_RANK_PRIMARY,GST_TYPE_TIDMAIACCEL))
+        return FALSE;
+
+    if (!gst_element_register(TICodecPlugin, "priority",
+        GST_RANK_PRIMARY,GST_TYPE_TIPRIORITY))
         return FALSE;
 
 #ifdef ENABLE_VIDEOSINK
