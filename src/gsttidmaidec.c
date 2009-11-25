@@ -345,7 +345,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->hEngine            = NULL;
     dmaidec->hCodec             = NULL;
-    dmaidec->flushing    		= FALSE;
+    dmaidec->flushing           = FALSE;
     dmaidec->parser_started     = FALSE;
 
     dmaidec->outBufSize         = 0;
@@ -1182,6 +1182,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     GstBuffer *meta;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
+    gboolean ret = TRUE;
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1189,9 +1190,8 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     
     /* If we are flushing, discard data and flush the circular buffer */
     if (dmaidec->flushing){
-        gst_buffer_unref(buf);
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
-        return TRUE;
+        goto out;
     }
     
     GST_DEBUG("Pushing a buffer of size %d, circbuf is currently %d",
@@ -1207,7 +1207,8 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
         if ((codec_data = decoder->parser->get_stream_prefix(dmaidec,buf))) {
             if (!validate_circBuf_space(dmaidec,
                  GST_BUFFER_SIZE(codec_data) + GST_BUFFER_SIZE(buf))){
-                return FALSE;
+                ret = FALSE;
+                goto out;
             }
             GST_BUFFER_OFFSET(meta) = dmaidec->head;
             memcpy(&data[dmaidec->head],GST_BUFFER_DATA(codec_data),
@@ -1217,14 +1218,16 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
             gst_buffer_unref(codec_data);
         } else {
             if (!validate_circBuf_space(dmaidec,GST_BUFFER_SIZE(buf))){
-                return FALSE;
+                ret = FALSE;
+                goto out;
             }
             GST_BUFFER_OFFSET(meta) = dmaidec->head;
         }
         dmaidec->codec_data_parsed = TRUE;
     } else {
         if (!validate_circBuf_space(dmaidec,GST_BUFFER_SIZE(buf))){
-            return FALSE;
+            ret = FALSE;
+            goto out;
         }
         GST_BUFFER_OFFSET(meta) = dmaidec->head;
     }
@@ -1237,9 +1240,10 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     
     /* Increases the head */
     dmaidec->head += GST_BUFFER_SIZE(buf);
+
+out:
     gst_buffer_unref(buf);
-    
-    return TRUE;
+    return ret;
 }
 
 /*
@@ -1268,7 +1272,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         /* Find the start of the next frame */
         framepos = decoder->parser->parse(dmaidec);
         if (dmaidec->flushing) {
-            framepos = NULL;
+            framepos = -1;
             /* Flush the circular buffer */
             gstti_dmaidec_circ_buffer_flush(dmaidec,0);
         }
@@ -1444,6 +1448,15 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
 
     gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
+    
+    /* Worth to try to flush before sleeping for a while on the decode
+       operation
+     */
+    if (dmaidec->flushing){
+	gst_buffer_unref(encData);
+        gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
+        return GST_FLOW_OK;
+    }
 
     if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed)){
         GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
@@ -1722,10 +1735,10 @@ static void gst_tidmaidec_stop_flushing(GstTIDmaidec *dmaidec)
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    dmaidec->flushing = FALSE;
-
     if (dmaidec->parser_started)
         decoder->parser->flush_stop(dmaidec->parser_private);
+
+    dmaidec->flushing = FALSE;
 }
 
 /******************************************************************************
