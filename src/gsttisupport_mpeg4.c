@@ -148,13 +148,11 @@ static gint mpeg4_parse(GstTIDmaidec *dmaidec){
         }
     } else {
         gchar *data = (gchar *)Buffer_getUserPtr(dmaidec->circBuf);
-        gint avail;
 
         GST_DEBUG("Marker is at %d",dmaidec->marker);
         /* Find next VOP start header */
-        avail = dmaidec->head - dmaidec->marker;
             
-        for (i = dmaidec->marker; i < avail - 4; i++) {
+        for (i = dmaidec->marker; i <= dmaidec->head - 4; i++) {
             if (priv->flushing){
                 return -1;
             }
