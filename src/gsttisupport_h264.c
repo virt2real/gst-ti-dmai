@@ -634,6 +634,7 @@ static int gst_h264_sps_pps_calBufSize (GstBuffer *codec_data)
 
 struct gstti_parser_ops gstti_h264_parser = {
     .numInputBufs = 1,
+    .trustme = TRUE,
     .init  = h264_init,
     .clean = h264_clean,
     .parse = h264_parse,

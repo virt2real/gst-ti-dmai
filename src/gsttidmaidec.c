@@ -1451,8 +1451,13 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         goto failure;
     }
 
-    gstti_dmaidec_circ_buffer_flush(dmaidec,
-        Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encData)));
+    if (decoder->parser->trustme){
+	/* In parser we trust */
+        gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
+    } else {
+        gstti_dmaidec_circ_buffer_flush(dmaidec,
+	    Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encData)));
+    }
     gst_buffer_unref(encData);
     encData = NULL;
 
@@ -1461,6 +1466,16 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * different one than the one we passed it.
          */
         hDstBuf = decoder->dops->codec_get_data(dmaidec);
+    }
+    
+    /* Release buffers no longer in use by the codec */
+    if (decoder->dops->codec_get_free_buffers){
+        hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
+        while (hFreeBuf) {
+            GST_LOG("Freeing buffer %p",hFreeBuf);
+            Buffer_freeUseMask(hFreeBuf, decoder->dops->outputUseMask);
+            hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
+        }
     }
     
     /* If we were given back decoded frame, push it to the source pad */
@@ -1510,7 +1525,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaidec->srcpad));
 
         if (TRUE) { /* Forward playback*/
-            GST_LOG("Pushing buffer downstream");
+            GST_LOG("Pushing buffer downstream: %p",outBuf);
+
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
                     GST_DEBUG("push to source pad failed while in flushing state\n");
@@ -1548,16 +1564,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             hDstBuf = decoder->dops->codec_get_data(dmaidec);
         } else {
             hDstBuf = NULL;
-        }
-    }
-    
-    /* Release buffers no longer in use by the codec */
-    if (decoder->dops->codec_get_free_buffers){
-        hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
-        while (hFreeBuf) {
-            GST_LOG("Freeing buffer %p",hFreeBuf);
-            Buffer_freeUseMask(hFreeBuf, decoder->dops->outputUseMask);
-            hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         }
     }
 

@@ -279,6 +279,7 @@ check_header:
 
 struct gstti_parser_ops gstti_aac_parser = {
     .numInputBufs = 1,
+    .trustme = TRUE,
     .init  = aac_init,
     .clean = aac_clean,
     .parse = aac_parse,

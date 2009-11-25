@@ -63,6 +63,7 @@ static void generic_flush_stop(void *private){
 
 struct gstti_parser_ops gstti_generic_parser = {
     .numInputBufs = 3,
+    .trustme = FALSE,
     .init  = generic_init,
     .clean = generic_clean,
     .parse = generic_parse,

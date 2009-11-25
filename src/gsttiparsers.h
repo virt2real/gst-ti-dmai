@@ -33,6 +33,10 @@ struct gstti_parser_ops {
      * defined in the number of times the size of one output buffer
      */
     gint            numInputBufs;
+    /* Tell what ever we should trust the parser buffer results over the
+     * info returned by the codec
+     */
+    gboolean        trustme;
     /*
      * Parser init
      * This function initializes any data structures required by the parser

@@ -232,6 +232,7 @@ no_data:
 
 struct gstti_parser_ops gstti_mpeg4_parser = {
     .numInputBufs = 1,
+    .trustme = TRUE,
     .init  = mpeg4_init,
     .clean = mpeg4_clean,
     .parse = mpeg4_parse,
