@@ -38,6 +38,8 @@
 #include <ti/sdo/dmai/Resize.h>
 #include "gsttidmaibuffertransport.h"
 
+#define UYVY_BLACK 0x10801080
+
 G_BEGIN_DECLS
 #define GST_TYPE_DMAI_RESIZER             (gst_dmai_resizer_get_type())
 #define GST_DMAI_RESIZER(obj)             (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_DMAI_RESIZER, GstTIDmaiResizer))
@@ -86,7 +88,9 @@ struct _GstTIDmaiResizer
   gint target_height;
   gint target_width_max;
   gint target_height_max;
-  gint aspect_radio;
+  gint aspectradio_relation_width;
+  gint aspectradio_relation_height;
+  gboolean keep_aspect_radio;
 
   /*Resizer */
   Resize_Handle Resizer;

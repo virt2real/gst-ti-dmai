@@ -49,7 +49,9 @@ enum
   ARG_TARGET_HEIGHT,
   ARG_TARGET_WIDTH_MAX,
   ARG_TARGET_HEIGHT_MAX,
-  ARG_ASPECT_RADIO,
+  ARG_ASPECTRADIO_RELATION_WIDTH,
+  ARG_ASPECTRADIO_RELATION_HEIGHT,
+  ARG_KEEP_ASPECT_RADIO,
   ARG_NUMBER_OUTPUT_BUFFERS,
 };
 
@@ -158,7 +160,21 @@ gst_dmai_resizer_class_init (GstTIDmaiResizerClass * klass)
           G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
-      ARG_ASPECT_RADIO,
+      ARG_ASPECTRADIO_RELATION_WIDTH,
+      g_param_spec_int ("aspect-radio-relation-width",
+          "aspect-radio-relation-width",
+          "", 0, G_MAXINT, 0,
+          G_PARAM_READWRITE));
+
+  g_object_class_install_property (G_OBJECT_CLASS (klass),
+      ARG_ASPECTRADIO_RELATION_HEIGHT,
+      g_param_spec_int ("aspect-radio-relation-height",
+          "aspect-radio-relation-height",
+          "", 0, G_MAXINT, 0,
+          G_PARAM_READWRITE));
+
+  g_object_class_install_property (G_OBJECT_CLASS (klass),
+      ARG_KEEP_ASPECT_RADIO,
       g_param_spec_boolean ("aspect-radio",
           "aspect-radio", "Keep aspect radio", TRUE, G_PARAM_READWRITE));
 
@@ -208,8 +224,16 @@ gst_dmai_resizer_get_property (GObject * object, guint prop_id,
       g_value_set_int (value, dmairesizer->target_height_max);
       break;
     }
-    case ARG_ASPECT_RADIO:{
-      g_value_set_boolean (value, dmairesizer->aspect_radio);
+    case ARG_KEEP_ASPECT_RADIO:{
+      g_value_set_boolean (value, dmairesizer->keep_aspect_radio);
+      break;
+    }
+    case ARG_ASPECTRADIO_RELATION_WIDTH:{
+      g_value_set_int (value, dmairesizer->aspectradio_relation_width);
+      break;
+    }
+    case ARG_ASPECTRADIO_RELATION_HEIGHT:{
+      g_value_set_int (value, dmairesizer->aspectradio_relation_height);
       break;
     }
     case ARG_NUMBER_OUTPUT_BUFFERS:{
@@ -263,7 +287,9 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->target_height = 0;
   dmairesizer->target_width_max = 0;
   dmairesizer->target_height_max = 0;
-  dmairesizer->aspect_radio = FALSE;
+  dmairesizer->keep_aspect_radio = FALSE;
+  dmairesizer->aspectradio_relation_width = 0;
+  dmairesizer->aspectradio_relation_height = 0;
   dmairesizer->caps_is_first_time = TRUE;
   dmairesizer->flushing = FALSE;
   dmairesizer->clean_bufTab = FALSE;
@@ -476,8 +502,16 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
       dmairesizer->target_height_max = g_value_get_int (value);
       break;
     }
-    case ARG_ASPECT_RADIO:{
-      dmairesizer->aspect_radio = g_value_get_boolean (value);
+    case ARG_KEEP_ASPECT_RADIO:{
+      dmairesizer->keep_aspect_radio = g_value_get_boolean (value);
+      break;
+    }
+    case ARG_ASPECTRADIO_RELATION_WIDTH:{
+      dmairesizer->aspectradio_relation_width = g_value_get_int (value);
+      break;
+    }
+    case ARG_ASPECTRADIO_RELATION_HEIGHT:{
+      dmairesizer->aspectradio_relation_height = g_value_get_int (value);
       break;
     }
     case ARG_NUMBER_OUTPUT_BUFFERS:{
@@ -544,6 +578,61 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   return ret;
 }
 
+/*******************************************************************************
+ * gst_tidmaivideosink_blackFill
+ * This funcion paints the display buffers after property or caps changes
+ *******************************************************************************/
+static void blackFill(GstTIDmaiResizer *dmairesizer, Buffer_Handle hBuf)
+{
+    switch (BufferGfx_getColorSpace(hBuf)) {
+        case ColorSpace_YUV422PSEMI:
+        {
+            Int8  *yPtr     = Buffer_getUserPtr(hBuf);
+            Int32  ySize    = Buffer_getSize(hBuf) / 2;
+            Int8  *cbcrPtr  = yPtr + ySize;
+            Int32  cbCrSize = Buffer_getSize(hBuf) - ySize;
+            Int    i;
+
+            /* Fill the Y plane */
+            for (i = 0; i < ySize; i++) {
+                yPtr[i] = 0x0;
+            }
+
+            for (i = 0; i < cbCrSize; i++) {
+                cbcrPtr[i] = 0x80;
+            }
+            break;
+        }
+
+        case ColorSpace_UYVY:
+        {
+            Int32 *bufPtr  = (Int32*)Buffer_getUserPtr(hBuf);
+            Int32  bufSize = Buffer_getSize(hBuf) / sizeof(Int32);
+            Int    i;
+
+            /* Make sure display buffer is 4-byte aligned */
+            assert((((UInt32) bufPtr) & 0x3) == 0);
+
+            for (i = 0; i < bufSize; i++) {
+                bufPtr[i] = UYVY_BLACK;
+            }
+            break;
+        }
+
+        case ColorSpace_RGB565:
+        {
+            memset(Buffer_getUserPtr(hBuf), 0, Buffer_getSize(hBuf));
+            break;
+        }
+
+        default:
+            GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),  ("Unsupported color space, buffers not painted\n"));
+            break;
+    }
+}
+
+
+
 /*******
 *   Resize_buffer
 *
@@ -592,6 +681,24 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
     dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
       (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
     dmairesizer->flagToClean[IDBuf] = FALSE;
+    if(dmairesizer->keep_aspect_radio){
+      blackFill(dmairesizer, DstBuf);
+    }
+  }
+
+  if(dmairesizer->keep_aspect_radio){
+     /*Sw/Sh > Tw/Th*/
+     if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
+     /*Horizontal*/
+     dmairesizer->dim[IDBuf].height = dmairesizer->target_width * dmairesizer->source_height / dmairesizer->source_width;
+     dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+
+     }else{
+     /*Vertical*/
+     dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
+     dmairesizer->dim[IDBuf].x = (dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2;
+     }
+
   }
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
@@ -610,6 +717,23 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
         ("Failed executing the resizer"));
     return NULL;
   }
+
+  /*Reseting values after resize to send buffer correctly*/
+  if(dmairesizer->keep_aspect_radio){
+     if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
+     /*Horizontal*/
+     dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
+     dmairesizer->dim[IDBuf].y = 0;
+     }else{
+     /*Vertical*/
+     dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
+     dmairesizer->dim[IDBuf].x = 0;
+     }
+  }
+  BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
+
+
+
 
   return DstBuf;
 }
