@@ -216,6 +216,9 @@ gst_tipriority_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
     if ((newnice == -1) && (errno)) {
       GST_ELEMENT_WARNING (priority, RESOURCE, FAILED, (NULL),
           ("Failed to set the request nice level, errno %d", errno));
+    } else {
+      GST_INFO ("%s: nice value is now %d",
+          gst_element_get_name (priority), newnice);
     }
     priority->nice_changed = 0;
     priority->nice = newnice;
