@@ -266,6 +266,8 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->aspect_radio = FALSE;
   dmairesizer->caps_is_first_time = TRUE;
   dmairesizer->flushing = FALSE;
+  dmairesizer->clean_bufTab = FALSE;
+  
 
 
 #if PLATFORM == dm6467
@@ -356,7 +358,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   /* Both the codec and the GStreamer pipeline can own a buffer */
   gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
-  outBufSize = gfxAttrs.dim.lineLength * dmairesizer->outBufHeight;
+  outBufSize = gfxAttrs.dim.lineLength * gfxAttrs.dim.height;
   dmairesizer->outBufTab =
       BufTab_create (dmairesizer->numOutBuf, outBufSize,
       BufferGfx_getBufferAttrs (&gfxAttrs));
@@ -384,7 +386,6 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
   GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (object);
   GstCaps *caps;
   GstStructure *capStruct;
-  gint count;
 
   switch (prop_id) {
     case ARG_SOURCE_X:{
@@ -436,9 +437,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
         gst_pad_set_caps (dmairesizer->srcpad, caps);
         gst_caps_unref (caps);
       }
-      for(count = 0; count < dmairesizer->numOutBuf; count++){
-         dmairesizer->flagToClean[count]=TRUE;
-      }
+        dmairesizer->clean_bufTab=TRUE;
       break;
     }
     case ARG_TARGET_HEIGHT:{
@@ -460,9 +459,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
         gst_pad_set_caps (dmairesizer->srcpad, caps);
         gst_caps_unref (caps);
       }
-      for(count = 0; count < dmairesizer->numOutBuf; count++){
-         dmairesizer->flagToClean[count]=TRUE;
-      }
+      dmairesizer->clean_bufTab=TRUE;
       break;
     }
     case ARG_TARGET_WIDTH_MAX:{
@@ -502,7 +499,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   GstStructure *structure, *capStruct;
   gboolean ret = FALSE;
   dmairesizer = GST_DMAI_RESIZER (gst_pad_get_parent (pad));
-  gint count;
   
   if (!GST_PAD_IS_SINK (pad))
     return TRUE;
@@ -532,11 +528,8 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   if(dmairesizer->caps_is_first_time){
     setup_outputBuf (dmairesizer);
     dmairesizer->caps_is_first_time = FALSE;
-  }else{
-    for(count = 0; count < dmairesizer->numOutBuf; count++){
-      dmairesizer->flagToClean[count]=TRUE;
-    }
   }
+  dmairesizer->clean_bufTab = TRUE;
 
   gst_caps_ref(caps);
   caps = gst_caps_make_writable (caps);
@@ -565,6 +558,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
 {
   Buffer_Handle DstBuf;
   DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
+  int count;
 
   if (DstBuf == NULL) {
     GST_INFO ("Failed to get free buffer, waiting on bufTab\n");
@@ -576,6 +570,13 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
           ("failed to get a free contiguous buffer from BufTab"));
     }
+  }
+
+  if(dmairesizer->clean_bufTab){
+    for(count = 0; count < dmairesizer->numOutBuf; count++){
+         dmairesizer->flagToClean[count]=TRUE;
+    }
+    dmairesizer->clean_bufTab=FALSE;
   }
 
  /*Using array to handle the buftab dimension*/

@@ -64,6 +64,7 @@ struct _GstTIDmaiResizer
   ColorSpace_Type colorSpace;
   gboolean caps_is_first_time;
   gboolean flushing;
+  gboolean clean_bufTab;
   BufferGfx_Dimensions *dim;
   gboolean *flagToClean;
 
