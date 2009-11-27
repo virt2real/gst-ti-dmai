@@ -52,6 +52,11 @@ struct _GstTIPriority
 
   gint nice;
   gint nice_changed;
+  gint rtpriority;
+  gint scheduler;
+  gboolean rt_changed;
+  gint rtmin;
+  gint rtmax;
 };
 
 /* _GstTIPriorityClass object */
