@@ -11,6 +11,7 @@
  *
  * Contributor:
  *     Cristina Murillo, RidgeRun
+ *     Kapil Agrawal, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
@@ -1073,6 +1074,7 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
     if (GST_IS_TIDMAIBUFFERTRANSPORT(buf)){
         switch (encoder->eops->codec_type) {
             case VIDEO:
+            case IMAGE: 
                 if (Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
                     == Buffer_Type_GRAPHICS){
                     /* Easy: we got a gfx buffer from upstream */
@@ -1108,6 +1110,7 @@ Buffer_Handle get_raw_buffer(GstTIDmaienc *dmaienc, GstBuffer *buf){
 
         switch (encoder->eops->codec_type) {
             case VIDEO:
+            case IMAGE: 
                 /* Slow path: Copy the data into gfx buffer */
 
                 gfxAttrs.dim.width          = dmaienc->width;
@@ -1198,7 +1201,8 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 
 	ret = (int)Buffer_getNumBytesUsed(hSrcBuf);
 
-	if (encoder->eops->codec_type == VIDEO) {
+	if (encoder->eops->codec_type == VIDEO
+                || encoder->eops->codec_type == IMAGE) {
 	    /* DMAI set the buffer type on the input buffer, since only this one
 	     * is a GFX buffer
 	     */

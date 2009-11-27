@@ -8,6 +8,7 @@
  * Contributor:
  *      Diego Dompe, RidgeRun Engineering
  *      Cristina Murillo, RidgeRun
+ *      Kapil Agrawal, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
@@ -48,6 +49,7 @@
 #include "gsttisupport_mp3.h"
 #include "gsttisupport_wma.h"
 #include "gsttisupport_g711.h"
+#include "gsttisupport_jpeg.h"
 #include "gsttidmairesizer.h"
 #include "gsttidmaiaccel.h"
 #include "gsttipriority.h"
@@ -109,6 +111,8 @@ extern struct gstti_encoder_ops gstti_videnc1_ops;
 extern struct gstti_encoder_ops gstti_videnc0_ops;
 extern struct gstti_encoder_ops gstti_audenc0_ops;
 extern struct gstti_encoder_ops gstti_audenc1_ops;
+extern struct gstti_encoder_ops gstti_imgenc1_ops;
+extern struct gstti_encoder_ops gstti_imgenc0_ops;
 
 #if PLATFORM == dm357
 #  define DECODEENGINE "hmjcp"
@@ -499,6 +503,27 @@ GstTIDmaiencData encoders[] = {
     },
 #endif
 */
+
+/* Image Encoder */
+#ifdef ENABLE_JPEGENC_XDM1
+    {
+        .streamtype = "jpeg",
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_jpeg_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "jpegenc",
+        .eops = &gstti_imgenc1_ops,
+    },
+#elif ENABLE_JPEGENC_XDM0
+    {
+        .streamtype = "jpeg",
+        .sinkCaps = &gstti_uyvy_caps,
+        .srcCaps = &gstti_jpeg_caps,
+        .engineName = ENCODEENGINE,
+        .codecName = "jpegenc",
+        .eops = &gstti_imgenc0_ops,
+    },
+#endif
     { .streamtype = NULL },
     /* Dummy entry to avoid build errors when no element
        is enabled using the src or sink caps

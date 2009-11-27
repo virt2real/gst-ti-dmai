@@ -6,6 +6,7 @@
  * Contributor:
  *     Diego Dompe, RidgeRun
  *     Cristina Murillo, RidgeRun
+ *     Kapil Agrawal, RidgeRun
  *
  * Copyright (C) $year Texas Instruments Incorporated - http://www.ti.com/
  * Copyright (C) 2009 RidgeRun
@@ -96,7 +97,7 @@ struct _GstTIDmaienc
     GstClockTime        basets;
     GstClockTime        asampleSize,asampleTime;
 
-    /* Video Data */
+    /* Video & Image Data */
     gint                framerateNum;
     gint                framerateDen;
     gint                height;

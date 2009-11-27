@@ -5,8 +5,8 @@ plugin_LTLIBRARIES  = libgstticodecplugin.la
 libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttidmaibuffertransport.c \
 gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c gsttidmaiaccel.c gsttipriority.c \
 gsttividdec2.c gsttividdec.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
-gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c \
-gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c \
+gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c gsttisupport_jpeg.c \
+gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c gsttiimgenc1.c gsttiimgenc.c \
 gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c \
 gstticommonutils.c ti_encoders.c caps.c
 
@@ -25,7 +25,7 @@ libgstticodecplugin_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) \
 noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h \
 gsttiparsers.h gsttisupport_generic.h gsttisupport_h264.h \
 gsttisupport_mpeg4.h gsttisupport_aac.h gsttisupport_mp3.h \
-gsttisupport_wma.h ti_encoders.h caps.h gsttidmaidec.h \
+gsttisupport_wma.h gsttisupport_jpeg.h ti_encoders.h caps.h gsttidmaidec.h \
 gsttidmaienc.h gsttidmaiaccel.h gsttipriority.h
 
 if ENABLE_ITTIAM_CODECS
