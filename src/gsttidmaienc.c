@@ -65,7 +65,6 @@ enum
     PROP_ENGINE_NAME,     /* engineName     (string)  */
     PROP_CODEC_NAME,      /* codecName      (string)  */
     PROP_SIZE_OUTPUT_BUF, /* sizeOutputBuf  (int)     */
-    PROP_DSP_LOAD,        /* printDspLoad   (boolean) */
     PROP_COPY_OUTPUT,     /* copyOutput    (boolean) */
 };
 
@@ -307,12 +306,6 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
             "Times the input buffer size that the output buffer size will be",
             0, G_MAXINT32, 3, G_PARAM_WRITABLE));
 
-    g_object_class_install_property(gobject_class, PROP_DSP_LOAD,
-        g_param_spec_boolean("printDspLoad",
-            "Print the load of the DSP if available",
-            "Boolean that set if DSP load information should be displayed",
-            FALSE, G_PARAM_READWRITE));
-
     g_object_class_install_property(gobject_class, PROP_COPY_OUTPUT,
         g_param_spec_boolean("copyOutput",
             "Copy the output buffers",
@@ -392,11 +385,7 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
 
     dmaienc->hEngine            = NULL;
     dmaienc->hCodec             = NULL;
-    dmaienc->hDsp               = NULL;
-    dmaienc->lastLoadstamp      = GST_CLOCK_TIME_NONE;
-    dmaienc->printDspLoad       = FALSE;
     dmaienc->copyOutput         = FALSE;
-    dmaienc->counter            = 0;
 
     dmaienc->adapter            = NULL;
 
@@ -463,11 +452,6 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
         GST_LOG("setting \"outBufMultiple\" to \"%d\"\n",
             dmaienc->outBufMultiple);
         break;
-    case PROP_DSP_LOAD:
-        dmaienc->printDspLoad = g_value_get_boolean(value);
-        GST_LOG("seeting \"printDspLoad\" to %s\n",
-            dmaienc->printDspLoad?"TRUE":"FALSE");
-        break;
     case PROP_COPY_OUTPUT:
         dmaienc->copyOutput = g_value_get_boolean(value);
         GST_LOG("seeting \"copyOutput\" to %s\n",
@@ -513,9 +497,6 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_SIZE_OUTPUT_BUF:
         g_value_set_int(value,dmaienc->outBufMultiple);
-        break;
-    case PROP_DSP_LOAD:
-        g_value_set_boolean(value,dmaienc->printDspLoad);
         break;
     case PROP_COPY_OUTPUT:
         g_value_set_boolean(value,dmaienc->copyOutput);
@@ -636,17 +617,6 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
         return FALSE;
     }
 
-    if (!dmaienc->hDsp && dmaienc->printDspLoad){
-        dmaienc->hDsp = Engine_getServer(dmaienc->hEngine);
-        if (!dmaienc->hDsp){
-            GST_ELEMENT_WARNING(dmaienc,STREAM,ENCODE,(NULL),
-                ("Failed to open the DSP Server handler, unable to report DSP load"));
-        } else {
-            GST_ELEMENT_INFO(dmaienc,STREAM,ENCODE,(NULL),
-                ("Printing DSP load every 1 second..."));
-        }
-    }
-
     dmaienc->adapter = gst_adapter_new();
     if (!dmaienc->adapter){
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -690,10 +660,6 @@ static gboolean gst_tidmaienc_exit_encoder(GstTIDmaienc *dmaienc)
         GST_DEBUG("closing codec engine\n");
         Engine_close(dmaienc->hEngine);
         dmaienc->hEngine = NULL;
-    }
-    
-    if (dmaienc->hDsp){
-        dmaienc->hDsp = NULL;
     }
 
     GST_DEBUG("end exit_encoder\n");
@@ -1219,15 +1185,6 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     gst_buffer_unref(rawData);
     rawData = NULL;
 
-    switch (encoder->eops->codec_type) {
-    case VIDEO:
-    case IMAGE:
-        dmaienc->counter++;
-        break;
-    default:
-        dmaienc->counter += GST_BUFFER_SIZE(outBuf);
-    }
-
     if (dmaienc->copyOutput) {
         GstBuffer *buf = gst_buffer_copy(outBuf);
         gst_buffer_unref(outBuf);
@@ -1352,45 +1309,6 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
 				buf = adapter_get_buffer(dmaienc,encoder);
 			}
        	}
-    }
-
-    if (dmaienc->hDsp){
-        GstClockTime time = gst_util_get_timestamp();
-        if (!GST_CLOCK_TIME_IS_VALID(dmaienc->lastLoadstamp) ||
-            (GST_CLOCK_TIME_IS_VALID(time) &&
-             GST_CLOCK_DIFF(dmaienc->lastLoadstamp,time) > GST_SECOND)){
-            gint32 nsegs,i;
-            guint32 load = Server_getCpuLoad(dmaienc->hDsp);
-            gchar info[4096];
-            gint idx;
-
-            switch (encoder->eops->codec_type) {
-            case VIDEO:
-            case IMAGE:
-                idx = g_snprintf(info,4096,"Timestamp: %" GST_TIME_FORMAT
-                    " :\nDSP load is %d %%, %u fps\n",
-                    GST_TIME_ARGS(time),load,dmaienc->counter);
-                break;
-            default:
-                idx = g_snprintf(info,4096,"Timestamp: %" GST_TIME_FORMAT
-                    " :\nDSP load is %d %%, %u bytes per second\n",
-                    GST_TIME_ARGS(time),load,dmaienc->counter);
-            }
-            dmaienc->counter = 0;
-
-            Server_getNumMemSegs(dmaienc->hDsp,&nsegs);
-            for (i=0; i < nsegs; i++){
-                Server_MemStat ms;
-                Server_getMemStat(dmaienc->hDsp,i,&ms);
-                idx += g_snprintf(&info[idx],4096-idx,
-                    "Memory segment %s: base 0x%x, size 0x%x, maxblocklen 0x%x, used 0x%x\n",
-                    ms.name,(unsigned int)ms.base,(unsigned int)ms.size,
-                    (unsigned int)ms.maxBlockLen,(unsigned int)ms.used);
-            }
-
-            GST_ELEMENT_INFO(dmaienc,STREAM,ENCODE,(NULL),("%s",info));
-            dmaienc->lastLoadstamp = time;
-        }
     }
 
     return GST_FLOW_OK;

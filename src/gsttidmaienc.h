@@ -68,13 +68,9 @@ struct _GstTIDmaienc
     /* Element state */
     Engine_Handle       hEngine;
     gpointer            hCodec;
-    Server_Handle       hDsp;
     gpointer            *params;
     gpointer            *dynParams;
-    GstClockTime        lastLoadstamp;
-    gboolean            printDspLoad;
     gboolean            copyOutput;
-    guint32             counter;
     gboolean            firstBuffer;
 
     /* Buffer management */
