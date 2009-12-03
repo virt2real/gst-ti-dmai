@@ -75,7 +75,8 @@ struct _GstTIDmaidec
     GstClockTime        frameDuration;
     gint                height;
     gint                width;
-    
+    ColorSpace_Type     colorSpace;
+
     /* Audio Information */
     gint                channels;
     gint                rate;

@@ -55,18 +55,22 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS
-    ("video/x-raw-yuv, "
-         "format=(fourcc)UYVY, "
+    (
+#if PLATFORM == dm365
+    "video/x-raw-yuv, "
+         "format=(fourcc)NV12, "
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ];"
+#elif PLATFORM == dm6467
     "video/x-raw-yuv, "
          "format=(fourcc)Y8C8, "
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ];"
+#endif
     "video/x-raw-yuv, "
-         "format=(fourcc)NV12, "
+         "format=(fourcc)UYVY, "
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ]"

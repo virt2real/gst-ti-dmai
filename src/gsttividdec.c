@@ -53,14 +53,22 @@ static gboolean gstti_viddec0_create (GstTIDmaidec *dmaidec)
     GST_DEBUG_CATEGORY_INIT(gst_tividdec0_debug, "TIViddec0", 0,
         "DMAI Video0 Decoder");
 
-    /* Set up codec parameters depending on device */
-#if PLATFORM == dm6467
-    params.forceChromaFormat = XDM_YUV_420P;
-#elif PLATFORM == dm365
-    params.forceChromaFormat = XDM_YUV_420SP;
-#else
-    params.forceChromaFormat = XDM_YUV_422ILE;
-#endif
+    /* Set up codec parameters */
+    switch (dmaidec->colorSpace){
+        case ColorSpace_UYVY:
+            params.forceChromaFormat = XDM_YUV_422ILE;
+            break;
+        case ColorSpace_YUV422PSEMI:
+            params.forceChromaFormat = XDM_YUV_420P;
+            break;
+        case ColorSpace_YUV420PSEMI:
+            params.forceChromaFormat = XDM_YUV_420SP;
+            break;
+        default:
+            GST_ELEMENT_ERROR(dmaidec, STREAM, NOT_IMPLEMENTED,
+                ("unsupported output chroma format\n"), (NULL));
+            return FALSE;
+    }
     params.maxWidth          = dmaidec->width;
     params.maxHeight         = dmaidec->height;
 

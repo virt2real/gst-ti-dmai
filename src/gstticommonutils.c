@@ -95,6 +95,35 @@ gint gst_ti_calculate_display_bufSize (Buffer_Handle hDstBuf)
 }
 
 /******************************************************************************
+ * gst_ti_calculate_bufSize
+ *    Function to calculate video buffer size.
+ *****************************************************************************/
+gint gst_ti_calculate_bufSize (gint width, gint height, ColorSpace_Type 
+    colorspace)
+{
+    int size = width * height;
+
+    switch (colorspace){
+        case ColorSpace_UYVY:
+            size *= 2;
+            break;
+        case ColorSpace_YUV422PSEMI:
+            size *= 5 / 2;
+            break;
+        case ColorSpace_YUV420PSEMI:
+            size *= 9 / 4;
+            break;
+        default:
+            GST_WARNING(
+                "Unable to calculate buffer size for unknown color space\n");
+            size = 0;
+    }
+
+    return size;
+}
+
+
+/******************************************************************************
  * gst_ti_get_env_boolean
  *   Function will return environment boolean.
  *****************************************************************************/

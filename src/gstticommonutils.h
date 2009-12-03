@@ -28,6 +28,7 @@
 
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/Buffer.h>
+#include <ti/sdo/dmai/BufferGfx.h>
 
 #define undefined 0
 #define dm355   1
@@ -76,6 +77,10 @@ extern Int32 gstti_bufferGFX_getFrameType(Buffer_Handle hBuf);
 
 /* Function to calculate the display buffer size */
 gint gst_ti_calculate_display_bufSize (Buffer_Handle hDstBuf);
+
+/* Function to calculate the buffer size */
+gint gst_ti_calculate_bufSize (gint width, gint height,
+    ColorSpace_Type colorspace);
 
 /* Function to read environment variable and return its boolean value */
 gboolean gst_ti_env_get_boolean (gchar *env);

@@ -681,13 +681,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     switch (decoder->dops->codec_type) {
     case VIDEO: 
     {
-#if PLATFORM == dm6467
-        gfxAttrs.colorSpace     = ColorSpace_YUV422PSEMI;
-#elif PLATFORM == dm365
-        gfxAttrs.colorSpace     = ColorSpace_YUV420PSEMI;
-#else
-        gfxAttrs.colorSpace     = ColorSpace_UYVY;
-#endif
+        gfxAttrs.colorSpace     = dmaidec->colorSpace;
         gfxAttrs.dim.width      = dmaidec->width;
         gfxAttrs.dim.height     = dmaidec->height;
         gfxAttrs.dim.lineLength = BufferGfx_calcLineLength(
@@ -697,7 +691,8 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
         gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE |
             decoder->dops->outputUseMask;
 
-        dmaidec->outBufSize = gfxAttrs.dim.lineLength * dmaidec->height;
+        dmaidec->outBufSize = gst_ti_calculate_bufSize (
+            dmaidec->width,dmaidec->height,dmaidec->colorSpace);
         dmaidec->inBufSize = dmaidec->outBufSize;
 
         dmaidec->hOutBufTab =
@@ -823,6 +818,8 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
     GstTIDmaidec *dmaidec;
     GstStructure *capStruct;
     const gchar  *mime;
+    GstCaps *othercaps, *newcaps;
+    guint32 fourcc;
     char * str = NULL;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
@@ -837,10 +834,15 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
 
     GST_INFO("requested sink caps:  %s", gst_caps_to_string(caps));
 
+    /* Pick the output caps */
+    othercaps = gst_pad_get_allowed_caps (dmaidec->srcpad);
+    newcaps = gst_caps_copy_nth (othercaps, 0);
+    gst_caps_unref(othercaps);
+
     switch (decoder->dops->codec_type) {
     case VIDEO:
         /* Generic Video Properties */
-        if (!strncmp(mime, "video/", 6)) {
+        if (!strncmp(mime, "video/", 6) || !strncmp(mime,"image/",6)) {
             gint  framerateNum;
             gint  framerateDen;
 
@@ -857,16 +859,33 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
             if (!gst_structure_get_int(capStruct, "width", &dmaidec->width)) {
                 dmaidec->width = 0;
             }
-            
-            caps = gst_caps_make_writable(
-                gst_caps_copy(gst_pad_get_pad_template_caps(dmaidec->srcpad)));
-            capStruct = gst_caps_get_structure(caps, 0);
+
+            capStruct = gst_caps_get_structure(newcaps, 0);
             gst_structure_set(capStruct,
                 "height",G_TYPE_INT,dmaidec->height,
                 "width",G_TYPE_INT,dmaidec->width,
                 "framerate", GST_TYPE_FRACTION,
                 dmaidec->framerateNum,dmaidec->framerateDen,
                 (char *)NULL);
+
+            if (gst_structure_get_fourcc(capStruct, "format", &fourcc)) {
+                switch (fourcc) {
+                    case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
+                        dmaidec->colorSpace = ColorSpace_UYVY;
+                        break;
+                    case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
+                        dmaidec->colorSpace = ColorSpace_YUV422PSEMI;
+                        break;
+                    case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+                        dmaidec->colorSpace = ColorSpace_YUV420PSEMI;
+                        break;
+                    default:
+                        GST_ELEMENT_ERROR(dmaidec, STREAM, NOT_IMPLEMENTED,
+                            ("unsupported fourcc in video/image stream\n"), (NULL));
+                            gst_object_unref(dmaidec);
+                        return FALSE;
+                }
+            }
         }
         break;
     case AUDIO:
@@ -880,13 +899,10 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
                 dmaidec->rate = 0;
             }
 
-            caps = gst_caps_make_writable(
-                gst_caps_copy(gst_pad_get_pad_template_caps(dmaidec->srcpad)));
-
             /* gst_pad_get_pad_template_caps: gets the capabilities of
              * dmaidec->srcpad, then creates a copy and makes it writable
              */
-            capStruct = gst_caps_get_structure(caps, 0);
+            capStruct = gst_caps_get_structure(newcaps, 0);
 
             gst_structure_set(capStruct,"channels",G_TYPE_INT,dmaidec->channels,
                                         "rate",G_TYPE_INT,dmaidec->rate,
@@ -908,7 +924,8 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
     GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(caps)));
     g_free(str);
 
-    if (!gst_pad_set_caps(dmaidec->srcpad, caps)) {
+    gst_pad_fixate_caps (dmaidec->srcpad, newcaps);
+    if (!gst_pad_set_caps(dmaidec->srcpad, newcaps)) {
         GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
             ("Failed to set the srcpad caps"));
     } else {
