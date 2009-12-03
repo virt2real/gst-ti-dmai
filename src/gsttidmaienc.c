@@ -867,8 +867,8 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                         dmaienc->framerateNum,dmaienc->framerateDen,
                                     (char *)NULL);
 
-        dmaienc->inBufSize = BufferGfx_calcLineLength(dmaienc->width,
-            dmaienc->colorSpace) * dmaienc->height;
+        dmaienc->inBufSize = gst_ti_calculate_bufSize (
+            dmaienc->width,dmaienc->height,dmaienc->colorSpace);
         /* We need to ask the codec for the outbuffer size, even if we could
          * guess a safe value, some encoders may have their own ideas...
          */
