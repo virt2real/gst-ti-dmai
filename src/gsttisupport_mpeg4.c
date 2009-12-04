@@ -91,12 +91,8 @@ static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc,
         /* We found a codec data */
         codec_data = gst_buffer_new_and_alloc(i);
         memcpy(GST_BUFFER_DATA(codec_data),data,i);
-
-        /* Remove the codec data info from the output buffer */
-        GST_BUFFER_DATA(*buffer) = &data[i];
-        GST_BUFFER_SIZE(*buffer) -= i;
     }
-    
+
     return codec_data;
 }
 
