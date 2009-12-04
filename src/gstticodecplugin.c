@@ -82,6 +82,14 @@ static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
     "   height=(int)[ 1, MAX ] "
 );
 #elif PLATFORM == dm365
+static GstStaticCaps gstti_nv12_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "                        /* NV12 */
+    "   format=(fourcc)NV12, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ]; "
+);
+
 static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
     "video/x-raw-yuv, "                        /* NV12 */
     "   format=(fourcc)NV12, "
@@ -103,14 +111,6 @@ static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
     "   height=(int)[ 1, MAX ] "
 );
 #endif
-
-static GstStaticCaps gstti_nv12_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* NV12 */
-    "   format=(fourcc)NV12, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ]; "
-);
 
 GstStaticCaps gstti_mpeg2_caps = GST_STATIC_CAPS(
     "video/mpeg, "
