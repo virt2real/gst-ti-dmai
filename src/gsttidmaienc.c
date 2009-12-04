@@ -910,13 +910,15 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
 	    }
 
         if (!gst_tidmaienc_configure_codec(dmaienc)) {
-            GST_ERROR("failing to configure codec");
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+                ("Failed to configure codec"));
+            gst_object_unref(dmaienc);
             return GST_FLOW_UNEXPECTED;
         }
 
-	    gst_object_unref(dmaienc);
+        gst_object_unref(dmaienc);
 
-	    GST_DEBUG("sink caps negotiation successful\n");
+        GST_DEBUG("sink caps negotiation successful\n");
     }
 
     return TRUE;
