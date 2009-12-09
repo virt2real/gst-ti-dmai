@@ -154,6 +154,8 @@ static GstStateChangeReturn
      GstStateChange transition);
 static gboolean 
  gst_tidmaivideosink_start(GstBaseSink *sink);
+static gboolean 
+ gst_tidmaivideosink_stop(GstBaseSink *sink);
 static GstFlowReturn
  gst_tidmaivideosink_preroll(GstBaseSink * bsink, GstBuffer * buffer);
 static int
@@ -337,6 +339,8 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_set_caps);
     gstbase_sink_class->start    =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_start);
+    gstbase_sink_class->stop    =
+        GST_DEBUG_FUNCPTR(gst_tidmaivideosink_stop);
     gstbase_sink_class->event    =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_event);
     gstbase_sink_class->preroll  =
@@ -1789,7 +1793,30 @@ static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
     return TRUE;
 }
 
+/*******************************************************************************
+ * gst_tidmaivideosink_stop
+ *
+ * Function used to stop some vars and apps.
+*******************************************************************************/
 
+static gboolean gst_tidmaivideosink_stop(GstBaseSink * sink)
+{
+    GstTIDmaiVideoSink *dmaisink;
+    dmaisink = GST_TIDMAIVIDEOSINK(sink);
+    Buffer_Handle hDispBuf  = NULL;
+    int i;
+    /*Clean display after last display*/
+    for(i=0; i<dmaisink->numDispBuf; i++){
+       if (Display_get(dmaisink->hDisplay, &hDispBuf) < 0) {
+          GST_ERROR("Failed to get display buffer to clean display before to stop\n");
+       }
+       gst_tidmaivideosink_blackFill(dmaisink, hDispBuf);
+       if (Display_put(dmaisink->hDisplay, hDispBuf) < 0) {
+          GST_ERROR("Failed to put display buffer to clean display before to stop\n");
+       }
+    }
+    return TRUE;
+}
 
 /*******************************************************************************
  * gst_tidmaivideosink_set_caps
