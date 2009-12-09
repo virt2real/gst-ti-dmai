@@ -49,9 +49,7 @@ enum
   ARG_TARGET_HEIGHT,
   ARG_TARGET_WIDTH_MAX,
   ARG_TARGET_HEIGHT_MAX,
-  ARG_ASPECTRADIO_RELATION_WIDTH,
-  ARG_ASPECTRADIO_RELATION_HEIGHT,
-  ARG_KEEP_ASPECT_RADIO,
+  ARG_KEEP_ASPECT_RATIO,
   ARG_NUMBER_OUTPUT_BUFFERS,
 };
 
@@ -160,23 +158,9 @@ gst_dmai_resizer_class_init (GstTIDmaiResizerClass * klass)
           G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
-      ARG_ASPECTRADIO_RELATION_WIDTH,
-      g_param_spec_int ("aspect-radio-relation-width",
-          "aspect-radio-relation-width",
-          "", 0, G_MAXINT, 0,
-          G_PARAM_READWRITE));
-
-  g_object_class_install_property (G_OBJECT_CLASS (klass),
-      ARG_ASPECTRADIO_RELATION_HEIGHT,
-      g_param_spec_int ("aspect-radio-relation-height",
-          "aspect-radio-relation-height",
-          "", 0, G_MAXINT, 0,
-          G_PARAM_READWRITE));
-
-  g_object_class_install_property (G_OBJECT_CLASS (klass),
-      ARG_KEEP_ASPECT_RADIO,
-      g_param_spec_boolean ("aspect-radio",
-          "aspect-radio", "Keep aspect radio", TRUE, G_PARAM_READWRITE));
+      ARG_KEEP_ASPECT_RATIO,
+      g_param_spec_boolean ("aspect-ratio",
+          "aspect-ratio", "Keep aspect ratio", FALSE, G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
       ARG_NUMBER_OUTPUT_BUFFERS,
@@ -224,16 +208,8 @@ gst_dmai_resizer_get_property (GObject * object, guint prop_id,
       g_value_set_int (value, dmairesizer->target_height_max);
       break;
     }
-    case ARG_KEEP_ASPECT_RADIO:{
-      g_value_set_boolean (value, dmairesizer->keep_aspect_radio);
-      break;
-    }
-    case ARG_ASPECTRADIO_RELATION_WIDTH:{
-      g_value_set_int (value, dmairesizer->aspectradio_relation_width);
-      break;
-    }
-    case ARG_ASPECTRADIO_RELATION_HEIGHT:{
-      g_value_set_int (value, dmairesizer->aspectradio_relation_height);
+    case ARG_KEEP_ASPECT_RATIO:{
+      g_value_set_boolean (value, dmairesizer->keep_aspect_ratio);
       break;
     }
     case ARG_NUMBER_OUTPUT_BUFFERS:{
@@ -287,14 +263,14 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->target_height = 0;
   dmairesizer->target_width_max = 0;
   dmairesizer->target_height_max = 0;
-  dmairesizer->keep_aspect_radio = FALSE;
-  dmairesizer->aspectradio_relation_width = 0;
-  dmairesizer->aspectradio_relation_height = 0;
+  dmairesizer->keep_aspect_ratio = FALSE;
   dmairesizer->caps_is_first_time = TRUE;
   dmairesizer->flushing = FALSE;
   dmairesizer->clean_bufTab = FALSE;
-  
 
+  dmairesizer->mutex = NULL;
+  g_assert (dmairesizer->mutex == NULL);
+  dmairesizer->mutex = g_mutex_new ();
 
 #if PLATFORM == dm6467
   dmairesizer->numOutBuf = 5;
@@ -324,6 +300,7 @@ gst_dmai_resizer_sink_event(GstPad *pad, GstEvent * event){
         break;
       default:
         ret = gst_pad_event_default(pad, event);
+        break;
     }
     gst_object_unref(dmairesizer);
     return ret;
@@ -412,6 +389,9 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
   GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (object);
   GstCaps *caps;
   GstStructure *capStruct;
+
+  /*To prevent the changed unwanted of properties on chain function*/
+  g_mutex_lock (dmairesizer->mutex);
 
   switch (prop_id) {
     case ARG_SOURCE_X:{
@@ -502,16 +482,8 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
       dmairesizer->target_height_max = g_value_get_int (value);
       break;
     }
-    case ARG_KEEP_ASPECT_RADIO:{
-      dmairesizer->keep_aspect_radio = g_value_get_boolean (value);
-      break;
-    }
-    case ARG_ASPECTRADIO_RELATION_WIDTH:{
-      dmairesizer->aspectradio_relation_width = g_value_get_int (value);
-      break;
-    }
-    case ARG_ASPECTRADIO_RELATION_HEIGHT:{
-      dmairesizer->aspectradio_relation_height = g_value_get_int (value);
+    case ARG_KEEP_ASPECT_RATIO:{
+      dmairesizer->keep_aspect_ratio = g_value_get_boolean (value);
       break;
     }
     case ARG_NUMBER_OUTPUT_BUFFERS:{
@@ -523,6 +495,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
       break;
     }
   }
+  g_mutex_unlock (dmairesizer->mutex);
 }
 
 static gboolean
@@ -673,7 +646,6 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   int  IDBuf = Buffer_getId(DstBuf);
 
   if(dmairesizer->flagToClean[IDBuf]){
-    GST_INFO("Updating buffer:%d -%d\n",(int)dmairesizer->dim[IDBuf].x, (int)dmairesizer->dim[IDBuf].y);
     dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
     dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
     dmairesizer->dim[IDBuf].x = 0;
@@ -681,12 +653,12 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
     dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
       (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
     dmairesizer->flagToClean[IDBuf] = FALSE;
-    if(dmairesizer->keep_aspect_radio){
+    if(dmairesizer->keep_aspect_ratio){
       blackFill(dmairesizer, DstBuf);
     }
   }
 
-  if(dmairesizer->keep_aspect_radio){
+  if(dmairesizer->keep_aspect_ratio){
      /*Sw/Sh > Tw/Th*/
      if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
      /*Horizontal*/
@@ -696,7 +668,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
      }else{
      /*Vertical*/
      dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
-     dmairesizer->dim[IDBuf].x = (dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2;
+     dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
      }
 
   }
@@ -719,7 +691,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   }
 
   /*Reseting values after resize to send buffer correctly*/
-  if(dmairesizer->keep_aspect_radio){
+  if(dmairesizer->keep_aspect_ratio){
      if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
      /*Horizontal*/
      dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
@@ -731,9 +703,6 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
      }
   }
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
-
-
-
 
   return DstBuf;
 }
@@ -838,6 +807,9 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (GST_OBJECT_PARENT (pad));
   BufferGfx_Dimensions srcDim;
 
+  /*To prevent unwanted change of properties just before to resize*/
+  g_mutex_lock (dmairesizer->mutex);
+
   /*Check dimentions*/
   if(dmairesizer->source_width > dmairesizer->width){
     GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, 
@@ -884,6 +856,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   if(outBuffer == NULL){
     gst_buffer_unref (buf);
     /*GST_ELEMENT_ERROR called before */
+    g_mutex_unlock (dmairesizer->mutex);
     return GST_FLOW_UNEXPECTED;
   }
 
@@ -893,6 +866,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   if (!pushBuffer) {
     GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
         ("Failed to create dmai buffer"));
+    g_mutex_unlock (dmairesizer->mutex);
     return GST_FLOW_UNEXPECTED;
   }
   gst_buffer_copy_metadata (pushBuffer, buf, GST_BUFFER_COPY_FLAGS |
@@ -900,6 +874,8 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   gst_buffer_unref (buf);
   gst_buffer_set_caps (pushBuffer, caps);
   gst_caps_unref(caps);
+
+  g_mutex_unlock (dmairesizer->mutex);
 
   if (gst_pad_push (dmairesizer->srcpad, pushBuffer) != GST_FLOW_OK) {
     if(!dmairesizer->flushing){
@@ -910,7 +886,6 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
     }
     return GST_FLOW_UNEXPECTED;
   }
-
   return GST_FLOW_OK;
 }
 

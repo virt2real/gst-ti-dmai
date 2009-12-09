@@ -88,9 +88,8 @@ struct _GstTIDmaiResizer
   gint target_height;
   gint target_width_max;
   gint target_height_max;
-  gint aspectradio_relation_width;
-  gint aspectradio_relation_height;
-  gboolean keep_aspect_radio;
+  GMutex *mutex;
+  gboolean keep_aspect_ratio;
 
   /*Resizer */
   Resize_Handle Resizer;
