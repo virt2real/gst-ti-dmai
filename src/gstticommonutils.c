@@ -108,10 +108,10 @@ gint gst_ti_calculate_bufSize (gint width, gint height, ColorSpace_Type
             size *= 2;
             break;
         case ColorSpace_YUV422PSEMI:
-            size *= 5 / 2;
+            size = size * 5 / 2;
             break;
         case ColorSpace_YUV420PSEMI:
-            size *= 9 / 4;
+            size = size * 3 / 2;
             break;
         default:
             GST_WARNING(
