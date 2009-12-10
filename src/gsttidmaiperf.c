@@ -269,7 +269,7 @@ gst_dmaiperf_start (GstBaseTransform * trans)
 
   /* Make sure we know what codec we're using */
   if (!dmaiperf->engineName) {
-    GST_ELEMENT_WARNING (dmaiperf, STREAM, CODEC_NOT_FOUND, (NULL),
+    GST_ELEMENT_WARNING (dmaiperf, RESOURCE, SETTINGS, (NULL),
         ("Engine name not specified, not printing DSP information"));
   } else {
       dmaiperf->hEngine = Engine_open ((Char *) dmaiperf->engineName, NULL, NULL);
