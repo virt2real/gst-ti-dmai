@@ -134,8 +134,9 @@ dnl DMAI PLUGINS OPTIONS
 dnl Define presets
 AC_ARG_WITH(preset,
   [AS_HELP_STRING([--with-preset=<preset>],
-	[Select a preset (autoselects the platform and plugins):                                       
-		dm355 (dvsdk 1.30 or 2.00), dm355s (dvsdk2.0 + DM355s codecs),
+	[Select a preset (autoselects the platform and optimizations for 
+	  the default codec servers):                                       
+		dm355 (2.00), dm355s (dvsdk2.0 + DM355s codecs),
 		dm357 (dvsdk 2.00), dm365 (dvsdk 2.10)
 		dm6446 (dvsdk 2.00),                                       
 		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00)
@@ -145,29 +146,12 @@ AC_ARG_WITH(preset,
 
 if test "x$preset" = "xomap35x" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	enable_mpeg4dec_xdm2=1;
-  	enable_h264dec_xdm2=1;
-  	enable_mpeg2dec_xdm2=1;
-  	enable_aachedec_xdm1=1;
-  	enable_wmadec_xdm1=1;
-  	enable_jpegdec_xdm1=1;
-	enable_mpeg4enc_xdm1=1;
 	AC_DEFINE([MPEG4_C64X_TI_ENCODER],[1],[TI DSP MPEG4 Encoder])
-  	enable_h264enc_xdm1=1;
-  	enable_jpegenc_xdm1=1;
-  	enable_videosink=1;
-	enable_resizer=1;
   	with_platform=omap35x;
 fi
 
 if test "x$preset" = "xdm355" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	enable_mpeg4dec_xdm2=1;
-  	enable_jpegdec_xdm1=1;
-	enable_mpeg4enc_xdm1=1;
-  	enable_jpegenc_xdm1=1;
-	enable_resizer=1;
-  	enable_videosink=1;
   	with_platform=dm355;
 fi
 
@@ -175,75 +159,28 @@ if test "x$preset" = "xdm355s" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
 	AC_DEFINE([AACLC_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM AACLC Encoder])
 	AC_DEFINE([MP3_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM MP3 Encoder])
-	enable_mpeg4dec_xdm2=1;
-  	enable_jpegdec_xdm1=1;
-	enable_mpeg4enc_xdm1=1;
-  	enable_jpegenc_xdm1=1;
-  	enable_aaclcenc_xdm1=1;
-  	enable_mp3enc_xdm1=1;
-  	enable_wmaenc_xdm1=1;
-  	enable_aaclcdec_xdm1=1;
-  	enable_mp3dec_xdm1=1;
-  	enable_wmaenc_xdm1=1;
-	enable_resizer=1;
-  	enable_videosink=1;
   	with_platform=dm355;
   	with_xdc_config_basename=dm355s;
 fi
 
 if test "x$preset" = "xdm365" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-  	enable_h264dec_xdm2=1;
-	enable_mpeg4dec_xdm2=1;
-  	enable_jpegdec_xdm1=1;
-	enable_h264enc_xdm1=1;
-	enable_mpeg4enc_xdm1=1;
-  	enable_jpegenc_xdm1=1;
-	enable_resizer=1;
-  	enable_videosink=1;
   	with_platform=dm365;
 fi
 
 if test "x$preset" = "xdm357" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	enable_mpeg4dec_xdm2=1;
-  	enable_jpegdec_xdm1=1;
-	enable_mpeg4enc_xdm1=1;
-  	enable_g711dec_xdm1=1;
-  	enable_jpegenc_xdm1=1;
-	enable_resizer=1;
-  	enable_videosink=1;
   	with_platform=dm357;
 fi
 
 if test "x$preset" = "xdm6446" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	enable_mpeg4dec_xdm2=1;
-  	enable_h264dec_xdm2=1;
-  	enable_mpeg2dec_xdm2=1;
-	enable_mpeg4enc_xdm1=1;
 	AC_DEFINE([MPEG4_C64X_TI_ENCODER],[1],[TI DSP MPEG4 Encoder])
-	enable_h264enc_xdm1=1;
-  	enable_aachedec_xdm1=1;
-  	enable_g711dec_xdm1=1;
-	enable_g711enc_xdm1=1;
-	enable_resizer=1;
-  	enable_videosink=1;
   	with_platform=dm6446;
 fi
 
 if test "x$preset" = "xdm6467" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-  	enable_h264dec_xdm2=1;
-  	enable_h264enc_xdm1=1;
-  	enable_mpeg2dec_xdm2=1;
-  	enable_mpeg3dec_xdm1=1;
-  	enable_aachedec_xdm1=1;
-  	enable_aacheenc_xdm1=1;
-  	enable_g711dec_xdm1=1;
-  	enable_g711enc_xdm1=1;
-	enable_resizer=1;
-  	enable_videosink=1;
   	with_platform=dm6467;
 fi
 
@@ -322,437 +259,5 @@ AC_ARG_WITH(xdc-config-basename,
    AC_MSG_NOTICE([Setting the XDC config basename to "$XDC_CONFIG_BASENAME"])]
 )
 
-	
-dnl VIDEO Decoders ============================================================
-AC_ARG_ENABLE(mpeg4dec-xdm2,
-  [AS_HELP_STRING([--enable-mpeg4dec-xdm2],
-	[Enable MPEG4 xDM 1.2 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG4DEC_XDM2],[1],
-			  [mpeg4 xDM 1.2 decoder is enabled])])
-AC_ARG_ENABLE(mpeg4dec-xdm0,
-  [AS_HELP_STRING([--enable-mpeg4dec-xdm0],
-	[Enable MPEG4 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG4DEC_XDM0],[1],
-			  [mpeg4 xDM 0.9 decoder is enabled])])
-if test "${enable_mpeg4dec_xdm2+set}" = set &&
-   test "${enable_mpeg4dec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([MPEG4 decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(h264dec-xdm2,
-  [AS_HELP_STRING([--enable-h264dec-xdm2],
-	[Enable H264 xDM 1.2 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_H264DEC_XDM2],[1],
-			  [h264 xDM 1.2 decoder is enabled])])
-AC_ARG_ENABLE(h264dec-xdm1,
-  [AS_HELP_STRING([--enable-h264dec-xdm0],
-	[Enable H264 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_H264DEC_XDM0],[1],
-			  [h264 xDM 0.9 decoder is enabled])])
-if test "${enable_h264dec_xdm2+set}" = set &&
-   test "${enable_h264dec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([H264 decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(mpeg2dec-xdm2,
-  [AS_HELP_STRING([--enable-mpeg2dec-xdm2],
-	[Enable MPEG2 xDM 1.2 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG2DEC_XDM2],[1],
-			  [mpeg2 xDM 1.2 decoder is enabled])])
-AC_ARG_ENABLE(mpeg2dec-xdm0,
-  [AS_HELP_STRING([--enable-mpeg2dec-xdm0],
-	[Enable MPEG2 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG2DEC_XDM0],[1],
-			  [mpeg2 xDM 0.9 decoder is enabled])])
-if test "${enable_mpeg2dec_xdm2+set}" = set &&
-   test "${enable_mpeg2dec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([MPEG2 decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-dnl TODO: MJPEG?
-
-dnl Audio Decoders ============================================================
-
-AC_ARG_ENABLE(aachedec-xdm1,
-  [AS_HELP_STRING([--enable-aachedec-xdm1],
-	[Enable AAC (HE) xDM 1.x decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACHEDEC_XDM1],[1],
-			  [AAC (HE) xDM 1.x decoder is enabled])])
-AC_ARG_ENABLE(aachedec-xdm0,
-  [AS_HELP_STRING([--enable-aachedec-xdm0],
-	[Enable AAC (HE) xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACHEDEC_XDM0],[1],
-			  [AAC (HE) xDM 0.9 decoder is enabled])])
-dnl Validate errors
-if test "${enable_aachedec_xdm1+set}" = set &&
-   test "${enable_aachedec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([AAC (HE) decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(aaclcdec-xdm1,
-  [AS_HELP_STRING([--enable-aaclcdec-xdm1],
-	[Enable AAC (LC) xDM 1.x decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACLCDEC_XDM1],[1],
-			  [AAC (LC) xDM 1.x decoder is enabled])])
-AC_ARG_ENABLE(aaclcdec-xdm0,
-  [AS_HELP_STRING([--enable-aaclcdec-xdm0],
-	[Enable AAC (LC) xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACLCDEC_XDM0],[1],
-			  [AAC (LC) xDM 0.9 decoder is enabled])])
-dnl Validate errors
-if test "${enable_aaclcdec_xdm1+set}" = set &&
-   test "${enable_aaclcdec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([AAC (LC) decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(mp3dec-xdm1,
-  [AS_HELP_STRING([--enable-mp3dec-xdm1],
-	[Enable MP3 xDM 1.x decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MP3DEC_XDM1],[1],
-			  [MP3 xDM 1.x decoder is enabled])])
-AC_ARG_ENABLE(mp3dec-xdm0,
-  [AS_HELP_STRING([--enable-mp3dec-xdm0],
-	[Enable MP3 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MP3DEC_XDM0],[1],
-			  [MP3 xDM 0.9 decoder is enabled])])
-dnl Validate errors
-if test "${enable_mp3dec_xdm1+set}" = set &&
-   test "${enable_mp3dec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([MP3 decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(wmadec-xdm1,
-  [AS_HELP_STRING([--enable-wmadec-xdm1],
-	[Enable WMA xDM 1.x decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_WMADEC_XDM1],[1],
-			  [WMA xDM 1.x decoder is enabled])])
-AC_ARG_ENABLE(wmadec-xdm0,
-  [AS_HELP_STRING([--enable-wmadec-xdm0],
-	[Enable WMA xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_WMADEC_XDM0],[1],
-			  [WMA xDM 0.9 decoder is enabled])])
-dnl Validate errors
-if test "${enable_wmadec_xdm1+set}" = set &&
-   test "${enable_wmadec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([WMA decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(g711dec-xdm1,
-  [AS_HELP_STRING([--enable-g711dec-xdm1],
-	[Enable G711 xDM 1.x decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_G711DEC_XDM1],[1],
-			  [G711 xDM 1.x decoder is enabled])])
-AC_ARG_ENABLE(g711dec-xdm0,
-  [AS_HELP_STRING([--enable-g711dec-xdm0],
-	[Enable G711 xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_G711DEC_XDM0],[1],
-			  [G711 xDM 0.9 decoder is enabled])])
-dnl Validate errors
-if test "${enable_g711dec_xdm1+set}" = set &&
-   test "${enable_g711dec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([G711 decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-dnl Image Decoders ============================================================
-AC_ARG_ENABLE(jpegdec-xdm1,
-  [AS_HELP_STRING([--enable-jpegdec-xdm1],
-	[Enable JPEG xDM 1.0 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_JPEGDEC_XDM1],[1],
-			  [JPEG xDM 1.0 decoder is enabled])])
-AC_ARG_ENABLE(jpegdec-xdm0,
-  [AS_HELP_STRING([--enable-jpegdec-xdm0],
-	[Enable JPEG xDM 0.9 decoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_JPEGDEC_XDM0],[1],
-			  [JPEG xDM 0.9 decoder is enabled])])
-dnl Validate errors
-if test "${enable_jpegdec_xdm1+set}" = set &&
-   test "${enable_jpegdec_xdm0+set}" = set ; then
-		AC_MSG_ERROR([JPEG decoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-dnl Video Encoders ============================================================
-AC_ARG_ENABLE(mpeg4enc-xdm1,
-  [AS_HELP_STRING([--enable-mpeg4enc-xdm1],
-	[Enable MPEG4 xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG4ENC_XDM1],[1],
-			  [mpeg4 xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(mpeg4enc-xdm0,
-  [AS_HELP_STRING([--enable-mpeg4enc-xdm0],
-	[Enable MPEG4 xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG4ENC_XDM0],[1],
-			  [mpeg4 xDM 0.9 encoder is enabled])])
-if test "${enable_mpeg4enc_xdm1+set}" = set &&
-   test "${enable_mpeg4enc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([MPEG4 encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(h264enc-xdm1,
-  [AS_HELP_STRING([--enable-h264enc-xdm1],
-	[Enable H264 xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_H264ENC_XDM1],[1],
-			  [h264 xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(h264enc-xdm0,
-  [AS_HELP_STRING([--enable-h264enc-xdm0],
-	[Enable H264 xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_H264ENC_XDM0],[1],
-			  [h264 xDM 0.9 encoder is enabled])])
-if test "${enable_h264enc_xdm1+set}" = set &&
-   test "${enable_h264enc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([H264 encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(mpeg2enc-xdm1,
-  [AS_HELP_STRING([--enable-mpeg2enc-xdm1],
-	[Enable MPEG2 xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG2ENC_XDM1],[1],
-			  [mpeg2 xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(mpeg2enc-xdm0,
-  [AS_HELP_STRING([--enable-mpeg2enc-xdm0],
-	[Enable MPEG2 xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MPEG2ENC_XDM0],[1],
-			  [mpeg2 xDM 0.9 encoder is enabled])])
-if test "${enable_mpeg2enc_xdm1+set}" = set &&
-   test "${enable_mpeg2enc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([MPEG2 encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-dnl TODO: mjpeg
-
-dnl Audio Encoders ============================================================
-AC_ARG_ENABLE(aacheenc-xdm1,
-  [AS_HELP_STRING([--enable-aacheenc-xdm1],
-	[Enable AAC (HE) xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACHEENC_XDM1],[1],
-			  [AAC (HE) xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(aacheenc-xdm0,
-  [AS_HELP_STRING([--enable-aacheenc-xdm0],
-	[Enable AAC (HE) xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACHEENC_XDM0],[1],
-			  [AAC (HE) xDM 0.9 encoder is enabled])])
-dnl Validate errors
-if test "${enable_aacheenc_xdm1+set}" = set &&
-   test "${enable_aacheenc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([AAC (HE) encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(aaclcenc-xdm1,
-  [AS_HELP_STRING([--enable-aaclcenc-xdm1],
-	[Enable AAC (LC) xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACLCENC_XDM1],[1],
-			  [AAC (LC) xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(aaclcenc-xdm0,
-  [AS_HELP_STRING([--enable-aaclcenc-xdm0],
-	[Enable AAC (LC) xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_AACLCENC_XDM0],[1],
-			  [AAC (LC) xDM 0.9 encoder is enabled])])
-dnl Validate errors
-if test "${enable_aaclcenc_xdm1+set}" = set &&
-   test "${enable_aaclcenc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([AAC (LC) encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(mp3enc-xdm1,
-  [AS_HELP_STRING([--enable-mp3enc-xdm1],
-	[Enable MP3 xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MP3ENC_XDM1],[1],
-			  [MP3 xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(mp3enc-xdm0,
-  [AS_HELP_STRING([--enable-mp3enc-xdm0],
-	[Enable MP3 xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_MP3ENC_XDM0],[1],
-			  [MP3 xDM 0.9 encoder is enabled])])
-dnl Validate errors
-if test "${enable_mp3enc_xdm1+set}" = set &&
-   test "${enable_mp3enc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([MP3 encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(wmaenc-xdm1,
-  [AS_HELP_STRING([--enable-wmaenc-xdm1],
-	[Enable WMA xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_WMAENC_XDM1],[1],
-			  [WMA xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(wmaenc-xdm0,
-  [AS_HELP_STRING([--enable-wmaenc-xdm0],
-	[Enable WMA xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_WMAENC_XDM0],[1],
-			  [WMA xDM 0.9 encoder is enabled])])
-dnl Validate errors
-if test "${enable_wmaenc_xdm1+set}" = set &&
-   test "${enable_wmaenc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([WMA encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-AC_ARG_ENABLE(g711enc-xdm1,
-  [AS_HELP_STRING([--enable-g711enc-xdm1],
-	[Enable G711 xDM 1.x encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_G711ENC_XDM1],[1],
-			  [G711 xDM 1.x encoder is enabled])])
-AC_ARG_ENABLE(g711enc-xdm0,
-  [AS_HELP_STRING([--enable-g711enc-xdm0],
-	[Enable G711 xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_G711ENC_XDM0],[1],
-			  [G711 xDM 0.9 encoder is enabled])])
-dnl Validate errors
-if test "${enable_g711enc_xdm1+set}" = set &&
-   test "${enable_g711enc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([G711 encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-
-dnl Image Encoders ============================================================
-AC_ARG_ENABLE(jpegenc-xdm1,
-  [AS_HELP_STRING([--enable-jpegenc-xdm1],
-	[Enable JPEG xDM 1.0 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_JPEGENC_XDM1],[1],
-			  [JPEG xDM 1.0 encoder is enabled])])
-AC_ARG_ENABLE(jpegenc-xdm0,
-  [AS_HELP_STRING([--enable-jpegenc-xdm0],
-	[Enable JPEG xDM 0.9 encoder  @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_JPEGENC_XDM0],[1],
-			  [JPEG xDM 0.9 encoder is enabled])])
-dnl Validate errors
-if test "${enable_jpegenc_xdm1+set}" = set &&
-   test "${enable_jpegenc_xdm0+set}" = set ; then
-		AC_MSG_ERROR([JPEG encoder is enabled for more than one xDM API. Only one is allowed])
-fi
-
-dnl Video Sink ================================================================
-AC_ARG_ENABLE(videosink,
-  [AS_HELP_STRING([--enable-videosink],
-	[Enable DMAI videosink @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_VIDEOSINK],[1],
-			  [DMAI Video Sink is enabled])])
-
-AC_ARG_ENABLE(resizer,
-  [AS_HELP_STRING([--enable-resizer],
-	[Enable DMAI video resizer @<:@default=no@:>@])],
-  [AC_DEFINE([ENABLE_DMAI_RESIZER],[1],
-			  [DMAI Video Resizer is enabled])])
-
-echo
-echo "The following elements will be built:"
-if test "${enable_h264dec_xdm2+set}" = set; then 
-	echo "H264 Decoder (XDM 1.2)"
-fi
-if test "${enable_h264dec_xdm0+set}" = set; then 
-	echo "H264 Decoder (XDM 0.9)"
-fi
-if test "${enable_mpeg4dec_xdm2+set}" = set; then 
-	echo "MPEG4 Decoder (XDM 1.2)"
-fi
-if test "${enable_mpeg4dec_xdm0+set}" = set; then 
-	echo "MPEG4 Decoder (XDM 0.9)"
-fi
-if test "${enable_mpeg2dec_xdm2+set}" = set; then 
-	echo "MPEG2 Decoder (XDM 1.2)"
-fi
-if test "${enable_mpeg2dec_xdm0+set}" = set; then 
-	echo "MPEG2 Decoder (XDM 0.9)"
-fi
-
-if test "${enable_aachedec_xdm1+set}" = set; then 
-	echo "AAC (HE) Decoder (XDM 1.x)"
-fi
-if test "${enable_aachedec_xdm0+set}" = set; then 
-	echo "AAC (HE) Decoder (XDM 0.9)"
-fi
-if test "${enable_aaclcdec_xdm1+set}" = set; then 
-	echo "AAC (LC) Decoder (XDM 1.x)"
-fi
-if test "${enable_aaclcdec_xdm0+set}" = set; then 
-	echo "AAC (LC) Decoder (XDM 0.9)"
-fi
-if test "${enable_mp3dec_xdm1+set}" = set; then 
-	echo "MP3 Decoder (XDM 1.x)"
-fi
-if test "${enable_mp3dec_xdm0+set}" = set; then 
-	echo "MP3 Decoder (XDM 0.9)"
-fi
-if test "${enable_wmadec_xdm1+set}" = set; then 
-	echo "WMA Decoder (XDM 1.x)"
-fi
-if test "${enable_wmadec_xdm0+set}" = set; then 
-	echo "WMA Decoder (XDM 0.9)"
-fi
-if test "${enable_g711dec_xdm1+set}" = set; then 
-	echo "G711 Decoder (XDM 1.x)"
-fi
-if test "${enable_g711dec_xdm0+set}" = set; then 
-	echo "G711 Decoder (XDM 0.9)"
-fi
-
-if test "${enable_jpegdec_xdm1+set}" = set; then 
-	echo "JPEG Decoder (XDM 1.0)"
-fi
-if test "${enable_jpegdec_xdm0+set}" = set; then 
-	echo "JPEG Decoder (XDM 0.9)"
-fi
-
-if test "${enable_h264enc_xdm1+set}" = set; then 
-	echo "H264 Encoder (XDM 1.x)"
-fi
-if test "${enable_h264enc_xdm0+set}" = set; then 
-	echo "H264 Encoder (XDM 0.9)"
-fi
-if test "${enable_mpeg4enc_xdm1+set}" = set; then 
-	echo "MPEG4 Encoder (XDM 1.x)"
-fi
-if test "${enable_mpeg4enc_xdm0+set}" = set; then 
-	echo "MPEG4 Encoder (XDM 0.9)"
-fi
-if test "${enable_mpeg2enc_xdm1+set}" = set; then 
-	echo "MPEG2 Encoder (XDM 1.x)"
-fi
-if test "${enable_mpeg2enc_xdm0+set}" = set; then 
-	echo "MPEG2 Encoder (XDM 0.9)"
-fi
-
-if test "${enable_aacheenc_xdm1+set}" = set; then 
-	echo "AAC (HE) Encoder (XDM 1.x)"
-fi
-if test "${enable_aacheenc_xdm0+set}" = set; then 
-	echo "AAC (HE) Encoder (XDM 0.9)"
-fi
-if test "${enable_aaclcenc_xdm1+set}" = set; then 
-	echo "AAC (LC) Encoder (XDM 1.x)"
-fi
-if test "${enable_aaclcenc_xdm0+set}" = set; then 
-	echo "AAC (LC) Encoder (XDM 0.9)"
-fi
-if test "${enable_mp3enc_xdm1+set}" = set; then 
-	echo "MP3 Encoder (XDM 1.x)"
-fi
-if test "${enable_mp3enc_xdm0+set}" = set; then 
-	echo "MP3 Encoder (XDM 0.9)"
-fi
-if test "${enable_wmaenc_xdm1+set}" = set; then 
-	echo "WMA Encoder (XDM 1.x)"
-fi
-if test "${enable_wmaenc_xdm0+set}" = set; then 
-	echo "WMA Encoder (XDM 0.9)"
-fi
-if test "${enable_g711enc_xdm1+set}" = set; then 
-	echo "G711 Encoder (XDM 1.x)"
-fi
-if test "${enable_g711enc_xdm0+set}" = set; then 
-	echo "G711 Encoder (XDM 0.9)"
-fi
-
-if test "${enable_jpegenc_xdm1+set}" = set; then 
-	echo "JPEG Encoder (XDM 1.0)"
-fi
-if test "${enable_jpegenc_xdm0+set}" = set; then 
-	echo "JPEG Encoder (XDM 0.9)"
-fi
-
-if test "${enable_videosink+set}" = set; then 
-	echo "DMAI Video Sink"
-fi
-if test "${enable_resizer+set}" = set; then 
-	echo "DMAI Video Resizer"
-fi
-
-echo
 AC_OUTPUT(Makefile m4/Makefile src/Makefile)
 

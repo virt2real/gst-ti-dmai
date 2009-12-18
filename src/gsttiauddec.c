@@ -115,7 +115,7 @@ static gint gstti_auddec_get_out_buffer_size(GstTIDmaidec *dmaidec){
     return Adec_getOutBufSize(dmaidec->hCodec);
 }
 
-struct gstti_decoder_ops gstti_auddec_ops = {
+struct gstti_decoder_ops gstti_auddec0_ops = {
     .xdmversion = "xDM 0.9",
     .codec_type = AUDIO,
     .codec_create = gstti_auddec_create,

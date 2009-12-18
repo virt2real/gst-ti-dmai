@@ -62,8 +62,6 @@ GST_DEBUG_CATEGORY (gst_tidmaienc_debug);
 enum
 {
     PROP_0,
-    PROP_ENGINE_NAME,     /* engineName     (string)  */
-    PROP_CODEC_NAME,      /* codecName      (string)  */
     PROP_SIZE_OUTPUT_BUF, /* sizeOutputBuf  (int)     */
     PROP_COPY_OUTPUT,     /* copyOutput    (boolean) */
 };
@@ -107,7 +105,7 @@ static int
  * Register all the required encoders
  * Receives a NULL terminated array of encoder instances.
  */
-gboolean register_dmai_encoders(GstPlugin * plugin, GstTIDmaiencData *encoder){
+gboolean register_dmai_encoder(GstPlugin * plugin, GstTIDmaiencData *encoder){
     GTypeInfo typeinfo = {
            sizeof(GstTIDmaiencClass),
            (GBaseInitFunc)gst_tidmaienc_base_init,
@@ -120,38 +118,33 @@ gboolean register_dmai_encoders(GstPlugin * plugin, GstTIDmaiencData *encoder){
            (GInstanceInitFunc) gst_tidmaienc_init
        };
     GType type;
+    gchar *type_name;
 
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tidmaienc_debug, "TIDmaienc", 0,
         "DMAI VISA Encoder");
 
-    while (encoder->streamtype != NULL) {
-        gchar *type_name;
+    type_name = g_strdup_printf ("dmaienc_%s", encoder->streamtype);
 
-        type_name = g_strdup_printf ("dmaienc_%s", encoder->streamtype);
-
-        /* Check if it exists */
-        if (g_type_from_name (type_name)) {
-            g_free (type_name);
-            g_warning("Not creating type %s, since it exists already",type_name);
-            goto next;
-        }
-
-        type = g_type_register_static (GST_TYPE_ELEMENT, type_name, &typeinfo, 0);
-        g_type_set_qdata (type, GST_TIDMAIENC_PARAMS_QDATA, (gpointer) encoder);
-
-        if (!gst_element_register(plugin, type_name, GST_RANK_PRIMARY,type)) {
-              g_warning ("Failed to register %s", type_name);
-              g_free (type_name);
-              return FALSE;
-            }
-        g_free(type_name);
-
-next:
-        encoder++;
+    /* Check if it exists */
+    if (g_type_from_name (type_name)) {
+        g_free (type_name);
+        g_warning("Not creating type %s, since it exists already",type_name);
+        return FALSE;
     }
 
-    GST_DEBUG("DMAI encoders registered\n");
+    type = g_type_register_static (GST_TYPE_ELEMENT, type_name, &typeinfo, 0);
+    g_type_set_qdata (type, GST_TIDMAIENC_PARAMS_QDATA, (gpointer) encoder);
+
+    if (!gst_element_register(plugin, type_name, GST_RANK_PRIMARY,type)) {
+          g_warning ("Failed to register %s", type_name);
+          g_free (type_name);
+          return FALSE;
+    }
+
+    GST_DEBUG("DMAI encoder %s registered\n",type_name);
+    g_free(type_name);
+
     return TRUE;
 }
 
@@ -290,15 +283,6 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
 
     gstelement_class->change_state = gst_tidmaienc_change_state;
 
-    g_object_class_install_property(gobject_class, PROP_ENGINE_NAME,
-        g_param_spec_string("engineName", "Engine Name",
-            "Engine name used by Codec Engine", encoder->engineName,
-            G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_CODEC_NAME,
-        g_param_spec_string("codecName", "Codec Name", "Name of codec",
-            encoder->codecName, G_PARAM_READWRITE));
-
     g_object_class_install_property(gobject_class, PROP_SIZE_OUTPUT_BUF,
         g_param_spec_int("sizeOutputMultiple",
             "Number of times the output buffer size is"
@@ -433,20 +417,6 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
     GST_LOG("begin set_property\n");
 
     switch (prop_id) {
-    case PROP_ENGINE_NAME:
-        if (dmaienc->engineName) {
-            g_free((gpointer)dmaienc->engineName);
-        }
-        dmaienc->engineName = g_strdup(g_value_get_string(value));
-        GST_LOG("setting \"engineName\" to \"%s\"\n", dmaienc->engineName);
-        break;
-    case PROP_CODEC_NAME:
-        if (dmaienc->codecName) {
-            g_free((gpointer)dmaienc->codecName);
-        }
-        dmaienc->codecName =  g_strdup(g_value_get_string(value));
-        GST_LOG("setting \"codecName\" to \"%s\"\n", dmaienc->codecName);
-        break;
     case PROP_SIZE_OUTPUT_BUF:
         dmaienc->outBufMultiple = g_value_get_int(value);
         GST_LOG("setting \"outBufMultiple\" to \"%d\"\n",
@@ -489,12 +459,6 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
     GST_LOG("begin get_property\n");
 
     switch (prop_id) {
-    case PROP_ENGINE_NAME:
-        g_value_set_string(value, dmaienc->engineName);
-        break;
-    case PROP_CODEC_NAME:
-        g_value_set_string(value, dmaienc->codecName);
-        break;
     case PROP_SIZE_OUTPUT_BUF:
         g_value_set_int(value,dmaienc->outBufMultiple);
         break;

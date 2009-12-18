@@ -143,7 +143,7 @@ struct _GstTIDmaiencData
 };
 
 /* Function to initialize the decoders */
-gboolean register_dmai_encoders(GstPlugin *plugin, GstTIDmaiencData *encoder);
+gboolean register_dmai_encoder(GstPlugin *plugin, GstTIDmaiencData *encoder);
 
 G_END_DECLS
 

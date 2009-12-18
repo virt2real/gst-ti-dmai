@@ -60,8 +60,6 @@ GST_DEBUG_CATEGORY_STATIC (gst_tidmaidec_debug);
 enum
 {
     PROP_0,
-    PROP_ENGINE_NAME,     /* engineName     (string)  */
-    PROP_CODEC_NAME,      /* codecName      (string)  */
     PROP_NUM_INPUT_BUFS,  /* numInputBufs  (int)     */
     PROP_NUM_OUTPUT_BUFS, /* numOutputBufs  (int)     */
     PROP_QOS,             /* qos (boolean */
@@ -122,7 +120,7 @@ static void gstti_dmaidec_circ_buffer_flush
  * Register all the required decoders
  * Receives a NULL terminated array of decoder instances.
  */
-gboolean register_dmai_decoders(GstPlugin * plugin, GstTIDmaidecData *decoder){
+gboolean register_dmai_decoder(GstPlugin * plugin, GstTIDmaidecData *decoder){
     GTypeInfo typeinfo = {
            sizeof(GstTIDmaidecClass),
            (GBaseInitFunc)gst_tidmaidec_base_init,
@@ -135,39 +133,33 @@ gboolean register_dmai_decoders(GstPlugin * plugin, GstTIDmaidecData *decoder){
            (GInstanceInitFunc) gst_tidmaidec_init
        };
     GType type;
+    gchar *type_name;
 
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tidmaidec_debug, "TIDmaidec", 0,
         "DMAI VISA Decoder");
 
-    while (decoder->streamtype != NULL) {
-        gchar *type_name;
+    type_name = g_strdup_printf ("dmaidec_%s", decoder->streamtype);
 
-        type_name = g_strdup_printf ("dmaidec_%s", decoder->streamtype);
-
-        /* Check if it exists */
-        if (g_type_from_name (type_name)) {
-            g_warning("Not creating type %s, since it exists already",type_name);
-            g_free(type_name);
-            goto next;
-        }
-
-        type = g_type_register_static (GST_TYPE_ELEMENT, type_name, &typeinfo, 0);
-        g_type_set_qdata (type, GST_TIDMAIDEC_PARAMS_QDATA, (gpointer) decoder);
-
-
-        if (!gst_element_register(plugin, type_name, GST_RANK_PRIMARY,type)) {
-              g_warning ("Failed to register %s", type_name);
-              g_free (type_name);
-              return FALSE;
-            }
+    /* Check if it exists */
+    if (g_type_from_name (type_name)) {
+        g_warning("Not creating type %s, since it exists already",type_name);
         g_free(type_name);
-
-next:
-        decoder++;
+        return FALSE;
     }
 
-    GST_DEBUG("DMAI decoders registered\n");
+    type = g_type_register_static (GST_TYPE_ELEMENT, type_name, &typeinfo, 0);
+    g_type_set_qdata (type, GST_TIDMAIDEC_PARAMS_QDATA, (gpointer) decoder);
+
+    if (!gst_element_register(plugin, type_name, GST_RANK_PRIMARY,type)) {
+          g_warning ("Failed to register %s", type_name);
+          g_free (type_name);
+          return FALSE;
+    }
+
+    GST_DEBUG("DMAI decoder %s registered\n",type_name);
+    g_free(type_name);
+
     return TRUE;
 }
 
@@ -262,15 +254,6 @@ static void gst_tidmaidec_class_init(GstTIDmaidecClass *klass)
     gobject_class->get_property = gst_tidmaidec_get_property;
 
     gstelement_class->change_state = gst_tidmaidec_change_state;
-
-    g_object_class_install_property(gobject_class, PROP_ENGINE_NAME,
-        g_param_spec_string("engineName", "Engine Name",
-            "Engine name used by Codec Engine", decoder->engineName,
-            G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_CODEC_NAME,
-        g_param_spec_string("codecName", "Codec Name", "Name of codec",
-            decoder->codecName, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_NUM_OUTPUT_BUFS,
         g_param_spec_int("numOutputBufs",
@@ -390,20 +373,6 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
     GST_LOG("begin set_property\n");
 
     switch (prop_id) {
-    case PROP_ENGINE_NAME:
-        if (dmaidec->engineName) {
-            g_free((gpointer)dmaidec->engineName);
-        }
-        dmaidec->engineName = g_strdup(g_value_get_string(value));
-        GST_LOG("setting \"engineName\" to \"%s\"\n", dmaidec->engineName);
-        break;
-    case PROP_CODEC_NAME:
-        if (dmaidec->codecName) {
-            g_free((gpointer)dmaidec->codecName);
-        }
-        dmaidec->codecName =  g_strdup(g_value_get_string(value));
-        GST_LOG("setting \"codecName\" to \"%s\"\n", dmaidec->codecName);
-        break;
     case PROP_NUM_OUTPUT_BUFS:
         dmaidec->numOutputBufs = g_value_get_int(value);
         GST_LOG("setting \"numOutputBufs\" to \"%ld\"\n",
@@ -439,12 +408,6 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
     GST_LOG("begin get_property\n");
 
     switch (prop_id) {
-    case PROP_ENGINE_NAME:
-        g_value_set_string(value, dmaidec->engineName);
-        break;
-    case PROP_CODEC_NAME:
-        g_value_set_string(value, dmaidec->codecName);
-        break;
     case PROP_NUM_OUTPUT_BUFS:
         g_value_set_int(value,dmaidec->numOutputBufs);
         break;

@@ -151,396 +151,6 @@ extern struct gstti_encoder_ops gstti_imgenc0_ops;
 #define ENCODEENGINE CUSTOM_CODEC_SERVER
 #endif
 
-/* Video decoders */
-
-GstTIDmaidecData decoders[] = {
-#ifdef ENABLE_H264DEC_XDM2
-    {
-        .streamtype = "h264",
-        .sinkCaps = &gstti_h264_caps,
-        .srcCaps = &gstti_yuv_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "h264dec",
-        .dops = &gstti_viddec2_ops,
-        .parser = &gstti_h264_parser,
-    },
-#elif defined(ENABLE_H264DEC_XDM0)
-    {
-        .streamtype = "h264",
-        .sinkCaps = &gstt_h264_caps,
-        .srcCaps = &gstti_yuv_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "h264dec",
-        .dops = &gstti_viddec0_ops,
-        .parser = &gstti_h264_parser,
-    },
-#endif
-#ifdef ENABLE_MPEG4DEC_XDM2
-    {
-        .streamtype = "mpeg4",
-        .sinkCaps = &gstti_mpeg4_sink_caps,
-        .srcCaps = &gstti_yuv_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "mpeg4dec",
-        .dops = &gstti_viddec2_ops,
-        .parser = &gstti_mpeg4_parser,
-    },
-#elif defined(ENABLE_MPEG4DEC_XDM0)
-    {
-        .streamtype = "mpeg4",
-        .sinkCaps = &gstti_mpeg4_sink_caps,
-        .srcCaps = &gstti_yuv_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "mpeg4dec",
-        .dops = &gstti_viddec0_ops,
-        .parser = &gstti_mpeg4_parser,
-    },
-#endif
-#ifdef ENABLE_MPEG2DEC_XDM2
-    {
-        .streamtype = "mpeg2",
-        .sinkCaps = &gstti_mpeg2_caps,
-        .srcCaps = &gstti_yuv_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "mpeg2dec",
-        .dops = &gstti_viddec2_ops,
-        .parser = &gstti_generic_parser,
-    },
-#elif defined(ENABLE_MPEG2DEC_XDM0)
-    {
-        .streamtype = "mpeg2",
-        .sinkCaps = &gstti_mpeg2_caps,
-        .srcCaps = &gstti_yuv_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "mpeg2dec",
-        .dops = &gstti_viddec0_ops,
-        .parser = &gstti_generic_parser,
-    },
-#endif
-
-/* Audio decoders */
-#ifdef ENABLE_AACHEDEC_XDM1
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_aac_sink_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "aachedec",
-        .dops = &gstti_auddec1_ops,
-        .parser = &gstti_aac_parser,
-    },
-#elif defined(ENABLE_AACHEDEC_XDM0)
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_aac_sink_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "aachedec",
-        .dops = &gstti_auddec0_ops,
-        .parser = &gstti_aac_parser,
-    },
-#endif
-#ifdef ENABLE_AACLCDEC_XDM1
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_aac_sink_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "aaclcdec",
-        .dops = &gstti_auddec1_ops,
-        .parser = &gstti_aac_parser,
-    },
-#elif defined(ENABLE_AACLCDEC_XDM0)
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_aac_sink_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "aaclcdec",
-        .dops = &gstti_auddec0_ops,
-        .parser = &gstti_aac_parser,
-    },
-#endif
-#ifdef ENABLE_MP3DEC_XDM1
-    {
-        .streamtype = "mp3",
-        .sinkCaps = &gstti_mp3_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "mp3dec",
-        .dops = &gstti_auddec1_ops,
-        .parser = &gstti_generic_parser,
-    },
-#elif defined(ENABLE_MP3DEC_XDM0)
-    {
-        .streamtype = "mp3",
-        .sinkCaps = &gstti_mp3_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "mp3dec",
-        .dops = &gstti_auddec0_ops,
-        .parser = &gstti_generic_parser,
-    },
-#endif
-#ifdef ENABLE_WMADEC_XDM1
-    {
-        .streamtype = "wma",
-        .sinkCaps = &gstti_wma_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "wmadec",
-        .dops = &gstti_auddec1_ops,
-        .parser = &gstti_generic_parser,
-    },
-#elif defined(ENABLE_WMADEC_XDM0)
-    {
-        .streamtype = "wma",
-        .sinkCaps = &gstti_wma_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "wmadec",
-        .dops = &gstti_auddec0_ops,
-        .parser = &gstti_generic_parser,
-    },
-#endif
-/*
-#ifdef ENABLE_G711DEC_XDM1
-    {
-        .streamtype = "g711",
-        .sinkCaps = &gstti_g711_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "g711dec",
-        .dops = &gstti_sphdec1_ops,
-        .parser = &gstti_generic_parser,
-    },
-#elif defined(ENABLE_G711DEC_XDM0)
-    {
-        .streamtype = "g711",
-        .sinkCaps = &gstti_g711_caps,
-        .srcCaps = &gstti_pcm_caps,
-        .engineName = DECODEENGINE,
-        .codecName = "g711dec",
-        .dops = &gstti_sphdec0_ops,
-        .parser = &gstti_generic_parser,
-    },
-#endif
-*/
-    { .streamtype = NULL },
-
-    /* Dummy entry to avoid build errors when no element
-       is enabled using the src or sink caps
-    */
-    { .streamtype = NULL,
-      .srcCaps = &gstti_yuv_caps,
-      .sinkCaps = &gstti_yuv_caps,
-    },
-};
-
-
-/* Video encoders */
-
-GstTIDmaiencData encoders[] = {
-#ifdef ENABLE_H264ENC_XDM1
-    {
-        .streamtype = "h264",
-#if PLATFORM == dm365
-        .sinkCaps = &gstti_nv12_caps,
-#else
-        .sinkCaps = &gstti_yuv_caps,
-#endif
-        .srcCaps = &gstti_h264_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "h264enc",
-        .eops = &gstti_videnc1_ops,
-        .parser = &gstti_h264_parser,
-    },
-#elif defined(ENABLE_H264ENC_XDM0)
-    {
-        .streamtype = "h264",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_h264_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "h264enc",
-        .eops = &gstti_videnc0_ops,
-        .parser = &gstti_h264_parser,
-    },
-#endif
-#ifdef ENABLE_MPEG4ENC_XDM1
-    {
-        .streamtype = "mpeg4",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_mpeg4_src_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "mpeg4enc",
-        .eops = &gstti_videnc1_ops,
-        .parser = &gstti_mpeg4_parser,
-    },
-#elif defined(ENABLE_MPEG4ENC_XDM0)
-    {
-        .streamtype = "mpeg4",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_mpeg4_src_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "mpeg4enc",
-        .eops = &gstti_videnc0_ops,
-        .parser = &gstti_mpeg4_parser,
-    },
-#endif
-#ifdef ENABLE_MPEG2ENC_XDM1
-    {
-        .streamtype = "mpeg2",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_mpeg2_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "mpeg2enc",
-        .eops = &gstti_videnc1_ops,
-    },
-#elif defined(ENABLE_MPEG2ENC_XDM0)
-    {
-        .streamtype = "mpeg2",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_mpeg2_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "mpeg2enc",
-        .eops = &gstti_videnc0_ops,
-    },
-#endif
-
-/* Audio encoders */
-
-#ifdef ENABLE_AACHEENC_XDM1
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_aac_src_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "aacheenc",
-        .eops = &gstti_audenc1_ops,
-        .parser = &gstti_aac_parser,
-    },
-#elif defined(ENABLE_AACHEENC_XDM0)
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_aac_src_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "aacheenc",
-        .eops = &gstti_audenc0_ops,
-        .parser = &gstti_aac_parser,
-    },
-#endif
-#ifdef ENABLE_AACLCENC_XDM1
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_aac_src_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "aaclcenc",
-        .eops = &gstti_audenc1_ops,
-        .parser = &gstti_aac_parser,
-    },
-#elif defined(ENABLE_AACLCENC_XDM0)
-    {
-        .streamtype = "aac",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_aac_src_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "aaclcenc",
-        .eops = &gstti_audenc0_ops,
-        .parser = &gstti_aac_parser,
-    },
-#endif
-#ifdef ENABLE_MP3ENC_XDM1
-    {
-        .streamtype = "mp3",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_mp3_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "mp3enc",
-        .eops = &gstti_audenc1_ops,
-    },
-#elif defined(ENABLE_MP3ENC_XDM0)
-    {
-        .streamtype = "mp3",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_mp3_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "mp3enc",
-        .eops = &gstti_audenc0_ops,
-    },
-#endif
-#ifdef ENABLE_WMAENC_XDM1
-    {
-        .streamtype = "wma",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_wma_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "wmaenc",
-        .eops = &gstti_audenc1_ops,
-    },
-#elif defined(ENABLE_WMAENC_XDM0)
-    {
-        .streamtype = "wma",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_wma_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "wmaenc",
-        .eops = &gstti_audenc0_ops,
-    },
-#endif
-/*
-#ifdef ENABLE_G711ENC_XDM1
-    {
-        .streamtype = "g711",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_g711_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "g711enc",
-        .eops = &gstti_sphenc1_ops,
-    },
-#elif defined(ENABLE_G711ENC_XDM0)
-    {
-        .streamtype = "g711",
-        .sinkCaps = &gstti_pcm_caps,
-        .srcCaps = &gstti_g711_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "g711enc",
-        .eops = &gstti_sphenc0_ops,
-    },
-#endif
-*/
-
-/* Image Encoder */
-#ifdef ENABLE_JPEGENC_XDM1
-    {
-        .streamtype = "jpeg",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_jpeg_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "jpegenc",
-        .eops = &gstti_imgenc1_ops,
-    },
-#elif ENABLE_JPEGENC_XDM0
-    {
-        .streamtype = "jpeg",
-        .sinkCaps = &gstti_yuv_caps,
-        .srcCaps = &gstti_jpeg_caps,
-        .engineName = ENCODEENGINE,
-        .codecName = "jpegenc",
-        .eops = &gstti_imgenc0_ops,
-    },
-#endif
-    { .streamtype = NULL },
-    /* Dummy entry to avoid build errors when no element
-       is enabled using the src or sink caps
-    */
-    { .streamtype = NULL,
-      .srcCaps = &gstti_pcm_caps,
-      .sinkCaps = &gstti_pcm_caps,
-    },
-};
-
 /*
  * Custom extended parameters for known codecs
  * The preset will define whenever a particular codec combo uses one of this
@@ -554,6 +164,247 @@ struct codec_custom_data_entry codec_custom_data[] = {
     { .codec_name = NULL },
 };
 
+static gboolean
+probe_codec_server_decoders (GstPlugin *TICodecPlugin)
+{
+    GstTIDmaidecData *decoder = NULL;
+    gint numalgo;
+    gint xdm_ver;
+    Engine_AlgInfo algoname;
+    enum dmai_codec_type mediaType;
+
+    /* Get the algorithms from Codec Engine */
+    algoname.algInfoSize = sizeof(Engine_AlgInfo); 
+    Engine_getNumAlgs (DECODEENGINE, &numalgo);
+    
+    while (numalgo != 0) {
+        numalgo--;
+
+        /* Get the algo info */
+        Engine_getAlgInfo (DECODEENGINE, &algoname, numalgo);
+
+        if (g_strstr_len (*algoname.typeTab, 30, "DEC2")) {
+            xdm_ver = 2;
+        } else if (g_strstr_len (*algoname.typeTab, 30, "DEC1")) {
+            xdm_ver = 1;
+        } else if (g_strstr_len (*algoname.typeTab, 30, "DEC")) {
+            xdm_ver = 0;
+        } else {
+            /* Nothing we handle, maybe an encoder */
+            continue;
+        }
+        decoder = malloc (sizeof (GstTIDmaidecData));
+        decoder->codecName = algoname.name;
+        decoder->engineName = DECODEENGINE;
+
+        if (!strcmp (decoder->codecName, "mpeg4dec")) {
+            mediaType = VIDEO;
+            decoder->streamtype = "mpeg4";
+            decoder->sinkCaps = &gstti_mpeg4_sink_caps;
+            decoder->parser = &gstti_mpeg4_parser;
+        } else if (!strcmp (decoder->codecName, "h264dec")) {
+            mediaType = VIDEO;
+            decoder->streamtype = "h264";
+            decoder->sinkCaps = &gstti_h264_caps;
+            decoder->parser = &gstti_h264_parser;
+        } else if (!strcmp (decoder->codecName, "mpeg2dec")) {
+            mediaType = VIDEO;
+            decoder->streamtype = "mpeg2";
+            decoder->sinkCaps = &gstti_mpeg2_caps;
+            decoder->parser = &gstti_generic_parser;
+        } else if (!strcmp (decoder->codecName, "aachedec") ||
+                !strcmp (decoder->codecName, "aaclcdec")) {
+            mediaType = AUDIO;
+            decoder->streamtype = "aac";
+            decoder->sinkCaps = &gstti_aac_sink_caps;
+            decoder->parser = &gstti_aac_parser;
+        } else if (!strcmp (decoder->codecName, "mp3dec")) {
+            mediaType = AUDIO;
+            decoder->streamtype = "mp3";
+            decoder->sinkCaps = &gstti_mp3_caps;
+            decoder->parser = &gstti_generic_parser;
+        } else if (!strcmp (decoder->codecName, "wmadec")) {
+            mediaType = AUDIO;
+            decoder->streamtype = "wma";
+            decoder->sinkCaps = &gstti_wma_caps;
+            decoder->parser = &gstti_generic_parser;
+#if 0
+        } else if (!strcmp (decoder->codecName, "g711dec")) {
+            decoder->streamtype = "g711";
+            mediaType = AUDIO;
+            decoder->sinkCaps = &gstti_g711_caps;
+            decoder->parser = &gstti_generic_parser;
+#endif
+        } else {
+           GST_WARNING ("Element not provided for codec: %s",
+               decoder->codecName);
+           free(decoder);
+           continue;
+        }
+
+        /* Fill based on the xdm version */
+        switch (mediaType){
+        case VIDEO:
+            decoder->srcCaps = &gstti_yuv_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    decoder->dops = &gstti_viddec0_ops;
+                    break;
+                case 2:
+                    decoder->dops = &gstti_viddec2_ops;
+            }
+            break;
+        case AUDIO:
+            decoder->srcCaps = &gstti_pcm_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    decoder->dops = &gstti_auddec0_ops;
+                    break;
+                case 1:
+                    decoder->dops = &gstti_auddec1_ops;
+            }
+            break;
+        default:
+            g_warning("Unkown media type for idx %d",mediaType);
+            break;
+        }
+
+        /* Now register the element */
+        if (!register_dmai_decoder(TICodecPlugin,decoder)){
+            g_warning("Failed to register one decoder, aborting");
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+static gboolean
+probe_codec_server_encoders (GstPlugin *TICodecPlugin)
+{
+    GstTIDmaiencData *encoder;
+    gint numalgo;
+    gint xdm_ver;
+    Engine_AlgInfo algoname;
+    enum dmai_codec_type mediaType;
+
+    /* Get the algorithms from Codec Engine */
+    algoname.algInfoSize = sizeof(Engine_AlgInfo); 
+    Engine_getNumAlgs (ENCODEENGINE, &numalgo);
+
+    while (numalgo != 0) {
+        numalgo--;
+
+        /* Get the algo info */
+        Engine_getAlgInfo (ENCODEENGINE, &algoname, numalgo);
+
+        if (g_strstr_len (*algoname.typeTab, 30, "ENC1")) {
+            xdm_ver = 1;
+        } else if (g_strstr_len (*algoname.typeTab, 30, "ENC")) {
+            xdm_ver = 0;
+        } else {
+            /* Nothing we handle, maybe an decoder */
+            continue;
+        }
+        encoder = malloc (sizeof (GstTIDmaiencData));
+        encoder->codecName = algoname.name;
+        encoder->engineName = ENCODEENGINE;
+
+        if (!strcmp (encoder->codecName, "mpeg4enc")) {
+            mediaType = VIDEO;
+            encoder->streamtype = "mpeg4";
+            encoder->srcCaps = &gstti_mpeg4_src_caps;
+        } else if (!strcmp (encoder->codecName, "h264enc")){
+            mediaType = VIDEO;
+            encoder->streamtype = "h264";
+            encoder->srcCaps = &gstti_h264_caps;
+            encoder->parser = &gstti_h264_parser;
+        } else if (!strcmp (encoder->codecName, "mpeg2enc")) {
+            mediaType = VIDEO;
+            encoder->streamtype = "mpeg2";
+            encoder->srcCaps = &gstti_mpeg2_caps;
+        } else if (!strcmp (encoder->codecName, "aacheenc") || 
+                !strcmp (encoder->codecName, "aaclcenc")) {
+            mediaType = AUDIO;
+            encoder->streamtype = "aac";
+            encoder->srcCaps = &gstti_aac_src_caps;
+            encoder->parser = &gstti_aac_parser;
+        } else if (!strcmp (encoder->codecName, "mp3enc")) {
+            mediaType = AUDIO;
+            encoder->streamtype = "mp3";
+            encoder->srcCaps = &gstti_mp3_caps;
+        } else if (!strcmp (encoder->codecName, "wmaenc")) {
+            mediaType = AUDIO;
+            encoder->streamtype = "wma";
+            encoder->srcCaps = &gstti_wma_caps;
+#if 0
+        } else if (!strcmp (encoder->codecName, "g711enc")) {
+            mediaType = AUDIO;
+            encoder->streamtype = "g711";
+            encoder->srcCaps = &gstti_g711_caps;
+            continue;
+#endif
+        } else if (!strcmp (encoder->codecName, "jpegenc")) {
+            mediaType = IMAGE;
+            encoder->streamtype = "jpeg";
+            encoder->srcCaps = &gstti_jpeg_caps;
+        } else {
+            GST_WARNING ("Element not provided for codec: %s",
+                encoder->codecName);
+            free(encoder);
+            continue;
+        }
+
+        /* Fill based on the xdm version */
+        switch (mediaType){
+        case VIDEO:
+            encoder->sinkCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            if (!strcmp (encoder->codecName, "h264enc")) {
+                encoder->sinkCaps = &gstti_nv12_caps;
+            }
+#endif
+            switch (xdm_ver) {
+                case 0: 
+                    encoder->eops = &gstti_videnc0_ops;
+                    break;
+                case 1:
+                    encoder->eops = &gstti_videnc1_ops;
+            }
+            break;
+        case IMAGE:
+            encoder->sinkCaps = &gstti_yuv_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    encoder->eops = &gstti_imgenc0_ops;
+                    break;
+                case 1:
+                    encoder->eops = &gstti_imgenc1_ops;
+            }
+            break;
+        case AUDIO:
+            encoder->sinkCaps = &gstti_pcm_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    encoder->eops = &gstti_audenc0_ops;
+                    break;
+                case 1:
+                    encoder->eops = &gstti_audenc1_ops;
+            }
+            break;
+        default:
+            g_warning("Unkown media type for idx %d",mediaType);
+            break;
+        }
+        
+        /* Now register the element */
+        if (!register_dmai_encoder(TICodecPlugin,encoder)){
+            g_warning("Failed to register one encoder, aborting");
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
 /* entry point to initialize the plug-in
  * initialize the plug-in itself
  * register the element factories and other features
@@ -566,14 +417,12 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
 
     /* Initialize DMAI */
     Dmai_init();
-
-    if (!register_dmai_decoders(TICodecPlugin,decoders)){
-        g_warning("Failed to register one decoder, aborting");
+    
+    if (!probe_codec_server_decoders (TICodecPlugin)) {
         return FALSE;
     }
 
-    if (!register_dmai_encoders(TICodecPlugin,encoders)){
-        g_warning("Failed to register one encoder, aborting");
+    if (!probe_codec_server_encoders (TICodecPlugin)) {
         return FALSE;
     }
 
@@ -589,17 +438,13 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
         GST_RANK_PRIMARY,GST_TYPE_DMAIPERF))
         return FALSE;
 
-#ifdef ENABLE_VIDEOSINK
     if (!gst_element_register(TICodecPlugin, "TIDmaiVideoSink",
         GST_RANK_PRIMARY,GST_TYPE_TIDMAIVIDEOSINK))
         return FALSE;
-#endif
 
-#ifdef ENABLE_DMAI_RESIZER
     if (!gst_element_register(TICodecPlugin, "dmairesizer",
         GST_RANK_PRIMARY,GST_TYPE_DMAI_RESIZER))
         return FALSE;
-#endif
 
     return TRUE;
 }
