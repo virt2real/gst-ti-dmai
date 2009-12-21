@@ -63,7 +63,7 @@ static GstStaticPadTemplate video_sink_template_factory =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")));
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")", par =(fraction) [0/1, MAX ]"));
 
 static void gst_dmai_resizer_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
@@ -264,10 +264,11 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->target_width_max = 0;
   dmairesizer->target_height_max = 0;
   dmairesizer->keep_aspect_ratio = FALSE;
-  dmairesizer->caps_is_first_time = TRUE;
+  dmairesizer->setup_outBufTab = TRUE;
   dmairesizer->flushing = FALSE;
   dmairesizer->clean_bufTab = FALSE;
-
+  dmairesizer->par_n = 1;
+  dmairesizer->par_d = 1;
   dmairesizer->mutex = NULL;
   g_assert (dmairesizer->mutex == NULL);
   dmairesizer->mutex = g_mutex_new ();
@@ -524,6 +525,20 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
     dmairesizer->fps_d = 0;
     dmairesizer->fps_n = 1;
   }
+  if (!gst_structure_get_fraction (structure, "par", &dmairesizer->par_n,
+          &dmairesizer->par_d)) {
+    dmairesizer->par_d = 1;
+    dmairesizer->par_n = 1;
+  }else{
+    if(dmairesizer->par_d < 1){
+      dmairesizer->par_d = 1;
+      GST_INFO("The denominator of pixel aspect ratio can't be less than 1, setting to 1");
+    }
+    if(dmairesizer->par_n < 1){
+      dmairesizer->par_n = 1;
+      GST_INFO("The numerator of pixel aspect ratio can't be less than 1, setting to 1");
+    }
+  }
 #if PLATFORM == dm6467
   dmairesizer->colorSpace = ColorSpace_YUV422PSEMI;
 #else
@@ -532,9 +547,9 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   dmairesizer->inBufSize = 0;
 
   /*Setting output buffer */
-  if(dmairesizer->caps_is_first_time){
+  if(dmairesizer->setup_outBufTab){
     setup_outputBuf (dmairesizer);
-    dmairesizer->caps_is_first_time = FALSE;
+    dmairesizer->setup_outBufTab = FALSE;
   }
   dmairesizer->clean_bufTab = TRUE;
 
@@ -653,24 +668,46 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
     dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
       (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
     dmairesizer->flagToClean[IDBuf] = FALSE;
-    if(dmairesizer->keep_aspect_ratio){
-      blackFill(dmairesizer, DstBuf);
-    }
+    blackFill(dmairesizer, DstBuf);
   }
 
   if(dmairesizer->keep_aspect_ratio){
      /*Sw/Sh > Tw/Th*/
      if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
-     /*Horizontal*/
-     dmairesizer->dim[IDBuf].height = dmairesizer->target_width * dmairesizer->source_height / dmairesizer->source_width;
-     dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
-
+       /*Horizontal*/
+       dmairesizer->dim[IDBuf].height = dmairesizer->target_width * dmairesizer->source_height / dmairesizer->source_width;
+       dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
      }else{
-     /*Vertical*/
-     dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
-     dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+       /*Vertical*/
+       dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
+       dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
      }
-
+     /*PAR*/
+     if(dmairesizer->par_n > dmairesizer->par_d){
+       /*Vertical*/
+       dmairesizer->dim[IDBuf].width *= dmairesizer->par_d; 
+       dmairesizer->dim[IDBuf].width /= dmairesizer->par_n;
+       dmairesizer->dim[IDBuf].width &= ~0xF;
+       dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+     }else{
+       /*Horizontal*/
+       dmairesizer->dim[IDBuf].height *= dmairesizer->par_n;
+       dmairesizer->dim[IDBuf].height /= dmairesizer->par_d;
+       dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+     }
+  }else{
+    /*PAR*/
+    if(dmairesizer->par_n > 1 || dmairesizer->par_d > 1 ){
+      if(dmairesizer->par_n > dmairesizer->par_d){
+       /*Vertical*/
+        dmairesizer->dim[IDBuf].width = (dmairesizer->target_width * dmairesizer->par_d / dmairesizer->par_n) & ~0xF;
+        dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+      }else{
+        /*Horizontal*/
+        dmairesizer->dim[IDBuf].height = dmairesizer->target_height * dmairesizer->par_n / dmairesizer->par_d;
+        dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+      }
+    }
   }
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
@@ -691,17 +728,13 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   }
 
   /*Reseting values after resize to send buffer correctly*/
-  if(dmairesizer->keep_aspect_ratio){
-     if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
-     /*Horizontal*/
-     dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
-     dmairesizer->dim[IDBuf].y = 0;
-     }else{
-     /*Vertical*/
-     dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
-     dmairesizer->dim[IDBuf].x = 0;
-     }
+  if(dmairesizer->keep_aspect_ratio || dmairesizer->par_n > 1 || dmairesizer->par_d > 1){
+       dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
+       dmairesizer->dim[IDBuf].y = 0;
+       dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
+       dmairesizer->dim[IDBuf].x = 0;
   }
+
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
   return DstBuf;
@@ -899,6 +932,7 @@ void
 free_buffers (GstTIDmaiResizer * dmairesizer)
 {
 
+  dmairesizer->setup_outBufTab = TRUE;
   if (dmairesizer->dim) {
     free (dmairesizer->dim);
   }

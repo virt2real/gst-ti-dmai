@@ -64,7 +64,7 @@ struct _GstTIDmaiResizer
   gint fps_n;
   gint fps_d;
   ColorSpace_Type colorSpace;
-  gboolean caps_is_first_time;
+  gboolean setup_outBufTab;
   gboolean flushing;
   gboolean clean_bufTab;
   BufferGfx_Dimensions *dim;
@@ -90,7 +90,9 @@ struct _GstTIDmaiResizer
   gint target_height_max;
   GMutex *mutex;
   gboolean keep_aspect_ratio;
-
+  gint par_d;
+  gint par_n;
+ 
   /*Resizer */
   Resize_Handle Resizer;
 
