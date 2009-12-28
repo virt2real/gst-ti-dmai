@@ -42,5 +42,5 @@ XDC_PATH      = .;$(XDC_INSTALL_DIR)/packages;$(LINK_INSTALL_DIR)/packages;$(FC_
 	XDCPATH="$(XDC_PATH)" $(CONFIGURO) -c $(MVTOOL_DIR) -o  @XDC_CONFIG_BASENAME@ -t $(XDC_TARGET) -p $(XDC_PLATFORM) -b $(DMAI_INSTALL_DIR)/packages/config.bld $<
 
 clean-local:
-	-rm -rf @XDC_CONFIG_BASENAME@ gstticodecs_platform.c
+	-rm -rf @XDC_CONFIG_BASENAME@
 
