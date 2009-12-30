@@ -134,6 +134,7 @@ static gboolean aac_init(GstTIDmaidec *dmaidec){
     memset(priv,0,sizeof(struct gstti_aac_parser_private));
     priv->flushing = FALSE;
     priv->framed = FALSE;
+    priv->codecdata_inserted = FALSE;
 
     if (dmaidec->parser_private){
         g_free(dmaidec->parser_private);
@@ -179,6 +180,7 @@ static void aac_flush_start(void *private){
         (struct gstti_aac_parser_private *) private;
 
     priv->flushing = TRUE;
+    priv->codecdata_inserted = FALSE;
     GST_DEBUG("Parser flushed");
     return;
 }
@@ -192,89 +194,100 @@ static void aac_flush_stop(void *private){
     return;
 }
 
-/*
- * gst_get_acc_rateIdx - This function calculate sampling index rate using
- * the lookup table defined in ISO/IEC 13818-7 Part7: Advanced Audio Coding.
- */
-
-static GstBuffer *aac_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
-{
+static int aac_custom_memcpy(GstTIDmaidec *dmaidec, void *target, 
+    int available, GstBuffer *buf){
     struct gstti_aac_parser_private *priv =
         (struct gstti_aac_parser_private *) dmaidec->parser_private;
-    GstBuffer *aac_header_buf = NULL;
-    GstStructure *capStruct;
-    GstBuffer    *codec_data = NULL;
-    const GValue *value;
-    GstCaps      *caps = GST_BUFFER_CAPS(buf);
-    guint8 *data = GST_BUFFER_DATA(buf);
-    guint aacprofile = 0x1;
+    int ret = -1;
 
-    /* Find if we got a framed stream */
-    if (!caps)
-        goto check_header;
-    
-    capStruct = gst_caps_get_structure(caps,0);
-    if (!capStruct)
-        goto check_header;
+    if (priv->codecdata_inserted){
+        if (available < GST_BUFFER_SIZE(buf))
+            return ret;
+        ret = 0;
+    } else {
+        GstStructure *capStruct;
+        GstBuffer *codec_data = NULL;
+        GstBuffer *aac_header_buf = NULL;
+        const GValue *value;
+        GstCaps      *caps = GST_BUFFER_CAPS(buf);
+        guint8 *data = GST_BUFFER_DATA(buf);
+        guint aacprofile = 0x1;
 
-    gst_structure_get_boolean(capStruct, "framed", &priv->framed);
-    GST_DEBUG("The stream is %s framed",priv->framed ? "" : "not");
-    
-    if (!(value = gst_structure_get_value(capStruct, "codec_data"))){
-        GST_WARNING("No codec_data found, assuming an AAC LC stream");
-    }
-    codec_data = gst_value_get_buffer(value);
-    
-    aacprofile = (GST_BUFFER_DATA(codec_data)[0] >> 3) - 1;
-    GST_INFO("AAC profile is %d",aacprofile);
-    
-    gst_buffer_unref(codec_data);
+        /* Find if we got a framed stream */
+        if (!caps)
+            goto check_header;
+
+        capStruct = gst_caps_get_structure(caps,0);
+        if (!capStruct)
+            goto check_header;
+
+        gst_structure_get_boolean(capStruct, "framed", &priv->framed);
+        GST_DEBUG("The stream is %s framed",priv->framed ? "" : "not");
+
+        if (!(value = gst_structure_get_value(capStruct, "codec_data"))){
+            GST_WARNING("No codec_data found, assuming an AAC LC stream");
+        }
+        codec_data = gst_value_get_buffer(value);
+
+        aacprofile = (GST_BUFFER_DATA(codec_data)[0] >> 3) - 1;
+        GST_INFO("AAC profile is %d",aacprofile);
 
 check_header:
-    /* Now check if we already have some ADIF or ADTS header */
-    if (data[0] == 'A' && data[1] == 'D' && data[2] == 'I'
-         && data[3] == 'F') {
-        return NULL;
+         /* Now check if we already have some ADIF or ADTS header */
+         if (!(data[0] == 'A' && data[1] == 'D' && data[2] == 'I'
+              && data[3] == 'F') &&
+             !((data[0] == 0xff) && ((data[1] >> 4) == 0xf))) {
+
+             /* Allocate buffer to store AAC ADIF header */
+             aac_header_buf = gst_buffer_new_and_alloc(MAX_AAC_HEADER_LENGTH);
+             if (aac_header_buf == NULL) {
+                 GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
+                     ("Failed to allocate buffer for aac header"));
+                 return NULL;
+             }
+
+             memset(GST_BUFFER_DATA(aac_header_buf), 0, MAX_AAC_HEADER_LENGTH);
+
+             /* Set adif_id field in ADIF header  - Always "ADIF"  (32-bit long) */
+             ADIF_SET_ID(aac_header_buf, "ADIF");
+
+             /* Disable copyright id  field in ADIF header - (1-bit long) */
+             ADIF_CLEAR_COPYRIGHT_ID_PRESENT(aac_header_buf);
+
+             /* Set profile field in ADIF header - (2-bit long)
+              * 0 - MAIN, 1 - LC,  2 - SCR  3 - LTR (2-bit long) 
+              */
+             ADIF_SET_PROFILE(aac_header_buf, aacprofile);
+
+             /* Set sampling rate index field in ADIF header - (4-bit long) */ 
+             ADIF_SET_SAMPLING_FREQUENCY_INDEX(aac_header_buf, 
+                 gst_get_aac_rateIdx(dmaidec->rate));
+
+             /* Set front_channel_element field in ADIF header - (4-bit long) */
+             ADIF_SET_FRONT_CHANNEL_ELEMENT(aac_header_buf, dmaidec->channels);
+
+             /* Set comment field in ADIF header (8-bit long) */
+             ADIF_SET_COMMENT_FIELD(aac_header_buf, 0x3);
+
+             GST_INFO("Generating ADIF header: profile %d, channels %d,rate %d",
+                 aacprofile,dmaidec->channels,dmaidec->rate);
+         }
+         
+         if (available < 
+             (GST_BUFFER_SIZE(buf) + GST_BUFFER_SIZE(aac_header_buf))){
+             gst_buffer_unref(aac_header_buf);
+             return ret;
+         }
+        
+         memcpy(target,GST_BUFFER_DATA(aac_header_buf),
+             GST_BUFFER_SIZE(aac_header_buf));
+         ret = GST_BUFFER_SIZE(aac_header_buf);
+         priv->codecdata_inserted = TRUE;
     }
-    if ((data[0] == 0xff) && ((data[1] >> 4) == 0xf)) {
-        return NULL;
-    }
-    
-    /* Allocate buffer to store AAC ADIF header */
-    aac_header_buf = gst_buffer_new_and_alloc(MAX_AAC_HEADER_LENGTH);
-    if (aac_header_buf == NULL) {
-        GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
-            ("Failed to allocate buffer for aac header"));
-        return NULL;
-    }
-    
-    memset(GST_BUFFER_DATA(aac_header_buf), 0, MAX_AAC_HEADER_LENGTH);
 
-    /* Set adif_id field in ADIF header  - Always "ADIF"  (32-bit long) */
-    ADIF_SET_ID(aac_header_buf, "ADIF");
-
-    /* Disable copyright id  field in ADIF header - (1-bit long) */
-    ADIF_CLEAR_COPYRIGHT_ID_PRESENT(aac_header_buf);
-
-    /* Set profile field in ADIF header - (2-bit long)
-     * 0 - MAIN, 1 - LC,  2 - SCR  3 - LTR (2-bit long) 
-     */
-    ADIF_SET_PROFILE(aac_header_buf, aacprofile);
-
-    /* Set sampling rate index field in ADIF header - (4-bit long) */ 
-    ADIF_SET_SAMPLING_FREQUENCY_INDEX(aac_header_buf, 
-                                    gst_get_aac_rateIdx(dmaidec->rate));
-
-    /* Set front_channel_element field in ADIF header - (4-bit long) */
-    ADIF_SET_FRONT_CHANNEL_ELEMENT(aac_header_buf, dmaidec->channels);
-   
-    /* Set comment field in ADIF header (8-bit long) */
-    ADIF_SET_COMMENT_FIELD(aac_header_buf, 0x3);
-
-    GST_INFO("Generating ADIF header: profile %d, channels %d,rate %d",
-        aacprofile,dmaidec->channels,dmaidec->rate);
-    
-    return aac_header_buf;
+    memcpy(&(((char *)target)[ret]),GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
+    ret += GST_BUFFER_SIZE(buf);
+    return ret;
 }
 
 struct gstti_parser_ops gstti_aac_parser = {
@@ -286,7 +299,7 @@ struct gstti_parser_ops gstti_aac_parser = {
     .flush_start = aac_flush_start,
     .flush_stop = aac_flush_stop,
     .generate_codec_data = aac_generate_codec_data,
-    .get_stream_prefix = aac_get_stream_prefix,
+    .custom_memcpy = aac_custom_memcpy,
 };
 
 

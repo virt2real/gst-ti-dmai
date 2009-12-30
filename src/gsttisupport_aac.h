@@ -31,8 +31,9 @@ extern GstStaticCaps gstti_aac_src_caps;
 
 /* AAC Parser */
 struct gstti_aac_parser_private {
-    gboolean    flushing;
-    gboolean    framed;
+    gboolean flushing;
+    gboolean framed;
+    gboolean codecdata_inserted;
 };
 
 extern struct gstti_parser_ops gstti_aac_parser;

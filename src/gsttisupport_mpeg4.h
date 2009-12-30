@@ -26,9 +26,11 @@ extern GstStaticCaps gstti_mpeg4_sink_caps;
 
 /* MPEG4 Parser */
 struct gstti_mpeg4_parser_private {
-    gboolean framed;
+    gboolean parsed;
     gboolean firstVOP;
     gboolean flushing;
+    GstBuffer *codecdata;
+    gboolean codecdata_inserted;
 };
 
 extern struct gstti_parser_ops gstti_mpeg4_parser;

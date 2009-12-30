@@ -31,16 +31,14 @@ extern GstStaticCaps gstti_h264_caps;
 
 /* H264 Parser */
 struct gstti_h264_parser_private {
-    gboolean            firstBuffer;
     GstBuffer           *sps_pps_data;
     GstBuffer           *nal_code_prefix;
     guint               nal_length;
-    Buffer_Handle       outbuf;
-    guint               out_offset;
-    GstBuffer           *current;
-    guint               current_offset;
     gboolean            flushing;
     gboolean            access_unit_found;
+    gboolean            au_delimiters;
+    gboolean            parsed;
+    GstBuffer           *codecdata;
 };
 
 extern struct gstti_parser_ops gstti_h264_parser;

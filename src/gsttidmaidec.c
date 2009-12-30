@@ -526,11 +526,6 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
             ("failed to open codec engine \"%s\"", dmaidec->engineName));
         return FALSE;
     }
-
-    /* Query the parser for the required number of buffers */
-    if (dmaidec->numInputBufs == 0) {
-        dmaidec->numInputBufs = decoder->parser->numInputBufs;
-    }
     
     dmaidec->circMeta = NULL;
 
@@ -691,6 +686,19 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
         /* Set the Output Buffer Tab on the codec */
         decoder->dops->set_outBufTab(dmaidec,dmaidec->hOutBufTab);
     }
+
+    /* Start the parser before allocating the input circular buffer */
+    g_assert(decoder && decoder->parser);
+    if (!decoder->parser->init(dmaidec)){
+        GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
+            ("Failed to initialize a parser for the stream"));
+    }
+    dmaidec->parser_started = TRUE;
+
+    /* Query the parser for the required number of buffers */
+    if (dmaidec->numInputBufs == 0) {
+        dmaidec->numInputBufs = decoder->parser->numInputBufs;
+    }
     
     /* Create codec input circular buffer */
     GST_DEBUG("creating input circular buffer\n");
@@ -710,16 +718,6 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->tail = 0;
     dmaidec->marker = 0;
     dmaidec->end = dmaidec->numInputBufs * dmaidec->inBufSize;
-    dmaidec->codec_data_parsed = FALSE;
-    dmaidec->firstMarkerFound = FALSE;
-
-    /* Start the parser */
-    g_assert(decoder && decoder->parser);
-    if (!decoder->parser->init(dmaidec)){
-        GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
-            ("Failed to initialize a parser for the stream"));
-    }
-    dmaidec->parser_started = TRUE;
 
     return TRUE;
 }
@@ -1162,6 +1160,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     GstBuffer *meta;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
+    int bytes = 0;
     gboolean ret = TRUE;
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
@@ -1180,46 +1179,38 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     meta = gst_buffer_new();
     gst_buffer_copy_metadata(meta,buf,GST_BUFFER_COPY_ALL);
     GST_BUFFER_SIZE(meta) = 0;
+    GST_BUFFER_OFFSET(meta) = dmaidec->head;
 
-    /* We may need to insert some codec_data */
-    if (!dmaidec->codec_data_parsed && decoder->parser->get_stream_prefix){
-        GstBuffer *codec_data;
-        if ((codec_data = decoder->parser->get_stream_prefix(dmaidec,buf))) {
-            if (!validate_circBuf_space(dmaidec,
-                 GST_BUFFER_SIZE(codec_data) + GST_BUFFER_SIZE(buf))){
-                ret = FALSE;
-                goto out;
-            }
-            GST_BUFFER_OFFSET(meta) = dmaidec->head;
-            memcpy(&data[dmaidec->head],GST_BUFFER_DATA(codec_data),
-                GST_BUFFER_SIZE(codec_data));
-            GST_BUFFER_SIZE(meta) += GST_BUFFER_SIZE(codec_data);
-            dmaidec->head += GST_BUFFER_SIZE(codec_data);
-            gst_buffer_unref(codec_data);
-        } else {
-            if (!validate_circBuf_space(dmaidec,GST_BUFFER_SIZE(buf))){
-                ret = FALSE;
-                goto out;
-            }
-            GST_BUFFER_OFFSET(meta) = dmaidec->head;
-        }
-        dmaidec->codec_data_parsed = TRUE;
-    } else {
-        if (!validate_circBuf_space(dmaidec,GST_BUFFER_SIZE(buf))){
+    /* Check if we have enough free space on the circular buffer, otherwise
+     * do a buffer shift on it.
+     * Some parsers that provide custom memcpy functions may require more
+     * than the size of the buffer for output, so as heuristic to prevent
+     * having overflows, we do the data shift when we have less than 1.5
+     * times the size of the input buffer
+     */
+    if (!validate_circBuf_space(dmaidec,GST_BUFFER_SIZE(buf) * 3 / 2)){
+        ret = FALSE;
+        goto out;
+    }
+    
+    if (decoder->parser->custom_memcpy){
+        bytes = decoder->parser->custom_memcpy(dmaidec,&data[dmaidec->head],
+            dmaidec->end - dmaidec->head,buf);
+        if (bytes == -1){
             ret = FALSE;
             goto out;
         }
-        GST_BUFFER_OFFSET(meta) = dmaidec->head;
+    } else {
+        /* Copy the new data into the circular buffer */
+        memcpy(&data[dmaidec->head],GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
+        bytes = GST_BUFFER_SIZE(buf);
     }
-    
-    /* Copy the new data into the circular buffer */
-    memcpy(&data[dmaidec->head],GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
 
-    GST_BUFFER_SIZE(meta) += GST_BUFFER_SIZE(buf);
+    GST_BUFFER_SIZE(meta) = bytes;
     dmaidec->circMeta = g_list_append(dmaidec->circMeta,meta);
     
     /* Increases the head */
-    dmaidec->head += GST_BUFFER_SIZE(buf);
+    dmaidec->head += bytes;
 
 out:
     gst_buffer_unref(buf);
@@ -1359,7 +1350,6 @@ static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,gint64 timestam
     return FALSE;
 }
 
-
 /******************************************************************************
  * decode
  *  This function decodes a frame and adds the decoded data to the output list
@@ -1433,7 +1423,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
        operation
      */
     if (dmaidec->flushing){
-	gst_buffer_unref(encData);
+        gst_buffer_unref(encData);
         gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
         return GST_FLOW_OK;
     }
@@ -1722,7 +1712,7 @@ static void gst_tidmaidec_stop_flushing(GstTIDmaidec *dmaidec)
 }
 
 /******************************************************************************
- * gst_tidmaidec_frame_duration
+ * get_stream_prefix
  *    Return the duration of a single frame in nanoseconds.
  ******************************************************************************/
 static GstClockTime gst_tidmaidec_frame_duration(GstTIDmaidec *dmaidec)

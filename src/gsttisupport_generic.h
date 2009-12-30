@@ -22,6 +22,10 @@
 
 extern struct gstti_parser_ops gstti_generic_parser;
 
+struct gstti_generic_parser_private {
+    gboolean parsed;
+};
+
 #endif /* __GSTTI_SUPPORT_GENERIC_H__ */
 
 

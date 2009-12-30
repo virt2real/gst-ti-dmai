@@ -98,6 +98,9 @@ static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc,
 
 static gboolean mpeg4_init(GstTIDmaidec *dmaidec){
     struct gstti_mpeg4_parser_private *priv;
+    const GValue *value;
+    GstStructure *capStruct;
+    GstCaps      *caps = GST_PAD_CAPS(dmaidec->sinkpad);
 
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tisupport_mpeg4_debug, "TISupportMPEG4", 0,
@@ -109,18 +112,44 @@ static gboolean mpeg4_init(GstTIDmaidec *dmaidec){
     memset(priv,0,sizeof(struct gstti_mpeg4_parser_private));
     priv->firstVOP = FALSE;
     priv->flushing = FALSE;
-    priv->framed = FALSE;
+    priv->parsed = FALSE;
+    priv->codecdata = NULL;
+    priv->codecdata_inserted = FALSE;
 
     if (dmaidec->parser_private){
         g_free(dmaidec->parser_private);
     }
     dmaidec->parser_private = priv;
 
+    /* Try to find the codec_data */
+    capStruct = gst_caps_get_structure(caps,0);
+
+    if (!capStruct)
+        goto done;
+
+    /* Find we are parsed */
+    gst_structure_get_boolean(capStruct, "parsed",&priv->parsed);
+
+    /* Read extra data passed via demuxer. */
+    if (!(value = gst_structure_get_value(capStruct, "codec_data")))
+        goto done;
+
+    priv->codecdata = gst_value_get_buffer(value);
+    gst_buffer_ref(priv->codecdata);
+    priv->parsed = TRUE;
+
+done:
     GST_DEBUG("Parser initialized");
     return TRUE;
 }
 
 static gboolean mpeg4_clean(GstTIDmaidec *dmaidec){
+    struct gstti_mpeg4_parser_private *priv =
+        (struct gstti_mpeg4_parser_private *) dmaidec->parser_private;
+
+    if (priv->codecdata){
+        gst_buffer_unref(priv->codecdata);
+    }
     if (dmaidec->parser_private){
         GST_DEBUG("Freeing parser private");
         g_free(dmaidec->parser_private);
@@ -135,7 +164,7 @@ static gint mpeg4_parse(GstTIDmaidec *dmaidec){
         (struct gstti_mpeg4_parser_private *) dmaidec->parser_private;
     gint i;
 
-    if (priv->framed){
+    if (priv->parsed){
         if (dmaidec->head != dmaidec->tail){
             return dmaidec->head;
         }
@@ -179,6 +208,7 @@ static void mpeg4_flush_start(void *private){
 
     priv->flushing = TRUE;
     priv->firstVOP = FALSE;
+    priv->codecdata_inserted = FALSE;
     GST_DEBUG("Parser flushed");
     return;
 }
@@ -192,35 +222,33 @@ static void mpeg4_flush_stop(void *private){
     return;
 }
 
-static GstBuffer *mpeg4_get_stream_prefix(GstTIDmaidec *dmaidec, GstBuffer *buf)
-{
+static int mpeg4_custom_memcpy(GstTIDmaidec *dmaidec, void *target, 
+    int available, GstBuffer *buf){
     struct gstti_mpeg4_parser_private *priv =
         (struct gstti_mpeg4_parser_private *) dmaidec->parser_private;
-    const GValue *value;
-    GstStructure *capStruct;
-    GstCaps      *caps = GST_BUFFER_CAPS(buf);
-    GstBuffer    *codec_data = NULL;
+    gchar *dest = (gchar *)target;
+    int ret = -1;
 
-    if (!caps)
-        goto no_data;
+    GST_DEBUG("MPEG4 memcpy, buffer %d, avail %d",GST_BUFFER_SIZE(buf),available);
+    if (priv->codecdata_inserted || !priv->codecdata){
+        if (available < GST_BUFFER_SIZE(buf))
+            return ret;
+        ret = 0;
+    } else {
+        if (available < 
+            (GST_BUFFER_SIZE(buf) + GST_BUFFER_SIZE(priv->codecdata)))
+            return ret;
 
-    capStruct = gst_caps_get_structure(caps,0);
+        memcpy(dest,GST_BUFFER_DATA(priv->codecdata),
+            GST_BUFFER_SIZE(priv->codecdata));
+        ret = GST_BUFFER_SIZE(priv->codecdata);
+        priv->codecdata_inserted = TRUE;
+    }
 
-    if (!capStruct)
-        goto no_data;
-
-    /* Read extra data passed via demuxer. */
-    if (!(value = gst_structure_get_value(capStruct, "codec_data")))
-        goto no_data;
-
-    codec_data = gst_value_get_buffer(value);
-    priv->framed = TRUE;
-    
-    return codec_data;
-
-no_data:
-    GST_WARNING("demuxer does not have codec_data field\n");
-    return NULL;
+    memcpy(&dest[ret],GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
+    ret += GST_BUFFER_SIZE(buf);
+    GST_DEBUG("MPEG4 memcpy done");
+    return ret;
 }
 
 struct gstti_parser_ops gstti_mpeg4_parser = {
@@ -232,7 +260,7 @@ struct gstti_parser_ops gstti_mpeg4_parser = {
     .flush_start = mpeg4_flush_start,
     .flush_stop = mpeg4_flush_stop,
     .generate_codec_data = mpeg4_generate_codec_data,
-    .get_stream_prefix = mpeg4_get_stream_prefix,
+    .custom_memcpy = mpeg4_custom_memcpy,
 };
 
 /******************************************************************************

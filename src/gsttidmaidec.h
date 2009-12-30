@@ -97,8 +97,6 @@ struct _GstTIDmaidec
     gint                tail;
     gint                marker;
     gint                end;
-    gboolean            codec_data_parsed;
-    gboolean            firstMarkerFound;
     UInt32              numInputBufs;
     UInt32              numOutputBufs;
     BufTab_Handle       hOutBufTab;
