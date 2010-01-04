@@ -973,7 +973,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
                 gst_buffer_unref(pushBuffer);
                 goto done;
             }
-            
+
             /* When the drain function returns a zero-size buffer
              * we are done
              */
@@ -1712,7 +1712,7 @@ static void gst_tidmaidec_stop_flushing(GstTIDmaidec *dmaidec)
 }
 
 /******************************************************************************
- * get_stream_prefix
+ * gst_tidmaidec_frame_duration
  *    Return the duration of a single frame in nanoseconds.
  ******************************************************************************/
 static GstClockTime gst_tidmaidec_frame_duration(GstTIDmaidec *dmaidec)
