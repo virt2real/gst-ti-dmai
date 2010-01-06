@@ -355,12 +355,12 @@ gst_dmaiperf_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
       gint idx;
       /*Real data per second: Time spent / unit (1000msec)*/
       
-      long long factor_n = GST_TIME_AS_MSECONDS(GST_CLOCK_DIFF (dmaiperf->lastLoadstamp, time));
-      long long factor_d = GST_TIME_AS_MSECONDS(GST_SECOND);
+      GstClockTime factor_n = GST_TIME_AS_MSECONDS(GST_CLOCK_DIFF (dmaiperf->lastLoadstamp, time));
+      GstClockTime factor_d = GST_TIME_AS_MSECONDS(GST_SECOND);
       
       idx = g_snprintf (info, GST_TIME_FORMAT_MAX_SIZE, "Timestamp: %" GST_TIME_FORMAT"; "
-          "bps: %lld; "
-          "fps: %lld; ",
+          "bps: %llu; "
+          "fps: %llu; ",
           GST_TIME_ARGS (time), (dmaiperf->bps * factor_d / factor_n), (dmaiperf->fps * factor_d / factor_n));
 
       dmaiperf->fps = 0;
