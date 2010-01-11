@@ -69,11 +69,24 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ];"
 #endif
+#if PLATFORM == omapl138
+    "video/x-raw-rgb, "
+        "bpp=(int)16, "
+        "depth=(int)16, "
+        "endianness=(int)1234, "
+        "red_mask=(int)63488, "
+        "green_mask=(int)2016, "
+        "blue_mask=(int)31, "
+        "framerate=(fraction)[ 0, MAX ], "
+        "width=(int)[ 1, MAX ], "
+        "height=(int)[1, MAX ] "
+#else
     "video/x-raw-yuv, "
          "format=(fourcc)UYVY, "
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ]"
+#endif
     )
 );
 
@@ -166,7 +179,8 @@ static gboolean
 static gboolean
  gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink);
 static gboolean
- gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink * sink);
+ gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink * sink,
+    ColorSpace_Type);
 static GstFlowReturn
  gst_tidmaivideosink_render(GstBaseSink * bsink, GstBuffer * buffer);
 static gboolean
@@ -1060,7 +1074,8 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
  *    this function sets the display attributes to the DMAI defaults
  *    and overrides those default with user input if entered.
 *******************************************************************************/
-static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
+static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
+        ColorSpace_Type colorSpace)
 {
     int ret;
 
@@ -1076,6 +1091,7 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
      * or if the stream has the frame rate information.
      */
     gst_tidmaivideosink_check_set_framerate(sink);
+    sink->dAttrs.colorSpace = colorSpace;
 
     /* Set the display attrs to the defaults for this device */
     switch (sink->cpu_dev) {
@@ -1090,6 +1106,11 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
         #if PLATFORM == dm365
         case Cpu_Device_DM365:
             sink->dAttrs = Display_Attrs_DM365_VID_DEFAULT;
+            break;
+        #endif
+        #if PLATFORM == omapl138
+        case Cpu_Device_OMAPL138:
+            sink->dAttrs = Display_Attrs_OMAPL138_OSD_DEFAULT;
             break;
         #endif
         default:
@@ -1263,7 +1284,7 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
      * 3.  autoselect was enabled and no working standard could be found
      */
     while (TRUE) {
-        if (!gst_tidmaivideosink_set_display_attrs(sink)) {
+        if (!gst_tidmaivideosink_set_display_attrs(sink,colorSpace)) {
             GST_ERROR("Error while trying to set the display attributes\n");
             return FALSE;
         }
@@ -1377,10 +1398,13 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
     gint                  width;
     ColorSpace_Type       inBufColorSpace;
     guint32               fourcc;
+    const gchar           *mime;
 
     GST_DEBUG("\n\n\nBegin\n");
 
     structure = gst_caps_get_structure(temp_caps, 0);
+    mime      = gst_structure_get_name(structure);
+
     /* The width and height of the input buffer are collected here
      * so that it can be checked against the width and height of the
      * display buffer.
@@ -1388,24 +1412,38 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
     gst_structure_get_int(structure, "width", &width);
     gst_structure_get_int(structure, "height", &height);
 
-    /* Map input buffer fourcc to dmai color space  */
-    gst_structure_get_fourcc(structure, "format", &fourcc);
+    if (!strcmp(mime, "video/x-raw-rgb")) {
+        gint rm,gm,bm;
 
-    switch (fourcc) {
-        case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
-            inBufColorSpace = ColorSpace_UYVY;
-            break;
-        case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
-            inBufColorSpace = ColorSpace_YUV422PSEMI;
-            break;
+        gst_structure_get_int(structure,"red_mask",&rm);
+        gst_structure_get_int(structure,"green_mask",&gm);
+        gst_structure_get_int(structure,"blue_mask",&bm);
+        if ((rm == 63488) && (gm == 2016) && (bm == 31)){
+            inBufColorSpace = ColorSpace_RGB565;
+        } else {
+            GST_ERROR("unsupported color space\n");
+             return FALSE;
+        }
+    } else {
+        /* Map input buffer fourcc to dmai color space  */
+        gst_structure_get_fourcc(structure, "format", &fourcc);
+
+        switch (fourcc) {
+            case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
+                inBufColorSpace = ColorSpace_UYVY;
+                break;
+            case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
+                inBufColorSpace = ColorSpace_YUV422PSEMI;
+                break;
 #if PLATFORM == dm365
-        case GST_MAKE_FOURCC('N', 'V', '1', '2'):
-            inBufColorSpace = ColorSpace_YUV420PSEMI;
-            break;
+            case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+                inBufColorSpace = ColorSpace_YUV420PSEMI;
+                break;
 #endif
-        default:
-            GST_ERROR("unsupport fourcc\n");
-            goto cleanup;
+            default:
+                GST_ERROR("unsupported fourcc\n");
+                return FALSE;
+        }
     }
 
     /* If the input buffer is non dmai buffer, then allocate dmai buffer and

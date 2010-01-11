@@ -136,9 +136,9 @@ extern struct gstti_encoder_ops gstti_imgenc0_ops;
 #if PLATFORM == dm357
 #  define DECODEENGINE "hmjcp"
 #  define ENCODEENGINE "hmjcp"
-#elif PLATFORM == omap35x
-#  define DECODEENGINE "demoEngine"
-#  define ENCODEENGINE "demoEngine"
+#elif (PLATFORM == omap35x) || (PLATFORM == omapl138)
+#  define DECODEENGINE "codecServer"
+#  define ENCODEENGINE "codecServer"
 #else
 #  define DECODEENGINE "decode"
 #  define ENCODEENGINE "encode"
@@ -176,7 +176,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
     /* Get the algorithms from Codec Engine */
     algoname.algInfoSize = sizeof(Engine_AlgInfo); 
     Engine_getNumAlgs (DECODEENGINE, &numalgo);
-    
+
     while (numalgo != 0) {
         numalgo--;
 

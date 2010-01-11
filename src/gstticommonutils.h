@@ -37,6 +37,7 @@
 #define dm357   4
 #define omap35x 5
 #define dm365   6
+#define omapl138 7
 
 /* Type of decoders */
 enum dmai_codec_type

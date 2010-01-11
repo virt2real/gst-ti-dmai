@@ -139,7 +139,7 @@ AC_ARG_WITH(preset,
 		dm355 (2.00), dm355s (dvsdk2.0 + DM355s codecs),
 		dm357 (dvsdk 2.00), dm365 (dvsdk 2.10)
 		dm6446 (dvsdk 2.00),                                       
-		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00)
+		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00), omapl138
 	])],
 	[preset=$withval]
 )
@@ -184,10 +184,15 @@ if test "x$preset" = "xdm6467" ; then
   	with_platform=dm6467;
 fi
 
+if test "x$preset" = "xomapl138" ; then
+	AC_MSG_NOTICE(The following preset has been selected: $preset);
+  	with_platform=omapl138;
+fi
+
 dnl Define the platform
 AC_ARG_WITH(platform,
   [AS_HELP_STRING([--with-platform=<platform>],
-    [Select the platform to build: dm355, dm365, dm357, dm6446, dm6467, omap35x])],
+    [Select the platform to build: dm355, dm365, dm357, dm6446, dm6467, omap35x, omapl138])],
   [AC_MSG_NOTICE([Setting the platform to "$withval"])
    AC_SUBST([PLATFORM],[$withval])
   ]
@@ -214,6 +219,10 @@ if test "x$PLATFORM" = "xdm6467" ; then
 fi
 if test "x$PLATFORM" = "xdm357" ; then
   with_xdcplatform=ti.platforms.evmDM357;
+  with_xdctarget=gnu.targets.MVArm9;
+fi
+if test "x$PLATFORM" = "xomapl138" ; then
+  with_xdcplatform=ti.platforms.evmOMAPL138;
   with_xdctarget=gnu.targets.MVArm9;
 fi
 
