@@ -1091,7 +1091,6 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
      * or if the stream has the frame rate information.
      */
     gst_tidmaivideosink_check_set_framerate(sink);
-    sink->dAttrs.colorSpace = colorSpace;
 
     /* Set the display attrs to the defaults for this device */
     switch (sink->cpu_dev) {
@@ -1106,11 +1105,13 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
         #if PLATFORM == dm365
         case Cpu_Device_DM365:
             sink->dAttrs = Display_Attrs_DM365_VID_DEFAULT;
+            sink->dAttrs.colorSpace = colorSpace;
             break;
         #endif
         #if PLATFORM == omapl138
         case Cpu_Device_OMAPL138:
             sink->dAttrs = Display_Attrs_OMAPL138_OSD_DEFAULT;
+            sink->dAttrs.colorSpace = colorSpace;
             break;
         #endif
         default:
