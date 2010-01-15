@@ -1306,7 +1306,7 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
               */
              hBufTab = Display_getBufTab(sink->hDisplay);
              sink->numDispBuf = BufTab_getNumBufs(hBufTab);
-             sink->cleanBufCtrl = (int *)malloc(sink->numDispBuf * sizeof(int));
+             sink->cleanBufCtrl = (int *)g_malloc0(sink->numDispBuf * sizeof(int));
              for(i=0; i < sink->numDispBuf; i++){
                  sink->cleanBufCtrl[i] = CLEANED;
              }

@@ -193,7 +193,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             /* Nothing we handle, maybe an encoder */
             continue;
         }
-        decoder = malloc (sizeof (GstTIDmaidecData));
+        decoder = g_malloc0 (sizeof (GstTIDmaidecData));
         decoder->codecName = algoname.name;
         decoder->engineName = DECODEENGINE;
 
@@ -305,7 +305,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             /* Nothing we handle, maybe an decoder */
             continue;
         }
-        encoder = malloc (sizeof (GstTIDmaiencData));
+        encoder = g_malloc0 (sizeof (GstTIDmaiencData));
         encoder->codecName = algoname.name;
         encoder->engineName = ENCODEENGINE;
 
@@ -313,6 +313,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             mediaType = VIDEO;
             encoder->streamtype = "mpeg4";
             encoder->srcCaps = &gstti_mpeg4_src_caps;
+            encoder->parser = &gstti_mpeg4_parser;
         } else if (!strcmp (encoder->codecName, "h264enc")){
             mediaType = VIDEO;
             encoder->streamtype = "h264";

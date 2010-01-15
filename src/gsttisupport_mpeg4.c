@@ -106,10 +106,9 @@ static gboolean mpeg4_init(GstTIDmaidec *dmaidec){
     GST_DEBUG_CATEGORY_INIT(gst_tisupport_mpeg4_debug, "TISupportMPEG4", 0,
         "DMAI plugins MPEG4 Support functions");
 
-    priv = g_malloc(sizeof(struct gstti_mpeg4_parser_private));
+    priv = g_malloc0(sizeof(struct gstti_mpeg4_parser_private));
     g_assert(priv != NULL);
 
-    memset(priv,0,sizeof(struct gstti_mpeg4_parser_private));
     priv->firstVOP = FALSE;
     priv->flushing = FALSE;
     priv->parsed = FALSE;

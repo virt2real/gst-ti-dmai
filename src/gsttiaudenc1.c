@@ -118,10 +118,10 @@ static gboolean gstti_audenc1_setup_params(GstTIDmaienc *dmaienc){
         "DMAI Audio1 Encoder");
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (AUDENC1_Params));
+        dmaienc->params = g_malloc0(sizeof (AUDENC1_Params));
     }
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (AUDENC1_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (AUDENC1_DynamicParams));
     }
 
     *(AUDENC1_Params *)dmaienc->params     = Aenc1_Params_DEFAULT;

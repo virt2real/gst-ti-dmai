@@ -151,10 +151,10 @@ static gboolean gstti_videnc1_setup_params(GstTIDmaienc *dmaienc){
         "DMAI Video1 Encoder");
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (VIDENC1_Params));
+        dmaienc->params = g_malloc0(sizeof (VIDENC1_Params));
     }
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (VIDENC1_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (VIDENC1_DynamicParams));
     }
     *(VIDENC1_Params *)dmaienc->params     = Venc1_Params_DEFAULT;
     *(VIDENC1_DynamicParams *)dmaienc->dynParams  = Venc1_DynamicParams_DEFAULT;

@@ -48,11 +48,11 @@ gboolean ittiam_aacenc_params(GstElement *element){
     ITTIAM_EAACPLUSENC_Params *eparams;
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (ITTIAM_EAACPLUSENC_Params));
+        dmaienc->params = g_malloc0(sizeof (ITTIAM_EAACPLUSENC_Params));
     }
     
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (ITTIAM_EAACPLUSENC_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (ITTIAM_EAACPLUSENC_DynamicParams));
     }
     
     *(AUDENC1_Params *)dmaienc->params     = Aenc1_Params_DEFAULT;
@@ -244,11 +244,11 @@ gboolean ittiam_mp3enc_params(GstElement *element){
     ITTIAM_MP3ENC_Params *eparams;
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (ITTIAM_MP3ENC_Params));
+        dmaienc->params = g_malloc0(sizeof (ITTIAM_MP3ENC_Params));
     }
     
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (ITTIAM_MP3ENC_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (ITTIAM_MP3ENC_DynamicParams));
     }
     
     *(AUDENC1_Params *)dmaienc->params     = Aenc1_Params_DEFAULT;

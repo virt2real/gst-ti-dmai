@@ -128,10 +128,9 @@ static gboolean aac_init(GstTIDmaidec *dmaidec){
     GST_DEBUG_CATEGORY_INIT(gst_tisupport_aac_debug, "TISupportAAC", 0,
         "DMAI plugins AAC Support functions");
 
-    priv = g_malloc(sizeof(struct gstti_aac_parser_private));
+    priv = g_malloc0(sizeof(struct gstti_aac_parser_private));
     g_assert(priv != NULL);
 
-    memset(priv,0,sizeof(struct gstti_aac_parser_private));
     priv->flushing = FALSE;
     priv->framed = FALSE;
     priv->codecdata_inserted = FALSE;

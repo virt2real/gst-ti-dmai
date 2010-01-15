@@ -68,10 +68,10 @@ gboolean ti_mpeg4enc_params(GstElement *element){
     IMP4VENC_DynamicParams *edynParams;
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (IMP4VENC_Params));
+        dmaienc->params = g_malloc0(sizeof (IMP4VENC_Params));
     }
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (IMP4VENC_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (IMP4VENC_DynamicParams));
     }
     *(VIDENC1_Params *)dmaienc->params     = Venc1_Params_DEFAULT;
     *(VIDENC1_DynamicParams *)dmaienc->dynParams  = Venc1_DynamicParams_DEFAULT;
@@ -369,10 +369,10 @@ gboolean ti_aaclcenc_params(GstElement *element){
     IAACENC_DynamicParams *edynParams;
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (IAACENC_Params));
+        dmaienc->params = g_malloc0(sizeof (IAACENC_Params));
     }
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (IAACENC_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (IAACENC_DynamicParams));
     }
     params = (AUDENC1_Params *)dmaienc->params;
     dynParams = (AUDENC1_DynamicParams *)dmaienc->dynParams;

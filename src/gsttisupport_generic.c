@@ -39,10 +39,10 @@ static gboolean generic_init(GstTIDmaidec *dmaidec){
     GST_DEBUG_CATEGORY_INIT(gst_tisupport_generic_debug, "TISupportGeneric", 0,
         "DMAI plugins Generic Support functions");
 
-    priv = g_malloc(sizeof(struct gstti_generic_parser_private));
+    priv = g_malloc0(sizeof(struct gstti_generic_parser_private));
     g_assert(priv != NULL);
     priv->parsed = FALSE;
-    
+
     capStruct = gst_caps_get_structure(caps,0);
     if (!capStruct)
         goto done;

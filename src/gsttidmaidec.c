@@ -543,7 +543,7 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     }
 
     /* Create array to keep information of incoming buffers */
-    dmaidec->metaTab = malloc(sizeof(GstBuffer) * dmaidec->numOutputBufs);
+    dmaidec->metaTab = g_malloc0(sizeof(GstBuffer) * dmaidec->numOutputBufs);
     if (dmaidec->metaTab == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
             ("failed to create meta input buffers"));

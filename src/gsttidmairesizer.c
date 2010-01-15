@@ -366,8 +366,8 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   dmairesizer->outBufTab =
       BufTab_create (dmairesizer->numOutBuf, outBufSize,
       BufferGfx_getBufferAttrs (&gfxAttrs));
-  dmairesizer->dim = (BufferGfx_Dimensions*) malloc (dmairesizer->numOutBuf * sizeof(BufferGfx_Dimensions));
-  dmairesizer->flagToClean = (gboolean *) malloc(dmairesizer->numOutBuf);
+  dmairesizer->dim = (BufferGfx_Dimensions*) g_malloc0(dmairesizer->numOutBuf * sizeof(BufferGfx_Dimensions));
+  dmairesizer->flagToClean = (gboolean *) g_malloc0(dmairesizer->numOutBuf);
  
   if (dmairesizer->outBufTab == NULL) {
     GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),

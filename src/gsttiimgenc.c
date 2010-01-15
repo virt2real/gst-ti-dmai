@@ -136,10 +136,10 @@ static gboolean gstti_imgenc0_setup_params(GstTIDmaienc *dmaienc){
         "DMAI Image0 Encoder");
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (IMGENC_Params));
+        dmaienc->params = g_malloc0(sizeof (IMGENC_Params));
     }
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (IMGENC_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (IMGENC_DynamicParams));
     }
     *(IMGENC_Params *)dmaienc->params = Ienc_Params_DEFAULT;
     *(IMGENC_DynamicParams *)dmaienc->dynParams = Ienc_DynamicParams_DEFAULT;

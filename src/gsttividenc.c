@@ -152,10 +152,10 @@ static gboolean gstti_videnc0_setup_params(GstTIDmaienc *dmaienc){
         "DMAI Audio1 Encoder");
 
     if (!dmaienc->params){
-        dmaienc->params = g_malloc(sizeof (VIDENC_Params));
+        dmaienc->params = g_malloc0(sizeof (VIDENC_Params));
     }
     if (!dmaienc->dynParams){
-        dmaienc->dynParams = g_malloc(sizeof (VIDENC_DynamicParams));
+        dmaienc->dynParams = g_malloc0(sizeof (VIDENC_DynamicParams));
     }
     *(VIDENC_Params *)dmaienc->params     = Venc_Params_DEFAULT;
     *(VIDENC_DynamicParams *)dmaienc->dynParams  = Venc_DynamicParams_DEFAULT;
