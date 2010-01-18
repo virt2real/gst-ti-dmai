@@ -51,7 +51,7 @@ GST_DEBUG_CATEGORY_STATIC (gstti_imgenc0_debug);
 /* Element property identifiers */
 enum
 {
-  PROP_0,
+  PROP_100 = 100,
   PROP_QVALUE,          /* qValue         (int)     */
 };
 
