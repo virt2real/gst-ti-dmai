@@ -103,6 +103,8 @@ struct _GstTIDmaidec
     gint                outBufSize;
     gint                inBufSize;
     GstBuffer           *metaTab;
+    GstBuffer           *allocated_buffer;
+    gboolean            downstreamBuffers;
     gboolean            require_configure;
 
     /* Parser structures */

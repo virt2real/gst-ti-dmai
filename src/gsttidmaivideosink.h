@@ -43,8 +43,8 @@ G_BEGIN_DECLS
 #define V4L2 "v4l2"
 #define FBDEV "fbdev"
 
-#define CLEANED 0
-#define NOT_CLEANED 1
+#define CLEAN 0
+#define DIRTY 1
 #define UYVY_BLACK 0x10801080
 
 #define GST_TYPE_TIDMAIVIDEOSINK \
@@ -86,25 +86,34 @@ struct _GstTIDmaiVideoSink {
   gint          framerate;
   gint          numBufs;
   gint          rotation;
-  gint          x_position;
-  gint          y_position;
-  gint          x_centering;
-  gint          y_centering;
+  gint          xPosition;
+  gint          yPosition;
+  gint          xCentering;
+  gint          yCentering;
   gboolean      resizer;
   gboolean      autoselect;
-  gboolean      contiguousInputFrame;
   gint          numBufClean; 
   gint          numDispBuf; 
-  gint          *cleanBufCtrl;
+  gchar         *cleanBufCtrl;
 
   Display_Handle    hDisplay;
   Display_Attrs     dAttrs;
   Framecopy_Handle  hFc;
-  Resize_Handle     hResize;
-  Ccv_Handle        hCcv;
   Cpu_Device        cpu_dev;
   Buffer_Handle     tempDmaiBuf;
+  gint              numBuffers;
+  GstBuffer         **allocatedBuffers;
+  GstBuffer         **unusedBuffers;
+  GstBuffer         *lastAllocatedBuffer;
+  GstBuffer         *prerolledBuffer;
+  gint              numAllocatedBuffers;
+  gint              numUnusedBuffers;
+  gboolean          dmaiElementUpstream;
 
+  gboolean      capsAreSet;
+  gint          width;
+  gint          height;
+  ColorSpace_Type colorSpace;
   /* prevVideoStd is used as part of the autoselect functionality.  If the
    * selected videoStd is not supported by the device then we look for
    * the next videoStd starting from the previous one.
@@ -116,11 +125,6 @@ struct _GstTIDmaiVideoSink {
    */
   VideoStd_Attrs    iattrs;
   VideoStd_Attrs    oattrs;
-  /* The framerepeat variable indicates how many times a frame
-   * should be repeated to match the display output frame rate.
-   */
-  int           framerepeat;
-  gboolean      signal_handoffs;
 
   /* Hardware accelerated copy */
   gboolean      accelFrameCopy;
@@ -128,10 +132,6 @@ struct _GstTIDmaiVideoSink {
 
 struct _GstTIDmaiVideoSinkClass {
   GstVideoSinkClass parent_class;
-
-  /* signals */
-  void (*handoff) (GstElement *element, GstBuffer *buf, GstPad *pad);
-  void (*preroll_handoff) (GstElement *element, GstBuffer *buf, GstPad *pad);
 };
 
 GType gst_tidmaivideosink_get_type (void);

@@ -36,11 +36,6 @@
 /* Define sink (input) pad capabilities.
  *
  * UYVY - YUV 422 interleaved corresponding to V4L2_PIX_FMT_UYVY in v4l2
- * Y8C8 - YUV 422 semi planar. The dm6467 VDCE outputs this format after a
- *        color conversion.The format consists of two planes: one with the
- *        Y component and one with the CbCr components interleaved (hence semi)  *
- *        See the LSP VDCE documentation for a thorough description of this
- *        format.
  * NV12 - YUV 420 semi planar corresponding to V4L2_PIX_FMT_NV12 in v4l2.
  *        The format consists of two planes: one with the
  *        Y component and one with the CbCr components interleaved with
@@ -62,12 +57,6 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ];"
-#elif PLATFORM == dm6467
-    "video/x-raw-yuv, "
-         "format=(fourcc)Y8C8, "
-         "framerate=(fraction)[ 0, MAX ], "
-         "width=(int)[ 1, MAX ], "
-         "height=(int)[ 1, MAX ];"
 #endif
 #if PLATFORM == omapl138
     "video/x-raw-rgb, "
@@ -86,8 +75,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ]"
-#endif
     )
+#endif
 );
 
 GST_DEBUG_CATEGORY_STATIC (gst_tidmaivideosink_debug);
@@ -97,25 +86,8 @@ static const GstElementDetails gst_tidmaivideosink_details =
 GST_ELEMENT_DETAILS ("TI DMAI Video Sink",
     "Sink/Video",
     "Displays video using the TI DMAI interface",
-    "Chase Maupin; Texas Instruments, Inc.");
+    "Chase Maupin; Texas Instruments, Inc., Diego Dompe; RidgeRun");
 
-
-/* TIDmaiVideoSink signals and args */
-enum
-{
-  SIGNAL_HANDOFF,
-  SIGNAL_PREROLL_HANDOFF,
-  LAST_SIGNAL
-};
-
-/* This value must be set to TRUE in order for the GstBaseSink class to
- * use the max-lateness value to drop frames.
- */
-#define DEFAULT_SYNC TRUE
-
-#define DEFAULT_SIGNAL_HANDOFFS FALSE
-#define DEFAULT_CAN_ACTIVATE_PUSH TRUE
-#define DEFAULT_CAN_ACTIVATE_PULL FALSE
 
 enum
 {
@@ -126,15 +98,8 @@ enum
   PROP_VIDEOOUTPUT,
   PROP_ROTATION,
   PROP_NUMBUFS,
-  PROP_RESIZER,
   PROP_AUTOSELECT,
-  PROP_FRAMERATE,
   PROP_ACCEL_FRAME_COPY,
-  PROP_SYNC,
-  PROP_SIGNAL_HANDOFFS,
-  PROP_CAN_ACTIVATE_PUSH,
-  PROP_CAN_ACTIVATE_PULL,
-  PROP_CONTIG_INPUT_BUF,
   PROP_X_POSITION,
   PROP_Y_POSITION
 };
@@ -158,19 +123,12 @@ static void
 static void
  gst_tidmaivideosink_get_property(GObject * object, guint prop_id,
      GValue * value, GParamSpec * pspec);
-static GstCaps *
- gst_tidmaivideosink_get_caps(GstBaseSink * bsink);
 static gboolean
  gst_tidmaivideosink_set_caps(GstBaseSink * bsink, GstCaps * caps);
-static GstStateChangeReturn
- gst_tidmaivideosink_change_state(GstElement * element,
-     GstStateChange transition);
 static gboolean 
  gst_tidmaivideosink_start(GstBaseSink *sink);
 static gboolean 
  gst_tidmaivideosink_stop(GstBaseSink *sink);
-static GstFlowReturn
- gst_tidmaivideosink_preroll(GstBaseSink * bsink, GstBuffer * buffer);
 static int
  gst_tidmaivideosink_videostd_get_attrs(VideoStd_Type videoStd,
      VideoStd_Attrs * attrs);
@@ -179,21 +137,20 @@ static gboolean
 static gboolean
  gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink);
 static gboolean
- gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink * sink,
-    ColorSpace_Type);
+ gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink * sink);
+static GstFlowReturn 
+gst_tidmaivideosink_buffer_alloc(GstBaseSink *sink, 
+    guint64 offset, guint size, GstCaps *caps, GstBuffer **buf);
+static GstFlowReturn
+ gst_tidmaivideosink_preroll(GstBaseSink * bsink, GstBuffer * buffer);
 static GstFlowReturn
  gst_tidmaivideosink_render(GstBaseSink * bsink, GstBuffer * buffer);
-static gboolean
- gst_tidmaivideosink_event(GstBaseSink * bsink, GstEvent * event);
 static void
     gst_tidmaivideosink_init_env(GstTIDmaiVideoSink *sink);
 
 static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *sink);
 
 static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_Handle hBuf);
-
-static guint gst_tidmaivideosink_signals[LAST_SIGNAL] = { 0 };
-
 
 /******************************************************************************
  * gst_tidmaivideosink_base_init
@@ -227,11 +184,6 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
     gobject_class->get_property = GST_DEBUG_FUNCPTR
         (gst_tidmaivideosink_get_property);
 
-    g_object_class_install_property(gobject_class, PROP_SIGNAL_HANDOFFS,
-        g_param_spec_boolean("signal-handoffs", "Signal handoffs",
-            "Send a signal before unreffing the buffer",
-            DEFAULT_SIGNAL_HANDOFFS, G_PARAM_READWRITE));
-
     g_object_class_install_property(gobject_class, PROP_DISPLAYSTD,
         g_param_spec_string("displayStd", "Display Standard",
             "Use V4L2 or FBDev for Video Display", NULL, G_PARAM_READWRITE));
@@ -254,11 +206,6 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
             "Output used to display video (i.e. Composite, Component, "
             "LCD, DVI)", NULL, G_PARAM_READWRITE));
 
-    g_object_class_install_property(gobject_class, PROP_RESIZER,
-        g_param_spec_boolean("resizer", "Enable resizer",
-            "Enable hardware resizer to resize the image", FALSE,
-            G_PARAM_READWRITE));
-
     g_object_class_install_property(gobject_class, PROP_AUTOSELECT,
         g_param_spec_boolean("autoselect", "Auto Select the VideoStd",
             "Automatically select the Video Standard to use based on "
@@ -271,38 +218,15 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
             "Number of video buffers allocated by the driver",
             -1, G_MAXINT, -1, G_PARAM_READWRITE));
 
+#if PLATFORM == omap35x
     g_object_class_install_property(gobject_class, PROP_ROTATION,
         g_param_spec_int("rotation", "Rotation angle", "Rotation angle "
             "(OMAP35x only)", -1, G_MAXINT, -1, G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_FRAMERATE,
-        g_param_spec_int("framerate", "frame rate of video",
-            "Frame rate of the video expressed as an integer", -1, G_MAXINT,
-            -1, G_PARAM_READWRITE));
-
+#endif
+    
     g_object_class_install_property(gobject_class, PROP_ACCEL_FRAME_COPY,
         g_param_spec_boolean("accelFrameCopy", "Accel frame copy",
              "Use hardware accelerated framecopy", TRUE, G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_SYNC,
-        g_param_spec_boolean("sync", "Sync audio video",
-            "This determined whether A/V data is synced and video "
-            "frames are dropped or not.", DEFAULT_SYNC, G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_CAN_ACTIVATE_PUSH,
-        g_param_spec_boolean("can-activate-push", "Can activate push",
-            "Can activate in push mode", DEFAULT_CAN_ACTIVATE_PUSH,
-            G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_CAN_ACTIVATE_PULL,
-        g_param_spec_boolean("can-activate-pull", "Can activate pull",
-            "Can activate in pull mode", DEFAULT_CAN_ACTIVATE_PULL,
-            G_PARAM_READWRITE));
-
-    g_object_class_install_property(gobject_class, PROP_CONTIG_INPUT_BUF,
-        g_param_spec_boolean("contiguousInputFrame", "Contiguous Input frame",
-            "Set this if elemenet recieves contiguous input frame",
-            FALSE, G_PARAM_WRITABLE));
 
     /*Positioning*/
     g_object_class_install_property(gobject_class, PROP_X_POSITION,
@@ -313,54 +237,18 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
         g_param_spec_int("y-position", "y position", "Y positioning of"
         " frame in display", G_MININT, G_MAXINT, -1, G_PARAM_READWRITE));
 
-    /**
-    * GstTIDmaiVideoSink::handoff:
-    * @dmaisink: the dmaisink instance
-    * @buffer: the buffer that just has been received
-    * @pad: the pad that received it
-    *
-    * This signal gets emitted before unreffing the buffer.
-    */
-    gst_tidmaivideosink_signals[SIGNAL_HANDOFF] =
-        g_signal_new("handoff", G_TYPE_FROM_CLASS(klass), G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET(GstTIDmaiVideoSinkClass, handoff), NULL, NULL,
-            gst_marshal_VOID__OBJECT_OBJECT, G_TYPE_NONE, 2, GST_TYPE_BUFFER,
-            GST_TYPE_PAD);
-
-   /**
-    * GstTIDmaiVideoSink::preroll-handoff:
-    * @dmaisink: the dmaisink instance
-    * @buffer: the buffer that just has been received
-    * @pad: the pad that received it
-    *
-    * This signal gets emitted before unreffing the buffer.
-    *
-    * Since: 0.10.7
-    */
-    gst_tidmaivideosink_signals[SIGNAL_PREROLL_HANDOFF] =
-        g_signal_new("preroll-handoff", G_TYPE_FROM_CLASS(klass),
-            G_SIGNAL_RUN_LAST,
-            G_STRUCT_OFFSET(GstTIDmaiVideoSinkClass, preroll_handoff),
-            NULL, NULL, gst_marshal_VOID__OBJECT_OBJECT, G_TYPE_NONE, 2,
-            GST_TYPE_BUFFER, GST_TYPE_PAD);
-
-    gstelement_class->change_state =
-        GST_DEBUG_FUNCPTR(gst_tidmaivideosink_change_state);
-
-    gstbase_sink_class->get_caps =
-        GST_DEBUG_FUNCPTR(gst_tidmaivideosink_get_caps);
     gstbase_sink_class->set_caps =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_set_caps);
     gstbase_sink_class->start    =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_start);
-    gstbase_sink_class->stop    =
+    gstbase_sink_class->stop     =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_stop);
-    gstbase_sink_class->event    =
-        GST_DEBUG_FUNCPTR(gst_tidmaivideosink_event);
     gstbase_sink_class->preroll  =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_preroll);
     gstbase_sink_class->render   =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_render);
+    gstbase_sink_class->buffer_alloc =
+        GST_DEBUG_FUNCPTR(gst_tidmaivideosink_buffer_alloc);
 }
 
 
@@ -405,11 +293,6 @@ static void gst_tidmaivideosink_init_env(GstTIDmaiVideoSink *sink)
         GST_LOG("Setting numBufs=%d\n",sink->numBufs);
     }
 
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_resizer")) {
-        sink->resizer = gst_ti_env_get_boolean("GST_TI_TIDmaiVideoSink_resizer");
-        GST_LOG("Setting resizer=%s\n",sink->resizer ? "TRUE" : "FALSE");
-    }
-
     if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_autoselect")) {
         sink->autoselect =
                 gst_ti_env_get_boolean("GST_TI_TIDmaiVideoSink_autoselect");
@@ -443,39 +326,28 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->videoStd       = NULL;
     dmaisink->videoOutput    = NULL;
     dmaisink->numBufs        = -1;
-    dmaisink->framerate      = -1;
     dmaisink->rotation       = -1;
     dmaisink->tempDmaiBuf    = NULL;
     dmaisink->accelFrameCopy = TRUE;
     dmaisink->autoselect     = FALSE;
     dmaisink->prevVideoStd   = 0;
-    dmaisink->x_position     = -1;
-    dmaisink->y_position     = -1;
+    dmaisink->xPosition     = -1;
+    dmaisink->yPosition     = -1;
     dmaisink->numBufClean    = 0;
-    dmaisink->x_centering = FALSE;
-    dmaisink->y_centering = FALSE;
-
-    dmaisink->signal_handoffs = DEFAULT_SIGNAL_HANDOFFS;
+    dmaisink->xCentering    = FALSE;
+    dmaisink->yCentering    = FALSE;
+    dmaisink->width          = 0;
+    dmaisink->height         = 0;
+    dmaisink->capsAreSet    = FALSE;
+    dmaisink->allocatedBuffers = NULL;
+    dmaisink->numAllocatedBuffers = 0;
+    dmaisink->unusedBuffers = NULL;
+    dmaisink->numUnusedBuffers = 0;
+    dmaisink->dmaiElementUpstream  = FALSE;
+    dmaisink->lastAllocatedBuffer = NULL;
 
     gst_tidmaivideosink_init_env(dmaisink);
 }
-
-/*******************************************************************************
- * gst_tidmaivideosink_string_cap
- *    This function will capitalize the given string.  This makes it easier
- *    to compare the strings later.
-*******************************************************************************/
-static void gst_tidmaivideosink_string_cap(gchar * str)
-{
-    int len = strlen(str);
-    int i;
-
-    for (i = 0; i < len; i++) {
-        str[i] = (char)toupper(str[i]);
-    }
-    return;
-}
-
 
 /*******************************************************************************
  * gst_tidmaivideosink_blackFill
@@ -502,7 +374,27 @@ static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_H
             }
             break;
         }
+        case ColorSpace_YUV420PSEMI:
+        {
+            Int8  *bufPtr = Buffer_getUserPtr(hBuf);
+            Int    y;
+            Int    bpp = ColorSpace_getBpp(ColorSpace_YUV420PSEMI);
+            BufferGfx_Dimensions dim;
+            
+            BufferGfx_getDimensions(hBuf, &dim);
 
+            for (y = 0; y < dim.height; y++) {
+                memset(bufPtr, 0x0, dim.width * bpp / 8);
+                bufPtr += dim.lineLength;
+            }
+
+            for (y = 0; y < (dim.height / 2); y++) {
+                memset(bufPtr, 0x80, dim.width * bpp / 8);
+                bufPtr += dim.lineLength;
+            }
+            
+            break;
+        }
         case ColorSpace_UYVY:
         {
             Int32 *bufPtr  = (Int32*)Buffer_getUserPtr(hBuf);
@@ -517,19 +409,16 @@ static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_H
             }
             break;
         }
-
         case ColorSpace_RGB565:
         {
             memset(Buffer_getUserPtr(hBuf), 0, Buffer_getSize(hBuf));
             break;
         }
-
         default:
             GST_ELEMENT_WARNING(dmaisink, RESOURCE, SETTINGS, (NULL),  ("Unsupported color space, buffers not painted\n"));
             break;
     }
 }
-
 
 
 /*******************************************************************************
@@ -540,9 +429,10 @@ static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_H
 static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *dmaisink)
 {
    int i;
-   dmaisink->numBufClean = dmaisink->numDispBuf;
-   for(i = 0; i < dmaisink->numDispBuf; i++){
-      dmaisink->cleanBufCtrl[i] = NOT_CLEANED;
+   
+   dmaisink->numBufClean = dmaisink->numBuffers;
+   for(i = 0; i < dmaisink->numBuffers; i++){
+      dmaisink->cleanBufCtrl[i] = DIRTY;
    }
 }
 
@@ -559,21 +449,15 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
     switch (prop_id) {
         case PROP_DISPLAYSTD:
             sink->displayStd = g_strdup(g_value_get_string(value));
-            gst_tidmaivideosink_string_cap(sink->displayStd);
             break;
         case PROP_DISPLAYDEVICE:
             sink->displayDevice = g_strdup(g_value_get_string(value));
             break;
         case PROP_VIDEOSTD:
             sink->videoStd = g_strdup(g_value_get_string(value));
-            gst_tidmaivideosink_string_cap(sink->videoStd);
             break;
         case PROP_VIDEOOUTPUT:
             sink->videoOutput = g_strdup(g_value_get_string(value));
-            gst_tidmaivideosink_string_cap(sink->videoOutput);
-            break;
-        case PROP_RESIZER:
-            sink->resizer = g_value_get_boolean(value);
             break;
         case PROP_AUTOSELECT:
             sink->autoselect = g_value_get_boolean(value);
@@ -584,38 +468,18 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
         case PROP_ROTATION:
             sink->rotation = g_value_get_int(value);
             break;
-        case PROP_FRAMERATE:
-            sink->framerate = g_value_get_int(value);
-            break;
         case PROP_ACCEL_FRAME_COPY:
             sink->accelFrameCopy = g_value_get_boolean(value);
             break;
-        case PROP_SYNC:
-            GST_BASE_SINK(sink)->sync = g_value_get_boolean(value);
-            break;
-        case PROP_SIGNAL_HANDOFFS:
-            sink->signal_handoffs = g_value_get_boolean(value);
-            break;
-        case PROP_CAN_ACTIVATE_PUSH:
-            GST_BASE_SINK(sink)->can_activate_push =
-                g_value_get_boolean(value);
-            break;
-        case PROP_CAN_ACTIVATE_PULL:
-            GST_BASE_SINK(sink)->can_activate_pull =
-                g_value_get_boolean(value);
-            break;
-        case PROP_CONTIG_INPUT_BUF:
-            sink->contiguousInputFrame = g_value_get_boolean(value);
-            break;
         case PROP_X_POSITION:
-            sink->x_position = (g_value_get_int(value) & ~0x1);
+            sink->xPosition = (g_value_get_int(value) & ~0x1);
             /*Handling negative and positive number*/
-            sink->x_position = 
-              sink->x_position % 2 ?sink->x_position++:sink->x_position;
+            sink->xPosition = 
+              sink->xPosition % 2 ?sink->xPosition++:sink->xPosition;
             gst_tidmaivideosink_clean_DisplayBuf(sink);
             break;
         case PROP_Y_POSITION:
-            sink->y_position = g_value_get_int(value);
+            sink->yPosition = g_value_get_int(value);
             gst_tidmaivideosink_clean_DisplayBuf(sink);
             break;
         default:
@@ -648,9 +512,6 @@ static void gst_tidmaivideosink_get_property(GObject * object, guint prop_id,
         case PROP_VIDEOOUTPUT:
             g_value_set_string(value, sink->videoOutput);
             break;
-        case PROP_RESIZER:
-            g_value_set_boolean(value, sink->resizer);
-            break;
         case PROP_AUTOSELECT:
             g_value_set_boolean(value, sink->autoselect);
             break;
@@ -660,32 +521,14 @@ static void gst_tidmaivideosink_get_property(GObject * object, guint prop_id,
         case PROP_NUMBUFS:
             g_value_set_int(value, sink->numBufs);
             break;
-        case PROP_FRAMERATE:
-            g_value_set_int(value, sink->framerate);
-            break;
-        case PROP_SYNC:
-            g_value_set_boolean(value, GST_BASE_SINK(sink)->sync);
-            break;
-        case PROP_SIGNAL_HANDOFFS:
-            g_value_set_boolean(value, sink->signal_handoffs);
-            break;
         case PROP_ACCEL_FRAME_COPY:
             g_value_set_boolean(value, sink->accelFrameCopy);
             break;
-        case PROP_CAN_ACTIVATE_PUSH:
-            g_value_set_boolean(value, GST_BASE_SINK(sink)->can_activate_push);
-            break;
-        case PROP_CAN_ACTIVATE_PULL:
-            g_value_set_boolean(value, GST_BASE_SINK(sink)->can_activate_pull);
-            break;
-        case PROP_CONTIG_INPUT_BUF:
-            g_value_set_boolean(value, sink->contiguousInputFrame);
-            break;
         case PROP_X_POSITION:
-            g_value_set_int(value, sink->x_position);
+            g_value_set_int(value, sink->xPosition);
             break;
         case PROP_Y_POSITION:
-            g_value_set_int(value, sink->y_position);
+            g_value_set_int(value, sink->yPosition);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -694,52 +537,83 @@ static void gst_tidmaivideosink_get_property(GObject * object, guint prop_id,
 }
 
 
-/******************************************************************************
- * gst_tidmaivideosink_event
- ******************************************************************************/
-static gboolean gst_tidmaivideosink_event(GstBaseSink * bsink,
-                    GstEvent * event)
+/*******************************************************************************
+ * gst_tidmaivideosink_set_caps
+ *
+ * This is mainly a place holder function.
+*******************************************************************************/
+static gboolean gst_tidmaivideosink_set_caps(GstBaseSink * bsink,
+                    GstCaps * caps)
 {
-    const GstStructure *s;
-    gchar              *sstr;
+    GstTIDmaiVideoSink *sink;
+    guint32 fourcc;
+    gint framerateDen, framerateNum;
+    GstStructure *structure = NULL;
 
-    if ((s = gst_event_get_structure(event)))
-        sstr = gst_structure_to_string(s);
-    else
-        sstr = g_strdup("");
+    sink = GST_TIDMAIVIDEOSINK(bsink);
 
-
-    GST_LOG("event  ******* E (type: %d, %s)\n", GST_EVENT_TYPE(event), sstr);
-    g_free(sstr);
-
-    return TRUE;
-}
-
-
-/******************************************************************************
- * gst_tidmaivideosink_preroll
- ******************************************************************************/
-static GstFlowReturn gst_tidmaivideosink_preroll(GstBaseSink * bsink,
-                         GstBuffer * buffer)
-{
-    GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK(bsink);
-
-    GST_DEBUG("Begin\n");
-
-    /* Render the buffer */
-    gst_tidmaivideosink_render(bsink,buffer);
-
-    /* If someone is looking for this signal go ahead and throw it.  We aren't
-     * doing anything with the buffer here anyway.
+    structure = gst_caps_get_structure(caps, 0);
+    /* The width and height of the input buffer are collected here
+     * so that it can be checked against the width and height of the
+     * display buffer.
      */
-    if (sink->signal_handoffs) {
-        g_signal_emit(sink,
-            gst_tidmaivideosink_signals[SIGNAL_PREROLL_HANDOFF], 0, buffer,
-            bsink->sinkpad);
-    }
-    GST_DEBUG("Finish\n");
+    gst_structure_get_int(structure, "width", &sink->width);
+    gst_structure_get_int(structure, "height", &sink->height);
+    sink->dmaiElementUpstream = FALSE;
+    gst_structure_get_boolean(structure,"dmaioutput",&sink->dmaiElementUpstream);
 
-    return GST_FLOW_OK;
+    /* Map input buffer fourcc to dmai color space  */
+    gst_structure_get_fourcc(structure, "format", &fourcc);
+
+    switch (fourcc) {
+        case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
+            sink->colorSpace = ColorSpace_UYVY;
+            break;
+        case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
+            sink->colorSpace = ColorSpace_YUV422PSEMI;
+            break;
+        case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+            sink->colorSpace = ColorSpace_YUV420PSEMI;
+            break;
+        default:
+            GST_ERROR("unsupport fourcc\n");
+            return FALSE;
+    }
+    GST_DEBUG("Colorspace %d, width %d, height %d\n", sink->colorSpace, sink->width,
+        sink->height);
+
+    gst_structure_get_fraction(structure, "framerate",
+        &framerateNum, &framerateDen);
+
+    /* Set the input videostd attrs so that when the display is created
+     * we can know what size it needs to be.
+     */
+    sink->iattrs.width  = sink->width;
+    sink->iattrs.height = sink->height;
+
+    /* Set the input frame rate.  Round to the nearest integer */
+    sink->iattrs.framerate =
+        (int)(((gdouble) framerateNum / framerateDen) + .5);
+
+    GST_DEBUG("Frame rate numerator = %d\n", framerateNum);
+    GST_DEBUG("Frame rate denominator = %d\n", framerateDen);
+    GST_DEBUG("Frame rate rounded = %d\n", sink->iattrs.framerate);
+
+    if (!gst_tidmaivideosink_init_display(sink, sink->colorSpace)) {
+        GST_ERROR("Unable to initialize display\n");
+        return FALSE;
+    }
+
+    if (sink->tempDmaiBuf) {
+        GST_DEBUG("Freeing temporary DMAI buffer\n");
+        Buffer_delete(sink->tempDmaiBuf);
+        sink->tempDmaiBuf = NULL;
+    }
+
+    gst_tidmaivideosink_clean_DisplayBuf(sink);
+    sink->capsAreSet = TRUE;
+  
+    return TRUE;
 }
 
 
@@ -784,7 +658,6 @@ static int gst_tidmaivideosink_videostd_get_attrs(VideoStd_Type videoStd,
         case VideoStd_720P_60:
             vattrs->framerate = 60;
             break;
-
         #if PLATFORM == omap35x
         case VideoStd_VGA:
             vattrs->framerate = 60;
@@ -823,8 +696,6 @@ static VideoStd_Type gst_tidmaivideosink_find_videostd(
                          GstTIDmaiVideoSink * sink)
 {
     VideoStd_Attrs  tattrs;
-    int             bestmatch = -1;
-    int             okmatch   = -1;
     int             dwidth;
     int             dheight;
     int             ret;
@@ -874,17 +745,6 @@ static VideoStd_Type gst_tidmaivideosink_find_videostd(
 
         if (((tattrs.width - sink->iattrs.width) <= dwidth) &&
             ((tattrs.height - sink->iattrs.height) <= dheight)) {
-            /* Check if the frame rate is an exact match, if not check if
-             * it is a multiple of the input frame rate.  If neither case
-             * is true then this is not a compatable videostd.
-             */
-            if (sink->iattrs.framerate == tattrs.framerate)
-                bestmatch = i;
-            else if (!(tattrs.framerate % sink->iattrs.framerate)) {
-                okmatch = i;
-            } else {
-                continue;
-            }
 
             /* Set new width and height deltas.  These are set after we
              * check if the framerates match so that a standard with an
@@ -893,73 +753,14 @@ static VideoStd_Type gst_tidmaivideosink_find_videostd(
              */
             dwidth = tattrs.width - sink->iattrs.width;
             dheight = tattrs.height - sink->iattrs.height;
+            GST_DEBUG("Finish\n");
+            return i;
         }
     }
-    /* If we didn't find a best match check if we found one that was ok */
-    if ((bestmatch == -1) && (okmatch != -1))
-        bestmatch = okmatch;
 
     GST_DEBUG("Finish\n");
-    return bestmatch;
+    return -1;
 }
-
-
-/******************************************************************************
- * gst_tidmaivideosink_check_set_framerate
- *
- *    This function will first check if the user set a frame rate on the
- *    command line.  If not then it will check if the frame rate of the
- *    input stream is known.  Lastly as a final resort it will default to
- *    an input frame rate of 30fps.  This is to help determine later based
- *    on the output standard whether to repeat frames or not.
- *
- ******************************************************************************/
-static void gst_tidmaivideosink_check_set_framerate(GstTIDmaiVideoSink * sink)
-{
-    GST_DEBUG("Begin\n");
-
-    /* Check if the framerate was set by the user on the command line */
-    if (sink->framerate != -1) {
-        sink->iattrs.framerate = sink->framerate;
-        return;
-    }
-
-    /* Was the frame rate set to a positive non-zero value based on the stream
-     * attributes?  If not set to 30fps as a default.
-     */
-    if (sink->iattrs.framerate <= 0)
-        sink->iattrs.framerate = 30;
-
-    GST_DEBUG("Finish\n");
-    return;
-}
-
-
-/******************************************************************************
- * gst_tidmaivideosink_get_framerepeat
- *
- *    This function will look at the output display frame rate and the
- *    input frame rate and determine how many times a frame should be
- *    repeated.  If the output is not an integer multiple of the input
- *    then 1 is returned to indicate that there will be no frame
- *    repeating.
- *
- ******************************************************************************/
-static int gst_tidmaivideosink_get_framerepeat(GstTIDmaiVideoSink * sink)
-{
-    int num_repeat;
-
-    GST_DEBUG("Begin\n");
-
-    if ((sink->oattrs.framerate % sink->iattrs.framerate) != 0)
-        num_repeat = 1;
-    else
-        num_repeat = sink->oattrs.framerate / sink->iattrs.framerate;
-
-    GST_DEBUG("Finish\n");
-    return num_repeat;
-}
-
 
 /******************************************************************************
  * gst_tidmaivideosink_convert_attrs
@@ -977,9 +778,9 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
         case VAR_DISPLAYSTD:
             /* Convert the strings V4L2 or FBDEV into their integer enumeration
              */
-            if (!strcmp(sink->displayStd, "V4L2"))
+            if (!strcasecmp(sink->displayStd, "V4L2"))
                 return Display_Std_V4L2;
-            else if (!strcmp(sink->displayStd, "FBDEV"))
+            else if (!strcasecmp(sink->displayStd, "FBDEV"))
                 return Display_Std_FBDEV;
             else {
                 GST_ERROR("Invalid displayStd entered (%s)"
@@ -992,38 +793,38 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
             /* Convert the video standard strings into their interger
              * enumeration
              */
-            if (!strcmp(sink->videoStd, "AUTO"))
+            if (!strcasecmp(sink->videoStd, "AUTO"))
                 return VideoStd_AUTO;
-            else if (!strcmp(sink->videoStd, "CIF"))
+            else if (!strcasecmp(sink->videoStd, "CIF"))
                 return VideoStd_CIF;
-            else if (!strcmp(sink->videoStd, "SIF_NTSC"))
+            else if (!strcasecmp(sink->videoStd, "SIF_NTSC"))
                 return VideoStd_SIF_NTSC;
-            else if (!strcmp(sink->videoStd, "SIF_PAL"))
+            else if (!strcasecmp(sink->videoStd, "SIF_PAL"))
                 return VideoStd_SIF_PAL;
-            else if (!strcmp(sink->videoStd, "D1_NTSC"))
+            else if (!strcasecmp(sink->videoStd, "D1_NTSC"))
                 return VideoStd_D1_NTSC;
-            else if (!strcmp(sink->videoStd, "D1_PAL"))
+            else if (!strcasecmp(sink->videoStd, "D1_PAL"))
                 return VideoStd_D1_PAL;
-            else if (!strcmp(sink->videoStd, "480P"))
+            else if (!strcasecmp(sink->videoStd, "480P"))
                 return VideoStd_480P;
-            else if (!strcmp(sink->videoStd, "576P"))
+            else if (!strcasecmp(sink->videoStd, "576P"))
                 return VideoStd_576P;
-            else if (!strcmp(sink->videoStd, "720P_60"))
+            else if (!strcasecmp(sink->videoStd, "720P_60"))
                 return VideoStd_720P_60;
-            else if (!strcmp(sink->videoStd, "720P_50"))
+            else if (!strcasecmp(sink->videoStd, "720P_50"))
                 return VideoStd_720P_50;
-            else if (!strcmp(sink->videoStd, "1080I_30"))
+            else if (!strcasecmp(sink->videoStd, "1080I_30"))
                 return VideoStd_1080I_30;
-            else if (!strcmp(sink->videoStd, "1080I_25"))
+            else if (!strcasecmp(sink->videoStd, "1080I_25"))
                 return VideoStd_1080I_25;
-            else if (!strcmp(sink->videoStd, "1080P_30"))
+            else if (!strcasecmp(sink->videoStd, "1080P_30"))
                 return VideoStd_1080P_30;
-            else if (!strcmp(sink->videoStd, "1080P_25"))
+            else if (!strcasecmp(sink->videoStd, "1080P_25"))
                 return VideoStd_1080P_25;
-            else if (!strcmp(sink->videoStd, "1080P_24"))
+            else if (!strcasecmp(sink->videoStd, "1080P_24"))
                 return VideoStd_1080P_24;
             #if PLATFORM == omap35x
-            else if (!strcmp(sink->videoStd, "VGA"))
+            else if (!strcasecmp(sink->videoStd, "VGA"))
                 return VideoStd_VGA;
             #endif
             else {
@@ -1039,16 +840,16 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
             /* Convert the strings SVIDEO, COMPONENT, or COMPOSITE into their
              * integer enumerations.
              */
-            if (!strcmp(sink->videoOutput, "SVIDEO"))
+            if (!strcasecmp(sink->videoOutput, "SVIDEO"))
                 return Display_Output_SVIDEO;
-            else if (!strcmp(sink->videoOutput, "COMPOSITE"))
+            else if (!strcasecmp(sink->videoOutput, "COMPOSITE"))
                 return Display_Output_COMPOSITE;
-            else if (!strcmp(sink->videoOutput, "COMPONENT"))
+            else if (!strcasecmp(sink->videoOutput, "COMPONENT"))
                 return Display_Output_COMPONENT;
             #if PLATFORM == omap35x
-            else if (!strcmp(sink->videoOutput, "DVI"))
+            else if (!strcasecmp(sink->videoOutput, "DVI"))
                 return Display_Output_DVI;
-            else if (!strcmp(sink->videoOutput, "LCD"))
+            else if (!strcasecmp(sink->videoOutput, "LCD"))
                 return Display_Output_LCD;
             #endif
             else {
@@ -1074,8 +875,7 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
  *    this function sets the display attributes to the DMAI defaults
  *    and overrides those default with user input if entered.
 *******************************************************************************/
-static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
-        ColorSpace_Type colorSpace)
+static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
 {
     int ret;
 
@@ -1086,11 +886,6 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
         GST_ERROR("Failed to determine target board\n");
         return FALSE;
     }
-
-    /* Set the frame rate based on if the user gave a rate on the command line
-     * or if the stream has the frame rate information.
-     */
-    gst_tidmaivideosink_check_set_framerate(sink);
 
     /* Set the display attrs to the defaults for this device */
     switch (sink->cpu_dev) {
@@ -1140,7 +935,7 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
         gst_tidmaivideosink_convert_attrs(VAR_VIDEOOUTPUT, sink);
     sink->dAttrs.displayDevice = sink->displayDevice == NULL ?
         sink->dAttrs.displayDevice : sink->displayDevice;
-
+    
     /* Set rotation on OMAP35xx */
     #if PLATFORM == omap35x
     if (sink->cpu_dev == Cpu_Device_OMAP3530) {
@@ -1213,22 +1008,16 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
 {
     GST_DEBUG("Begin\n");
 
-    if (sink->hResize) {
-        GST_DEBUG("closing resizer\n");
-        Resize_delete(sink->hResize);
-        sink->hResize = NULL;
+    if (sink->tempDmaiBuf) {
+        GST_DEBUG("Freeing temporary DMAI buffer\n");
+        Buffer_delete(sink->tempDmaiBuf);
+        sink->tempDmaiBuf = NULL;
     }
 
     if (sink->hFc) {
         GST_DEBUG("closing Framecopy\n");
         Framecopy_delete(sink->hFc);
         sink->hFc = NULL;
-    }
-
-    if (sink->hCcv) {
-        GST_DEBUG("closing ccv\n");
-        Ccv_delete(sink->hCcv);
-        sink->hCcv = NULL;
     }
 
     if (sink->hDisplay) {
@@ -1241,6 +1030,20 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
       free(sink->cleanBufCtrl);
     }
 
+    if (sink->allocatedBuffers){
+        g_free(sink->allocatedBuffers);
+        sink->allocatedBuffers = NULL;
+    }
+    sink->lastAllocatedBuffer = NULL;
+    sink->numAllocatedBuffers = 0;
+    
+    if (sink->unusedBuffers){
+        g_free(sink->unusedBuffers);
+        sink->unusedBuffers = NULL;
+    }
+    sink->numUnusedBuffers = 0;
+
+    sink->capsAreSet = FALSE;
 
     GST_DEBUG("Finish\n");
 
@@ -1267,11 +1070,7 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
 static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
     ColorSpace_Type colorSpace)
 {
-    Resize_Attrs rAttrs = Resize_Attrs_DEFAULT;
-    Ccv_Attrs ccvAttrs = Ccv_Attrs_DEFAULT;
     Framecopy_Attrs fcAttrs = Framecopy_Attrs_DEFAULT;
-    BufTab_Handle hBufTab;
-    gint i;
 
     GST_DEBUG("Begin\n");
 
@@ -1285,7 +1084,7 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
      * 3.  autoselect was enabled and no working standard could be found
      */
     while (TRUE) {
-        if (!gst_tidmaivideosink_set_display_attrs(sink,colorSpace)) {
+        if (!gst_tidmaivideosink_set_display_attrs(sink)) {
             GST_ERROR("Error while trying to set the display attributes\n");
             return FALSE;
         }
@@ -1296,24 +1095,21 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
         if ((sink->hDisplay == NULL) && (sink->autoselect == TRUE)) {
             GST_DEBUG("Could not create display with videoStd %d. " 
               "Searching for next valid standard.\n",
-            sink->dAttrs.videoStd);
+              sink->dAttrs.videoStd);
             sink->prevVideoStd = sink->dAttrs.videoStd;
             continue;
         } else {
-             /* This code create a array to control the buffers cleaned after 
-              * change of capabilities or some properties 
-              *
-              */
-             hBufTab = Display_getBufTab(sink->hDisplay);
-             sink->numDispBuf = BufTab_getNumBufs(hBufTab);
-             sink->cleanBufCtrl = (int *)g_malloc0(sink->numDispBuf * sizeof(int));
-             for(i=0; i < sink->numDispBuf; i++){
-                 sink->cleanBufCtrl[i] = CLEANED;
-             }
-             sink->numBufClean = 0;
-            /* If the display was created, or failed to be created and
-             * autoselect was not set break out of the loop.
+            /* This code create a array to control the buffers cleaned after 
+             * change of capabilities or some properties 
              */
+            sink->numBuffers = BufTab_getNumBufs(Display_getBufTab(sink->hDisplay));
+            sink->cleanBufCtrl = (gchar *)g_malloc0(sink->numBuffers);
+            sink->numBufClean = 0;
+            sink->unusedBuffers = g_malloc0(sink->numBuffers * sizeof(GstBuffer));
+            sink->numUnusedBuffers = 0;
+            sink->allocatedBuffers = g_malloc0(sink->numBuffers * sizeof(GstBuffer));
+            sink->numAllocatedBuffers = 0;
+
             break;
         }
     }
@@ -1325,43 +1121,15 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
 
     GST_DEBUG("Display Device Created\n");
 
-    /* For DM6467 devices the frame copy is done by the color conversion engine
-     */
-    if (sink->cpu_dev == Cpu_Device_DM6467 &&
-            colorSpace != ColorSpace_YUV422PSEMI) {
-        /* Create the VDCE accelerated color conversion job from 420 to 422 */
-        ccvAttrs.accel = TRUE;
-        sink->hCcv = Ccv_create(&ccvAttrs);
+    /* Use an accelerated frame copy */
+    fcAttrs.accel = sink->accelFrameCopy;
+    sink->hFc = Framecopy_create(&fcAttrs);
 
-        if (sink->hCcv == NULL) {
-            GST_ERROR("Failed to create CCV job\n");
-            return FALSE;
-        }
-        GST_DEBUG("CCV Device Created\n");
+    if (sink->hFc == NULL) {
+        GST_ERROR("Failed to create framcopy\n");
+        return FALSE;
     }
-
-    /* If user want to use the resizer to resize the image */
-    else if (sink->resizer) {
-        sink->hResize = Resize_create(&rAttrs);
-
-        if (sink->hResize == NULL) {
-            GST_ERROR("Failed to create resizer\n");
-            return FALSE;
-        }
-        GST_DEBUG("Resizer Device Created\n");
-    }
-
-    /* Otherwise, use an accelerated frame copy */
-    else {
-        fcAttrs.accel = sink->accelFrameCopy;
-        sink->hFc = Framecopy_create(&fcAttrs);
-
-        if (sink->hFc == NULL) {
-            GST_ERROR("Failed to create framcopy\n");
-            return FALSE;
-        }
-        GST_DEBUG("Frame Copy Device Created\n");
-    }
+    GST_DEBUG("Frame Copy Device Created\n");
 
     GST_DEBUG("Finish\n");
     return TRUE;
@@ -1369,12 +1137,224 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
 
 
 /*******************************************************************************
+ * gst_tidmaivideosink_start
+ *
+ *******************************************************************************/
+static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
+{
+    GstTIDmaiVideoSink *dmaisink;
+    dmaisink = GST_TIDMAIVIDEOSINK(sink);
+
+    if(dmaisink->xPosition == -1){
+      dmaisink->xCentering = TRUE;
+    } 
+    if(dmaisink->yPosition == -1){
+      dmaisink->yCentering = TRUE;
+    }
+
+    dmaisink->prerolledBuffer = NULL;
+    
+    return TRUE;
+}
+
+
+/*******************************************************************************
+ * gst_tidmaivideosink_stop
+ *
+ *******************************************************************************/
+static gboolean gst_tidmaivideosink_stop(GstBaseSink *sink)
+{
+    GstTIDmaiVideoSink *dmaisink;
+    dmaisink = GST_TIDMAIVIDEOSINK(sink);
+
+    /* Shutdown any display and frame copy devices */
+    if (!gst_tidmaivideosink_exit_display(dmaisink)) {
+        GST_ERROR("Failed to exit the display\n");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*******************************************************************************
+ * gst_tidmaivideosink_get_display_buffer
+ *
+ * Function used to obtain a display buffer with the right properties
+*******************************************************************************/
+static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
+    GstTIDmaiVideoSink *sink,Buffer_Handle inBuf,
+    BufferGfx_Dimensions *inDimSave){
+    Buffer_Handle hDispBuf = NULL;
+    BufferGfx_Dimensions dim, inDim;
+    int i;
+    
+    if (sink->numUnusedBuffers > 0){
+        /* Recicle some unused buffer */
+        for (i = 0; i < sink->numBuffers ; i++){
+            if (sink->unusedBuffers[i] != NULL){
+                hDispBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(sink->unusedBuffers[i]);
+                sink->unusedBuffers[i] = NULL;
+                sink->allocatedBuffers[i] = NULL;
+                sink->numUnusedBuffers--;
+                sink->numAllocatedBuffers--;
+            }
+        }
+    } else {
+        /* Get a buffer from the display driver */
+        if (Display_get(sink->hDisplay, &hDispBuf) < 0) {
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Failed to get display buffer"));
+            return NULL;
+        }
+    }
+    
+    /*Removing garbage on display buffer*/
+    if (sink->numBufClean){
+        if (sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == DIRTY ){
+            gst_tidmaivideosink_blackFill(sink, hDispBuf);
+            sink->numBufClean--;
+            GST_LOG("Cleaning Display buffers: %d cleaned of %d buffers\n",
+                sink->numBuffers - sink->numBufClean , sink->numBuffers);
+        } else{
+            GST_LOG("Display buffers had been cleaned");
+        }
+    }
+    
+    /* Retrieve the dimensions of the display buffer */
+    BufferGfx_getDimensions(hDispBuf, &dim);
+    GST_LOG("Display size %dx%d pitch %d\n",
+            (Int) dim.width, (Int) dim.height, (Int) dim.lineLength);
+    
+    /* We will only display the
+     * portion of the video that fits on the screen.  If the video is
+     * smaller than the display center or place it in the screen.
+     */
+    /*WIDTH*/
+    
+    if (inBuf) {
+        BufferGfx_getDimensions(inBuf, &inDim);
+        BufferGfx_getDimensions(inBuf, inDimSave);
+    }
+    
+    if(!sink->xCentering){
+       if(sink->xPosition > 0){
+          dim.x = sink->xPosition;
+          inDim.width = dim.width - sink->xPosition;
+          if(inDim.width > sink->width){
+             inDim.width = sink->width;
+          }else if(inDim.width < 0){
+             inDim.width = 0;
+          }
+       }else{
+          dim.x = 0;
+          inDim.width = sink->xPosition + sink->width > 0 ? 
+              sink->xPosition + sink->width : 0;
+          inDim.x = -sink->xPosition;
+       }
+    }else{
+       dim.x = (dim.width-sink->width)/2;
+    }
+    /*HEIGHT*/ 
+    if(!sink->yCentering){
+       if(sink->yPosition > 0){
+          dim.y = sink->yPosition;
+          inDim.height = dim.height - sink->yPosition;
+          if(inDim.height > sink->height){
+             inDim.height = sink->height;
+          }else if(inDim.height < 0){
+             inDim.height = 0;
+          }
+       }else{
+          dim.y = 0;
+          inDim.height = sink->yPosition + sink->height > 0 ? 
+              sink->yPosition + sink->height : 0;
+          inDim.y = -sink->yPosition;
+       }
+    }else{
+       dim.y = (dim.height-sink->height)/2;
+    }
+
+    if (inBuf)
+        BufferGfx_setDimensions(inBuf, &inDim);
+    BufferGfx_setDimensions(hDispBuf, &dim);
+    
+    return hDispBuf;
+}
+
+void allocated_buffer_release_cb(gpointer data,GstTIDmaiBufferTransport *buf){
+    GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK_CAST(data);
+    Buffer_Handle hBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
+    
+    if (sink->allocatedBuffers[Buffer_getId(hBuf)]){
+        /* The pointer is not null, this buffer is being released
+         * without having being pushed back into the sink, likely
+         * beacuse the frame was late and is dropped
+         */
+        sink->unusedBuffers[Buffer_getId(hBuf)] = (GstBuffer *)buf;
+        sink->numUnusedBuffers++;
+        GST_DEBUG("Pad allocated buffer being drop");
+    }
+}
+
+/*******************************************************************************
+ * gst_tidmaivideosink_buffer_alloc
+ *
+ * Function used to allocate a buffer from upstream elements
+*******************************************************************************/
+static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink, 
+    guint64 offset, guint size, GstCaps *caps, GstBuffer **buf){
+    Buffer_Handle hBuf;
+    GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK_CAST(bsink);
+
+    if (!sink->capsAreSet){
+        gst_tidmaivideosink_set_caps(bsink,caps);
+    }
+
+    if (!sink->dmaiElementUpstream){
+        return GST_FLOW_OK;
+    }
+
+    /* Do not allocate more buffers than available */
+    if ((sink->numAllocatedBuffers >= 
+         (BufTab_getNumBufs(Display_getBufTab(sink->hDisplay)) - 1)) &&
+        (sink->numUnusedBuffers == 0))
+        return GST_FLOW_OK;
+
+    hBuf = gst_tidmaivideosink_get_display_buffer(sink,NULL,NULL);
+    if (hBuf){
+        *buf = gst_tidmaibuffertransport_new(hBuf,NULL);
+        sink->allocatedBuffers[Buffer_getId(hBuf)] = *buf;
+        gst_tidmaibuffertransport_set_release_callback(
+            (GstTIDmaiBufferTransport *)*buf,
+             allocated_buffer_release_cb,sink);
+        gst_buffer_set_caps(*buf,caps);
+        GST_BUFFER_SIZE(*buf) = gst_ti_calculate_bufSize(
+            sink->width,sink->height,sink->colorSpace);
+        sink->numAllocatedBuffers++;
+        sink->lastAllocatedBuffer = *buf;
+    } else {
+        return GST_FLOW_UNEXPECTED;
+    }
+
+    return GST_FLOW_OK;
+}
+
+
+/*******************************************************************************
+ * gst_tidmaivideosink_preroll
+*******************************************************************************/
+static GstFlowReturn gst_tidmaivideosink_preroll(GstBaseSink * bsink,
+                         GstBuffer * buf){
+    GstTIDmaiVideoSink   *sink      = GST_TIDMAIVIDEOSINK_CAST(bsink);
+
+    if (!sink->prerolledBuffer)
+        sink->prerolledBuffer = buf;
+    
+    return gst_tidmaivideosink_render(bsink,buf);
+}
+
+/*******************************************************************************
  * gst_tidmaivideosink_render
- *   This is the main processing routine.  This function will receive a
- *   buffer containing video data to be displayed on the screen.  If the
- *   display has not been initialized it will be configured and the input
- *   video frame will be copied to the display driver using hardware
- *   acceleration if possible.
 *******************************************************************************/
 static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
                          GstBuffer * buf)
@@ -1382,75 +1362,22 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
     BufferGfx_Attrs       gfxAttrs  = BufferGfx_Attrs_DEFAULT;
     Buffer_Handle         hDispBuf  = NULL;
     Buffer_Handle         inBuf     = NULL;
-    GstCaps              *temp_caps = GST_BUFFER_CAPS(buf);
-    GstStructure         *structure = NULL;
+    BufferGfx_Dimensions  inDimSave;
     GstTIDmaiVideoSink   *sink      = GST_TIDMAIVIDEOSINK_CAST(bsink);
-    BufferGfx_Dimensions  dim, inDim,inDimSave;
-    gchar                 dur_str[64];
-    gchar                 ts_str[64];
-    gfloat                heightper;
-    gfloat                widthper;
-    gint                  framerateDen;
-    gint                  framerateNum;
-    gint                  height;
-    gint                  i;
-    gint                  origHeight;
-    gint                  origWidth;
-    gint                  width;
-    ColorSpace_Type       inBufColorSpace;
-    guint32               fourcc;
-    const gchar           *mime;
 
-    GST_DEBUG("\n\n\nBegin\n");
+    GST_DEBUG("Begin");
 
-    structure = gst_caps_get_structure(temp_caps, 0);
-    mime      = gst_structure_get_name(structure);
-
-    /* The width and height of the input buffer are collected here
-     * so that it can be checked against the width and height of the
-     * display buffer.
+    /* The base sink send us the first buffer twice, so we avoid processing 
+     * it again, since the Display_put may fail on this case when using 
+     * pad_allocation 
      */
-    gst_structure_get_int(structure, "width", &width);
-    gst_structure_get_int(structure, "height", &height);
-
-    if (!strcmp(mime, "video/x-raw-rgb")) {
-        gint rm,gm,bm;
-
-        gst_structure_get_int(structure,"red_mask",&rm);
-        gst_structure_get_int(structure,"green_mask",&gm);
-        gst_structure_get_int(structure,"blue_mask",&bm);
-        if ((rm == 63488) && (gm == 2016) && (bm == 31)){
-            inBufColorSpace = ColorSpace_RGB565;
-        } else {
-            GST_ERROR("unsupported color space\n");
-             return FALSE;
-        }
-    } else {
-        /* Map input buffer fourcc to dmai color space  */
-        gst_structure_get_fourcc(structure, "format", &fourcc);
-
-        switch (fourcc) {
-            case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
-                inBufColorSpace = ColorSpace_UYVY;
-                break;
-            case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
-                inBufColorSpace = ColorSpace_YUV422PSEMI;
-                break;
-#if PLATFORM == dm365
-            case GST_MAKE_FOURCC('N', 'V', '1', '2'):
-                inBufColorSpace = ColorSpace_YUV420PSEMI;
-                break;
-#endif
-            default:
-                GST_ERROR("unsupported fourcc\n");
-                return FALSE;
-        }
+    if (sink->prerolledBuffer == buf){
+        sink->prerolledBuffer = NULL;
+        return GST_FLOW_OK;
     }
-
+    
     /* If the input buffer is non dmai buffer, then allocate dmai buffer and
      *  copy input buffer in dmai buffer using memcpy routine.
-     *  This logic will help to display non-dmai buffers. (e.g the video
-     *  generated via videotestsrc plugin.
      */
     if (GST_IS_TIDMAIBUFFERTRANSPORT(buf)) {
         inBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
@@ -1459,418 +1386,80 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
         if (sink->tempDmaiBuf == NULL) {
 
             GST_DEBUG("Input buffer is non-dmai, allocating new buffer");
-            gfxAttrs.bAttrs.reference   = sink->contiguousInputFrame;
-            gfxAttrs.dim.width          = width;
-            gfxAttrs.dim.height         = height;
-            gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(width,
-                                            inBufColorSpace);
-            gfxAttrs.colorSpace         = inBufColorSpace;
-            sink->tempDmaiBuf           = Buffer_create(buf->size,
+            gfxAttrs.dim.width          = sink->width;
+            gfxAttrs.dim.height         = sink->height;
+            gfxAttrs.dim.lineLength     = BufferGfx_calcLineLength(sink->width,
+                                            sink->colorSpace);
+            gfxAttrs.colorSpace         = sink->colorSpace;
+            sink->tempDmaiBuf           = Buffer_create(GST_BUFFER_SIZE(buf),
                                            BufferGfx_getBufferAttrs(&gfxAttrs));
 
             if (sink->tempDmaiBuf == NULL) {
-                GST_ERROR("Failed to allocate memory for input buffer\n");
-                goto cleanup;
+                GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                    ("Failed to allocate memory for the input buffer"));
+                return GST_FLOW_UNEXPECTED;
             }
         }
         inBuf = sink->tempDmaiBuf;
 
-        /* If contiguous input frame is not set then use memcpy to copy the
-         * input buffer in contiguous dmai buffer.
-         */
-        if (sink->contiguousInputFrame) {
-            Buffer_setUserPtr(inBuf, (Int8*)buf->data);
-        }
-        else {
-            memcpy(Buffer_getUserPtr(inBuf), buf->data, buf->size);
-        }
-
+        memcpy(Buffer_getUserPtr(inBuf), buf->data, buf->size);
     }
 
-    /* If the Display_Handle element is NULL, then either this is our first
-     * buffer or the upstream element has re-nogatiated our capabilities which
-     * resulted in our display handle being closed.  In either case we need to
-     * initialize (or re-initialize) our display to handle the new stream.
-     */
-    if (sink->hDisplay == NULL) {
-        gst_structure_get_fraction(structure, "framerate",
-            &framerateNum, &framerateDen);
-
-        /* Set the input videostd attrs so that when the display is created
-         * we can know what size it needs to be.
+    if (sink->numAllocatedBuffers &&
+        (Buffer_getBufTab(inBuf) == Display_getBufTab(sink->hDisplay))) {
+        GST_DEBUG("Flipping pad allocated buffer");
+        /* We got a buffer that is already on video memory, just flip it */
+        hDispBuf = inBuf;
+        sink->numAllocatedBuffers--;
+        sink->allocatedBuffers[Buffer_getId(inBuf)] = NULL;
+        if (buf == sink->lastAllocatedBuffer){
+            sink->lastAllocatedBuffer = NULL;
+        }
+    } else {
+        /* Check if we can allocate a new buffer, otherwise we may need 
+         * to drop the buffer
          */
-        sink->iattrs.width  = width;
-        sink->iattrs.height = height;
-
-        /* Set the input frame rate.  Round to the nearest integer */
-        sink->iattrs.framerate =
-            (int)(((gdouble) framerateNum / framerateDen) + .5);
-
-        GST_DEBUG("Frame rate numerator = %d\n", framerateNum);
-        GST_DEBUG("Frame rate denominator = %d\n", framerateDen);
-        GST_DEBUG("Frame rate rounded = %d\n", sink->iattrs.framerate);
-
-        GST_DEBUG("Display Handle does not exist.  Creating a display\n");
-
-        if (!gst_tidmaivideosink_init_display(sink, inBufColorSpace)) {
-            GST_ERROR("Unable to initialize display\n");
-            goto cleanup;
-        }
-
-        /* Calculate the required framerepeat now that we have initialized
-         * the display and know the output frame rate.
-         */
-        sink->framerepeat = gst_tidmaivideosink_get_framerepeat(sink);
-    }
-
-    for (i = 0; i < sink->framerepeat; i++) {
-
-        /* Get a buffer from the display driver */
-        if (Display_get(sink->hDisplay, &hDispBuf) < 0) {
-            GST_ERROR("Failed to get display buffer\n");
-            goto cleanup;
-        }
-
-        /*Removing garbage on display buffer*/
-        if(sink->numBufClean){
-           if(sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == NOT_CLEANED ){
-            gst_tidmaivideosink_blackFill(sink, hDispBuf);
-            sink->numBufClean--;
-            GST_LOG("Cleaning Display buffers: %d cleaned of %d buffers\n", sink->numDispBuf - sink->numBufClean , sink->numDispBuf);
-          }else{
-            GST_LOG("Display buffers had been cleaned");
-          }
-        }
-
-        /* Retrieve the dimensions of the display buffer */
-        BufferGfx_getDimensions(hDispBuf, &dim);
-        GST_LOG("Display size %dx%d pitch %d\n",
-                (Int) dim.width, (Int) dim.height, (Int) dim.lineLength);
-
-
-        if (sink->resizer) {
-
-            /* TODO: Update DMAI CCv module to support resizing and
-             *  color conversion.
-             */
-            if (sink->cpu_dev == Cpu_Device_DM6467) {
-                GST_LOG("This plugin does not support resizer on"
-                        " DM6467.\n");
-                goto cleanup;
-            }
-
-            /* resize video image while maintaining the aspect ratio */
-            BufferGfx_getDimensions(hDispBuf, &dim);
-            if (width > height) {
-
-                origHeight = dim.height;
-                widthper   = (float)dim.width / width;
-                dim.height = height * widthper;
-
-                if (dim.height > origHeight)
-                    dim.height = origHeight;
-                else
-                    dim.y = (origHeight - dim.height) / 2;
-
-            } else {
-
-                origWidth = dim.width;
-                heightper = (float)dim.height / height;
-                dim.width = width * heightper;
-
-                if (dim.width > origWidth)
-                    dim.width = origWidth;
-                else
-                    dim.x = (origWidth - dim.width) / 2;
-            }
-            BufferGfx_setDimensions(hDispBuf, &dim);
-
-            /* Configure resizer */
-            if (Resize_config(sink->hResize, inBuf, hDispBuf) < 0) {
-                GST_LOG("Failed to configure resizer\n");
-                goto cleanup;
-            }
-
-            if (Resize_execute(sink->hResize, inBuf, hDispBuf) < 0) {
-                GST_LOG("Failed to execute resizer\n");
-                goto cleanup;
-            }
-
+        if ((sink->numAllocatedBuffers >= 
+             (BufTab_getNumBufs(Display_getBufTab(sink->hDisplay)) - 1)) &&
+             (sink->numUnusedBuffers == 0)){
+            GST_ELEMENT_WARNING(sink,RESOURCE,NO_SPACE_LEFT,(NULL),
+                ("Dropping incoming buffers because no display buffer"
+                    " available"));
+            return GST_FLOW_OK;
         } else {
-            /* Check that the input buffer sizer are not too large for the
-             * display buffers.  This is because the display buffers are
-             * pre-allocated by the driver and are not increased at run time
-             * (for fbdev devices, for v4l2  devices these can grow at run time)
-             * .However, since we don't expect the size of the clip to increase
-             * in the middle of playing we will not resize the window, even for
-             * v4l2 after the initial setup.  Instead we will only display the
-             * portion of the video that fits on the screen.  If the video is
-             * smaller than the display center or place it in the screen.
-             * TODO: later add an option to resize the video.
-             */
-            /*WIDTH*/
+            GST_DEBUG("Obtaining display buffer");
+            hDispBuf = gst_tidmaivideosink_get_display_buffer(sink,inBuf,
+                &inDimSave);
+            if (!hDispBuf)
+                return GST_FLOW_UNEXPECTED;
+        }
 
-            BufferGfx_getDimensions(inBuf, &inDim);
-            BufferGfx_getDimensions(inBuf, &inDimSave);
-            if(!sink->x_centering){
-               if(sink->x_position > 0){
-                  dim.x = sink->x_position;
-                  inDim.width = dim.width - sink->x_position;
-                  if(inDim.width > width){
-                     inDim.width = width;
-                  }else if(inDim.width < 0){
-                     inDim.width = 0;
-                  }
-               }else{
-                  dim.x = 0;
-                  inDim.width = sink->x_position + width > 0 ? sink->x_position + width : 0;
-                  inDim.x = -sink->x_position;// * inBufColorSpace);
-               }
-            }else{
-               dim.x = (dim.width-width)/2;
-            }
-            /*HEIGHT*/ 
-            if(!sink->y_centering){
-               if(sink->y_position > 0){
-                  dim.y = sink->y_position;
-                  inDim.height = dim.height - sink->y_position;
-                  if(inDim.height > height){
-                     inDim.height = height;
-                  }else if(inDim.height < 0){
-                     inDim.height = 0;
-                  }
-               }else{
-                  dim.y = 0;
-                  inDim.height = sink->y_position + height > 0 ? sink->y_position + height : 0;
-                  inDim.y = -sink->y_position;
-               }
-            }else{
-               dim.y = (dim.height-height)/2;
-            }
+        if (Framecopy_config(sink->hFc, inBuf, hDispBuf) < 0) {
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Failed to configure the frame copy"));
+            return GST_FLOW_UNEXPECTED;
+        }
 
-            BufferGfx_setDimensions(inBuf, &inDim);
-            BufferGfx_setDimensions(hDispBuf, &dim);
-
-            /* DM6467 Only: Color convert the 420Psemi decoded buffer from
-             * the video thread to the 422Psemi display.
-             */
-            if (sink->cpu_dev == Cpu_Device_DM6467 &&
-                    inBufColorSpace != ColorSpace_YUV422PSEMI) {
-
-                /* Configure the 420->422 color conversion job */
-                if (Ccv_config(sink->hCcv, inBuf, hDispBuf) < 0) {
-                    GST_ERROR("Failed to configure CCV job\n");
-                    goto cleanup;
-                }
-
-                if (Ccv_execute(sink->hCcv, inBuf, hDispBuf) < 0) {
-                    GST_ERROR("Failed to execute CCV job\n");
-                    goto cleanup;
-                }
-            } else {
-                if (Framecopy_config(sink->hFc, inBuf, hDispBuf) < 0) {
-                    GST_ERROR("Failed to configure framecopy\n");
-                    goto cleanup;
-                }
-
-                if (Framecopy_execute(sink->hFc, inBuf, hDispBuf) < 0) {
-                    GST_ERROR("Failed to execute resizer\n");
-                    goto cleanup;
-                }
-            }
+        if (Framecopy_execute(sink->hFc, inBuf, hDispBuf) < 0) {
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Failed to execute the frame copy"));
+            return GST_FLOW_UNEXPECTED;
         }
 
         BufferGfx_resetDimensions(hDispBuf);
         BufferGfx_setDimensions(inBuf, &inDimSave);
-
-        /* Send filled buffer to display device driver to be displayed */
-        if (Display_put(sink->hDisplay, hDispBuf) < 0) {
-            GST_ERROR("Failed to put display buffer\n");
-            goto cleanup;
-        }
     }
 
-    if (GST_BUFFER_TIMESTAMP(buf) != GST_CLOCK_TIME_NONE) {
-        g_snprintf(ts_str, sizeof(ts_str), "%" GST_TIME_FORMAT,
-                   GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(buf)));
-    } else {
-        g_strlcpy(ts_str, "none", sizeof(ts_str));
+    /* Send filled buffer to display device driver to be displayed */
+    if (Display_put(sink->hDisplay, hDispBuf) < 0) {
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Failed to put the buffer on display"));
+        return GST_FLOW_UNEXPECTED;
     }
 
-    if (GST_BUFFER_DURATION(buf) != GST_CLOCK_TIME_NONE) {
-        g_snprintf(dur_str, sizeof(dur_str), "%" GST_TIME_FORMAT,
-                   GST_TIME_ARGS(GST_BUFFER_DURATION(buf)));
-    } else {
-        g_strlcpy(dur_str, "none", sizeof(dur_str));
-    }
-
-    GST_LOG("render  ******* < (%5d bytes, timestamp: %s, duration: %s"
-            ", offset: %" G_GINT64_FORMAT ", offset_end: %" G_GINT64_FORMAT
-            ", flags: %d) %p\n", GST_BUFFER_SIZE(buf), ts_str, dur_str,
-            GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf),
-            GST_MINI_OBJECT(buf)->flags, buf);
-
-    if (sink->tempDmaiBuf) {
-        GST_DEBUG("Freeing temporary DMAI buffer\n");
-        Buffer_delete(sink->tempDmaiBuf);
-        sink->tempDmaiBuf = NULL;
-    }
-
-    /* Signal the handoff in case anyone is looking for that */
-    if (sink->signal_handoffs)
-        g_signal_emit(G_OBJECT(sink),
-            gst_tidmaivideosink_signals[SIGNAL_HANDOFF], 0,buf,
-                bsink->sinkpad);
-
-    GST_DEBUG("Finish\n\n\n");
+    GST_DEBUG("Finish");
 
     return GST_FLOW_OK;
-
-cleanup:
-
-    if (!gst_tidmaivideosink_exit_display(sink))
-        GST_ERROR("gst_tidmaivideosink_render: Could not close the"
-                  " display on error\n");
-
-    return GST_FLOW_UNEXPECTED;
-}
-
-
-/*******************************************************************************
- * gst_tidmaivideosink_change_state
- *
- * For now this function just handles the cleanup transition.
-*******************************************************************************/
-static GstStateChangeReturn gst_tidmaivideosink_change_state(
-                                GstElement * element,
-                                GstStateChange transition)
-{
-    GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
-    GstTIDmaiVideoSink *dmaisink = GST_TIDMAIVIDEOSINK(element);
-
-    GST_DEBUG("Begin\n");
-
-    /* Handle ramp-up state changes.  Nothing to do here as of now. */
-    switch (transition) {
-        case GST_STATE_CHANGE_NULL_TO_READY:
-            break;
-        case GST_STATE_CHANGE_READY_TO_PAUSED:
-            break;
-        case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-            break;
-        default:
-            break;
-    }
-
-    /* Pass state changes to base class */
-    ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
-    if (ret == GST_STATE_CHANGE_FAILURE)
-        return ret;
-
-    /* Handle ramp-down state changes */
-    switch (transition) {
-        case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-            break;
-        case GST_STATE_CHANGE_PAUSED_TO_READY:
-            break;
-        case GST_STATE_CHANGE_READY_TO_NULL:
-            /* Shutdown any display and frame copy devices */
-            if (!gst_tidmaivideosink_exit_display(dmaisink)) {
-                GST_ERROR("Failed to exit the display\n");
-                goto error;
-            }
-            break;
-        default:
-            break;
-    }
-
-    GST_DEBUG("Finish\n");
-    return ret;
-
-error:
-    GST_ELEMENT_ERROR(element, CORE, STATE_CHANGE, (NULL), (NULL));
-
-    return GST_STATE_CHANGE_FAILURE;
-}
-
-
-/*******************************************************************************
- * gst_tidmaivideosink_get_caps
- *
- * This is mainly a place holder function.
-*******************************************************************************/
-static GstCaps *gst_tidmaivideosink_get_caps(GstBaseSink * bsink)
-{
-    GstTIDmaiVideoSink *sink;
-
-    GST_DEBUG("Begin\n");
-
-    sink = GST_TIDMAIVIDEOSINK(bsink);
-
-    GST_DEBUG("Finish\n");
-
-    return gst_caps_copy(gst_pad_get_pad_template_caps
-               (GST_VIDEO_SINK_PAD(sink)));
-}
-/*******************************************************************************
- * gst_tidmaivideosink_start
- *
- * Function used to start some vars and apps.
-*******************************************************************************/
-
-static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
-{
-    GstTIDmaiVideoSink *dmaisink;
-    dmaisink = GST_TIDMAIVIDEOSINK(sink);
-
-    if(dmaisink->x_position == -1){
-      dmaisink->x_centering = TRUE;
-    } 
-    if(dmaisink->y_position == -1){
-      dmaisink->y_centering = TRUE;
-    } 
-    return TRUE;
-}
-
-/*******************************************************************************
- * gst_tidmaivideosink_stop
- *
- * Function used to stop some vars and apps.
-*******************************************************************************/
-
-static gboolean gst_tidmaivideosink_stop(GstBaseSink * sink)
-{
-    GstTIDmaiVideoSink *dmaisink;
-    dmaisink = GST_TIDMAIVIDEOSINK(sink);
-    Buffer_Handle hDispBuf  = NULL;
-    int i;
-    /*Clean display after last display*/
-    for(i=0; i<dmaisink->numDispBuf; i++){
-       if (Display_get(dmaisink->hDisplay, &hDispBuf) < 0) {
-          GST_ERROR("Failed to get display buffer to clean display before to stop\n");
-       }
-       gst_tidmaivideosink_blackFill(dmaisink, hDispBuf);
-       if (Display_put(dmaisink->hDisplay, hDispBuf) < 0) {
-          GST_ERROR("Failed to put display buffer to clean display before to stop\n");
-       }
-    }
-    return TRUE;
-}
-
-/*******************************************************************************
- * gst_tidmaivideosink_set_caps
- *
- * This is mainly a place holder function.
-*******************************************************************************/
-static gboolean gst_tidmaivideosink_set_caps(GstBaseSink * bsink,
-                    GstCaps * caps)
-{
-    GstTIDmaiVideoSink *sink;
-    sink = GST_TIDMAIVIDEOSINK(bsink);
-
-    gst_tidmaivideosink_clean_DisplayBuf(sink);
-    /* Just return true for now.  I don't have anything to set here yet */
-    return TRUE;
 }
 
 

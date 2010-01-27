@@ -528,6 +528,8 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     }
     
     dmaidec->circMeta = NULL;
+    dmaidec->allocated_buffer = NULL;
+    dmaidec->downstreamBuffers = FALSE;
 
     /* Define the number of display buffers to allocate.  This number must be
      * at least 2, but should be more if codecs don't return a display buffer
@@ -653,9 +655,48 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             dmaidec->width,dmaidec->height,dmaidec->colorSpace);
         dmaidec->inBufSize = dmaidec->outBufSize;
 
-        dmaidec->hOutBufTab =
-            BufTab_create(dmaidec->numOutputBufs, dmaidec->outBufSize,
-                BufferGfx_getBufferAttrs(&gfxAttrs));
+        /* Trying to get a downstream buffer */
+        if (gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize, 
+            GST_PAD_CAPS(dmaidec->srcpad), &dmaidec->allocated_buffer) !=
+                GST_FLOW_OK){
+            dmaidec->allocated_buffer = NULL;
+        }
+        if (dmaidec->allocated_buffer && 
+            GST_IS_TIDMAIBUFFERTRANSPORT(dmaidec->allocated_buffer)){
+
+            dmaidec->hOutBufTab = Buffer_getBufTab(
+                GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer));
+
+            /* If the downstream buffer doesn't belong to a buffer tab, 
+             * doesn't work for us
+             */
+            if (!dmaidec->hOutBufTab){
+                gst_buffer_unref(dmaidec->allocated_buffer);
+                dmaidec->allocated_buffer = NULL;
+                GST_ELEMENT_WARNING(dmaidec, STREAM, NOT_IMPLEMENTED,
+                    ("Downstream element provide transport buffers, but not on a tab\n"),
+                    (NULL));
+            }
+        } else {
+            /* If we got a downstream allocated buffer, but is not a DMAI 
+             * transport, we need to release it since we wont use it
+             */
+            if (dmaidec->allocated_buffer){
+                gst_buffer_unref(dmaidec->allocated_buffer);
+                dmaidec->allocated_buffer = NULL;
+            }
+        }
+
+        /* Create an output buffer tab */
+        if (!dmaidec->allocated_buffer) {
+            dmaidec->hOutBufTab =
+                BufTab_create(dmaidec->numOutputBufs, dmaidec->outBufSize,
+                    BufferGfx_getBufferAttrs(&gfxAttrs));
+            dmaidec->downstreamBuffers = FALSE;
+        } else {
+            GST_INFO("Using downstream allocated buffers");
+            dmaidec->downstreamBuffers = TRUE;
+        }
         break;
     }
     case AUDIO:
@@ -750,10 +791,15 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         dmaidec->circBuf = NULL;
     }
 
-    if (dmaidec->hOutBufTab) {
+    /* We only release the buffer tab if belong to us */
+    if (dmaidec->hOutBufTab && !dmaidec->downstreamBuffers) {
         GST_DEBUG("freeing output buffers\n");
         BufTab_delete(dmaidec->hOutBufTab);
         dmaidec->hOutBufTab = NULL;
+    }
+    
+    if (dmaidec->allocated_buffer){
+        gst_buffer_unref(dmaidec->allocated_buffer);
     }
 
     if (dmaidec->hCodec) {
@@ -827,6 +873,7 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
                 "width",G_TYPE_INT,dmaidec->width,
                 "framerate", GST_TYPE_FRACTION,
                 dmaidec->framerateNum,dmaidec->framerateDen,
+                "dmaioutput", G_TYPE_BOOLEAN, TRUE,
                 (char *)NULL);
 
             if (gst_structure_get_fourcc(capStruct, "format", &fourcc)) {
@@ -1388,19 +1435,41 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             goto codec_flushed;
     }
 
-    /* Obtain a free output buffer for the decoded data */
-    hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
-    if (hDstBuf == NULL) {
-        GST_INFO("Failed to get free buffer, waiting on bufTab\n");
-        Rendezvous_meet(dmaidec->waitOnOutBufTab);
-
+    if (!dmaidec->downstreamBuffers) {
+        /* Obtain a free output buffer for the decoded data */
         hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
-
         if (hDstBuf == NULL) {
-            GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
-                ("failed to get a free contiguous buffer from BufTab"));
-            goto failure;
+            GST_INFO("Failed to get free buffer, waiting on bufTab\n");
+            Rendezvous_meet(dmaidec->waitOnOutBufTab);
+    
+            hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
+    
+            if (hDstBuf == NULL) {
+                GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
+                    ("failed to get a free contiguous buffer from BufTab"));
+                goto failure;
+            }
         }
+    } else {
+        if (!dmaidec->allocated_buffer) {
+            if (gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize, 
+                GST_PAD_CAPS(dmaidec->srcpad), &dmaidec->allocated_buffer) !=
+                    GST_FLOW_OK){
+                dmaidec->allocated_buffer = NULL;
+            }
+            if (dmaidec->allocated_buffer && 
+                 !GST_IS_TIDMAIBUFFERTRANSPORT(dmaidec->allocated_buffer)){
+                dmaidec->allocated_buffer = NULL;
+            }
+            
+            if (!dmaidec->allocated_buffer){
+                GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
+                    ("failed to get a dmai transport downstream buffer"));
+                goto failure;
+            }
+        }
+        hDstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer);
+        dmaidec->allocated_buffer = NULL;
     }
 
     /* If we don't have a valid time stamp, give one to the buffer
