@@ -270,8 +270,9 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->par_n = 1;
   dmairesizer->par_d = 1;
   dmairesizer->mutex = NULL;
-  g_assert (dmairesizer->mutex == NULL);
   dmairesizer->mutex = g_mutex_new ();
+  dmairesizer->allocated_buffer = NULL;
+  dmairesizer->downstreamBuffers = FALSE;
 
 #if PLATFORM == dm6467
   dmairesizer->numOutBuf = 5;
@@ -311,7 +312,6 @@ gst_dmai_resizer_sink_event(GstPad *pad, GstEvent * event){
 gboolean
 setup_outputBuf (GstTIDmaiResizer * dmairesizer)
 {
-  gint outBufSize;
   BufferGfx_Attrs gfxAttrs = BufferGfx_Attrs_DEFAULT;
   Rendezvous_Attrs rzvAttrs = Rendezvous_Attrs_DEFAULT;
 
@@ -349,7 +349,8 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
     dmairesizer->outBufHeight = dmairesizer->target_height;
   }
 
-  if (dmairesizer->outBufTab) {
+  /* Destroy any previous output buffer*/
+  if (dmairesizer->outBufTab && !dmairesizer->downstreamBuffers) {
     BufTab_delete (dmairesizer->outBufTab);
   }
 
@@ -362,10 +363,52 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   /* Both the codec and the GStreamer pipeline can own a buffer */
   gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
-  outBufSize = gfxAttrs.dim.lineLength * gfxAttrs.dim.height;
-  dmairesizer->outBufTab =
-      BufTab_create (dmairesizer->numOutBuf, outBufSize,
-      BufferGfx_getBufferAttrs (&gfxAttrs));
+  dmairesizer->outBufSize = gfxAttrs.dim.lineLength * gfxAttrs.dim.height;
+
+  /* Trying to get a downstream buffer */
+  if (gst_pad_alloc_buffer(dmairesizer->srcpad, 0, dmairesizer->outBufSize, 
+      GST_PAD_CAPS(dmairesizer->srcpad), &dmairesizer->allocated_buffer) !=
+          GST_FLOW_OK){
+      dmairesizer->allocated_buffer = NULL;
+  }
+  if (dmairesizer->allocated_buffer && 
+      GST_IS_TIDMAIBUFFERTRANSPORT(dmairesizer->allocated_buffer)){
+
+      dmairesizer->outBufTab = Buffer_getBufTab(
+          GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmairesizer->allocated_buffer));
+
+      /* If the downstream buffer doesn't belong to a buffer tab, 
+       * doesn't work for us
+       */
+      if (!dmairesizer->outBufTab){
+          gst_buffer_unref(dmairesizer->allocated_buffer);
+          dmairesizer->allocated_buffer = NULL;
+          GST_ELEMENT_WARNING(dmairesizer, STREAM, NOT_IMPLEMENTED,
+              ("Downstream element provide transport buffers, but not on a tab\n"),
+              (NULL));
+      }
+  } else {
+      /* If we got a downstream allocated buffer, but is not a DMAI 
+       * transport, we need to release it since we wont use it
+       */
+      if (dmairesizer->allocated_buffer){
+          gst_buffer_unref(dmairesizer->allocated_buffer);
+          dmairesizer->allocated_buffer = NULL;
+      }
+  }
+
+  /* Create an output buffer tab */
+  if (!dmairesizer->allocated_buffer) {
+      dmairesizer->outBufTab =
+          BufTab_create(dmairesizer->numOutBuf, dmairesizer->outBufSize,
+              BufferGfx_getBufferAttrs(&gfxAttrs));
+      dmairesizer->downstreamBuffers = FALSE;
+      GST_INFO("Not Using downstream allocated buffers");
+  } else {
+      GST_INFO("Using downstream allocated buffers");
+      dmairesizer->downstreamBuffers = TRUE;
+  }
+
   dmairesizer->dim = (BufferGfx_Dimensions*) g_malloc0(dmairesizer->numOutBuf * sizeof(BufferGfx_Dimensions));
   dmairesizer->flagToClean = (gboolean *) g_malloc0(dmairesizer->numOutBuf);
  
@@ -505,7 +548,8 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
 
   GstTIDmaiResizer *dmairesizer;
   GstStructure *structure, *capStruct;
-  gboolean ret = FALSE;
+  guint32 fourcc;
+  GstCaps *othercaps, *newcaps;
   dmairesizer = GST_DMAI_RESIZER (gst_pad_get_parent (pad));
   
   if (!GST_PAD_IS_SINK (pad))
@@ -522,7 +566,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   }
   if (!gst_structure_get_fraction (structure, "framerate", &dmairesizer->fps_d,
           &dmairesizer->fps_n)) {
-    dmairesizer->fps_d = 0;
+    dmairesizer->fps_d = 30;
     dmairesizer->fps_n = 1;
   }
   if (!gst_structure_get_fraction (structure, "par", &dmairesizer->par_n,
@@ -539,12 +583,47 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       GST_INFO("The numerator of pixel aspect ratio can't be less than 1, setting to 1");
     }
   }
-#if PLATFORM == dm6467
-  dmairesizer->colorSpace = ColorSpace_YUV422PSEMI;
-#else
-  dmairesizer->colorSpace = ColorSpace_UYVY;
-#endif
+
+  if (gst_structure_get_fourcc(structure, "format", &fourcc)) {
+      switch (fourcc) {
+          case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
+              dmairesizer->colorSpace = ColorSpace_UYVY;
+              break;
+          case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
+              dmairesizer->colorSpace = ColorSpace_YUV422PSEMI;
+              break;
+          case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+              dmairesizer->colorSpace = ColorSpace_YUV420PSEMI;
+              break;
+          default:
+              GST_ELEMENT_ERROR(dmairesizer, STREAM, NOT_IMPLEMENTED,
+                  ("unsupported fourcc in video/image stream\n"), (NULL));
+                  gst_object_unref(dmairesizer);
+              return FALSE;
+      }
+  }
   dmairesizer->inBufSize = 0;
+
+  othercaps = gst_pad_get_allowed_caps (dmairesizer->srcpad);
+  newcaps = gst_caps_copy_nth (othercaps, 0);
+  gst_caps_unref(othercaps);
+  
+  capStruct = gst_caps_get_structure(newcaps, 0);
+  gst_structure_set(capStruct,
+      "height",G_TYPE_INT,dmairesizer->height,
+      "width",G_TYPE_INT,dmairesizer->width,
+      "framerate", GST_TYPE_FRACTION,
+      dmairesizer->fps_n,dmairesizer->fps_d,
+      "dmaioutput", G_TYPE_BOOLEAN, TRUE,
+      (char *)NULL);
+
+  gst_pad_fixate_caps (dmairesizer->srcpad, newcaps);
+  if (!gst_pad_set_caps(dmairesizer->srcpad, newcaps)) {
+      GST_ELEMENT_ERROR(dmairesizer,STREAM,FAILED,(NULL),
+          ("Failed to set the srcpad caps"));
+      gst_object_unref (dmairesizer);
+      return FALSE;
+  }
 
   /*Setting output buffer */
   if(dmairesizer->setup_outBufTab){
@@ -552,18 +631,9 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
     dmairesizer->setup_outBufTab = FALSE;
   }
   dmairesizer->clean_bufTab = TRUE;
-
-  gst_caps_ref(caps);
-  caps = gst_caps_make_writable (caps);
-  capStruct = gst_caps_get_structure (caps, 0);
-  gst_structure_set (capStruct,
-      "height", G_TYPE_INT, dmairesizer->target_height,
-      "width", G_TYPE_INT, dmairesizer->target_width, (char *) NULL);
-  ret = gst_pad_set_caps (dmairesizer->srcpad, caps);
-  gst_caps_unref (caps);
-
+  
   gst_object_unref (dmairesizer);
-  return ret;
+  return TRUE;
 }
 
 /*******************************************************************************
@@ -634,20 +704,45 @@ Buffer_Handle
 resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
 {
   Buffer_Handle DstBuf;
-  DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
+  BufferGfx_Dimensions allocDim;
   int count;
 
-  if (DstBuf == NULL) {
-    GST_INFO ("Failed to get free buffer, waiting on bufTab\n");
+  if (!dmairesizer->downstreamBuffers){
+      DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
+      if (DstBuf == NULL) {
+        GST_INFO ("Failed to get free buffer, waiting on bufTab\n");
 
-    Rendezvous_meet (dmairesizer->waitOnOutBufTab);
-    DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
+        Rendezvous_meet (dmairesizer->waitOnOutBufTab);
+        DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
 
-    if (DstBuf == NULL) {
-      GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
-          ("failed to get a free contiguous buffer from BufTab"));
-    }
+        if (DstBuf == NULL) {
+          GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
+              ("failed to get a free contiguous buffer from BufTab"));
+          return NULL;
+        }
+      }
+  } else {
+      if (!dmairesizer->allocated_buffer) {
+          if (gst_pad_alloc_buffer(dmairesizer->srcpad, 0, dmairesizer->outBufSize, 
+              GST_PAD_CAPS(dmairesizer->srcpad), &dmairesizer->allocated_buffer) !=
+                  GST_FLOW_OK){
+              dmairesizer->allocated_buffer = NULL;
+          }
+          if (dmairesizer->allocated_buffer && 
+              !GST_IS_TIDMAIBUFFERTRANSPORT(dmairesizer->allocated_buffer)){
+              dmairesizer->allocated_buffer = NULL;
+          }
+
+          if (!dmairesizer->allocated_buffer){
+              GST_ELEMENT_ERROR(dmairesizer,RESOURCE,NO_SPACE_LEFT,(NULL),
+                  ("failed to get a dmai transport downstream buffer"));
+              return NULL;
+          }
+      }
+      DstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmairesizer->allocated_buffer);
+      dmairesizer->allocated_buffer = NULL;
   }
+  
 
   if(dmairesizer->clean_bufTab){
     for(count = 0; count < dmairesizer->numOutBuf; count++){
@@ -661,56 +756,120 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   int  IDBuf = Buffer_getId(DstBuf);
 
   if(dmairesizer->flagToClean[IDBuf]){
-    dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
-    dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
-    dmairesizer->dim[IDBuf].x = 0;
-    dmairesizer->dim[IDBuf].y = 0;
-    dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
-      (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
-    dmairesizer->flagToClean[IDBuf] = FALSE;
-    blackFill(dmairesizer, DstBuf);
-  }
+      dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
+      dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
+      dmairesizer->dim[IDBuf].x = 0;
+      dmairesizer->dim[IDBuf].y = 0;
+      dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
+        (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
 
-  if(dmairesizer->keep_aspect_ratio){
-     /*Sw/Sh > Tw/Th*/
-     if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
-       /*Horizontal*/
-       dmairesizer->dim[IDBuf].height = dmairesizer->target_width * dmairesizer->source_height / dmairesizer->source_width;
-       dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
-     }else{
-       /*Vertical*/
-       dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
-       dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
-     }
-     /*PAR*/
-     if(dmairesizer->par_n > dmairesizer->par_d){
-       /*Vertical*/
-       dmairesizer->dim[IDBuf].width *= dmairesizer->par_d; 
-       dmairesizer->dim[IDBuf].width /= dmairesizer->par_n;
-       dmairesizer->dim[IDBuf].width &= ~0xF;
-       dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
-     }else{
-       /*Horizontal*/
-       dmairesizer->dim[IDBuf].height *= dmairesizer->par_n;
-       dmairesizer->dim[IDBuf].height /= dmairesizer->par_d;
-       dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
-     }
-  }else{
-    /*PAR*/
-    if(dmairesizer->par_n > 1 || dmairesizer->par_d > 1 ){
-      if(dmairesizer->par_n > dmairesizer->par_d){
-       /*Vertical*/
-        dmairesizer->dim[IDBuf].width = (dmairesizer->target_width * dmairesizer->par_d / dmairesizer->par_n) & ~0xF;
-        dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+      blackFill(dmairesizer, DstBuf);
+
+      if(dmairesizer->keep_aspect_ratio){
+         /*Sw/Sh > Tw/Th*/
+         if(dmairesizer->source_width * dmairesizer->target_height > dmairesizer->target_width * dmairesizer->source_height){
+           /*Horizontal*/
+           dmairesizer->dim[IDBuf].height = dmairesizer->target_width * dmairesizer->source_height / dmairesizer->source_width;
+           dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+         }else{
+           /*Vertical*/
+           dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
+           dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+         }
+         /*PAR*/
+         if(dmairesizer->par_n > dmairesizer->par_d){
+           /*Vertical*/
+           dmairesizer->dim[IDBuf].width *= dmairesizer->par_d; 
+           dmairesizer->dim[IDBuf].width /= dmairesizer->par_n;
+           dmairesizer->dim[IDBuf].width &= ~0xF;
+           dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+         }else{
+           /*Horizontal*/
+           dmairesizer->dim[IDBuf].height *= dmairesizer->par_n;
+           dmairesizer->dim[IDBuf].height /= dmairesizer->par_d;
+           dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+         }
       }else{
-        /*Horizontal*/
-        dmairesizer->dim[IDBuf].height = dmairesizer->target_height * dmairesizer->par_n / dmairesizer->par_d;
-        dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+        /*PAR*/
+        if(dmairesizer->par_n > 1 || dmairesizer->par_d > 1 ){
+          if(dmairesizer->par_n > dmairesizer->par_d){
+           /*Vertical*/
+            dmairesizer->dim[IDBuf].width = (dmairesizer->target_width * dmairesizer->par_d / dmairesizer->par_n) & ~0xF;
+            dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
+          }else{
+            /*Horizontal*/
+            dmairesizer->dim[IDBuf].height = dmairesizer->target_height * dmairesizer->par_n / dmairesizer->par_d;
+            dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
+          }
+        }
       }
-    }
+      
+      /* Handle cropping on downstream allocation scenario */
+      if (dmairesizer->downstreamBuffers){
+        BufferGfx_getDimensions(DstBuf, &allocDim);
+        dmairesizer->dim[IDBuf].lineLength = allocDim.lineLength;
+
+        dmairesizer->dim[IDBuf].x += allocDim.x;
+        if (dmairesizer->dim[IDBuf].x < 0){
+            dmairesizer->dim[IDBuf].width = dmairesizer->dim[IDBuf].x + allocDim.width > 0 ?
+                dmairesizer->dim[IDBuf].x + allocDim.width : 0;
+            dmairesizer->dim[IDBuf].x = -dmairesizer->dim[IDBuf].x;
+        }
+
+        if (dmairesizer->dim[IDBuf].x & 0xf){
+            dmairesizer->dim[IDBuf].x &= ~0xf;
+            GST_WARNING("Rounding the offset to multiple of 16: %d",(int)dmairesizer->dim[IDBuf].x);
+        }
+        if ((dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width) > allocDim.width){
+            gint availablew = allocDim.width - dmairesizer->dim[IDBuf].x;
+            dmairesizer->precropped_width = dmairesizer->dim[IDBuf].width;
+            dmairesizer->dim[IDBuf].width = availablew > 0 ? availablew : 0;
+        }
+        dmairesizer->dim[IDBuf].y += allocDim.y;
+        if (dmairesizer->dim[IDBuf].y < 0){
+            dmairesizer->dim[IDBuf].height = dmairesizer->dim[IDBuf].y + allocDim.height > 0 ?
+                dmairesizer->dim[IDBuf].y + allocDim.height : 0;
+            dmairesizer->dim[IDBuf].y = -dmairesizer->dim[IDBuf].y;
+        }
+        if ((dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height) > allocDim.height){
+            gint availableh = allocDim.height - dmairesizer->dim[IDBuf].y;
+            dmairesizer->precropped_height = dmairesizer->dim[IDBuf].height;
+            dmairesizer->dim[IDBuf].height = availableh > 0 ? availableh : 0;
+        }
+      }
+      
+      dmairesizer->flagToClean[IDBuf] = FALSE;
   }
+  
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
+  if (dmairesizer->downstreamBuffers){  
+      BufferGfx_Dimensions srcDim;
+      BufferGfx_getDimensions(inBuf,&srcDim);
+      BufferGfx_getDimensions(DstBuf, &allocDim);
+      
+
+      if ((dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width) > allocDim.width){
+          gint diff = dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width - allocDim.width;
+          if (dmairesizer->dim[IDBuf].width != 0){
+              srcDim.width -=  srcDim.width * diff / dmairesizer->precropped_width;
+          } else {
+              srcDim.width = 0;
+          }
+      }
+      if ((dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height) > allocDim.height){
+          gint diff = dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height - allocDim.height;
+          if (dmairesizer->dim[IDBuf].height != 0){
+              srcDim.height -=  srcDim.height * diff / dmairesizer->precropped_height;
+          } else {
+              srcDim.height = 0;
+          }
+      }
+GST_DEBUG("Source %dx%d @ %dx%d",(int)srcDim.width,(int)srcDim.height,(int)srcDim.x,(int)srcDim.y);
+GST_DEBUG("Target %dx%d @ %dx%d",(int)dmairesizer->dim[IDBuf].width,(int)dmairesizer->dim[IDBuf].height,(int)dmairesizer->dim[IDBuf].x,(int)dmairesizer->dim[IDBuf].y);
+      BufferGfx_setDimensions(inBuf, &srcDim);
+  }
+  
   /* Configure resizer */
   GST_LOG ("configuring resize\n");
   if (Resize_config (dmairesizer->Resizer, inBuf, DstBuf) < 0) {

@@ -77,6 +77,9 @@ struct _GstTIDmaiResizer
   Rendezvous_Handle waitOnOutBufTab;
   Buffer_Handle inBuf;
   gint inBufSize;
+  gint outBufSize;
+  GstBuffer *allocated_buffer;
+  gboolean downstreamBuffers;
 
   /*Properties */
   gint numOutBuf;
@@ -88,6 +91,8 @@ struct _GstTIDmaiResizer
   gint target_height;
   gint target_width_max;
   gint target_height_max;
+  gint precropped_width;
+  gint precropped_height;
   GMutex *mutex;
   gboolean keep_aspect_ratio;
   gint par_d;
