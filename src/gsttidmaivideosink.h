@@ -103,7 +103,7 @@ struct _GstTIDmaiVideoSink {
   Buffer_Handle     tempDmaiBuf;
   gint              numBuffers;
   GstBuffer         **allocatedBuffers;
-  GstBuffer         **unusedBuffers;
+  Buffer_Handle     *unusedBuffers;
   GstBuffer         *lastAllocatedBuffer;
   GstBuffer         *prerolledBuffer;
   gint              numAllocatedBuffers;

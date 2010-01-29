@@ -230,11 +230,11 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
 
     /*Positioning*/
     g_object_class_install_property(gobject_class, PROP_X_POSITION,
-        g_param_spec_int("x-position", "x position", "X positioning of"
+        g_param_spec_int("x", "x position", "X positioning of"
         " frame in display", G_MININT, G_MAXINT, -1, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_Y_POSITION,
-        g_param_spec_int("y-position", "y position", "Y positioning of"
+        g_param_spec_int("y", "y position", "Y positioning of"
         " frame in display", G_MININT, G_MAXINT, -1, G_PARAM_READWRITE));
 
     gstbase_sink_class->set_caps =
@@ -475,7 +475,7 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
             sink->xPosition = (g_value_get_int(value) & ~0x1);
             /*Handling negative and positive number*/
             sink->xPosition = 
-              sink->xPosition % 2 ?sink->xPosition++:sink->xPosition;
+              sink->xPosition % 2 ? sink->xPosition++:sink->xPosition;
             gst_tidmaivideosink_clean_DisplayBuf(sink);
             break;
         case PROP_Y_POSITION:
@@ -1105,9 +1105,9 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
             sink->numBuffers = BufTab_getNumBufs(Display_getBufTab(sink->hDisplay));
             sink->cleanBufCtrl = (gchar *)g_malloc0(sink->numBuffers);
             sink->numBufClean = 0;
-            sink->unusedBuffers = g_malloc0(sink->numBuffers * sizeof(GstBuffer));
+            sink->unusedBuffers = g_malloc0(sink->numBuffers * sizeof(Buffer_Handle));
             sink->numUnusedBuffers = 0;
-            sink->allocatedBuffers = g_malloc0(sink->numBuffers * sizeof(GstBuffer));
+            sink->allocatedBuffers = g_malloc0(sink->numBuffers * sizeof(GstBuffer *));
             sink->numAllocatedBuffers = 0;
 
             break;
@@ -1192,7 +1192,7 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
         /* Recicle some unused buffer */
         for (i = 0; i < sink->numBuffers ; i++){
             if (sink->unusedBuffers[i] != NULL){
-                hDispBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(sink->unusedBuffers[i]);
+                hDispBuf = sink->unusedBuffers[i];
                 sink->unusedBuffers[i] = NULL;
                 sink->allocatedBuffers[i] = NULL;
                 sink->numUnusedBuffers--;
@@ -1246,10 +1246,17 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
              inDim.width = 0;
           }
        }else{
-          dim.x = 0;
-          inDim.width = sink->xPosition + sink->width > 0 ? 
-              sink->xPosition + sink->width : 0;
-          inDim.x = -sink->xPosition;
+          if (inBuf) {
+            dim.x = 0;
+            inDim.width = sink->xPosition + sink->width > 0 ? 
+                sink->xPosition + sink->width : 0;
+            inDim.x = -sink->xPosition;
+          } else {
+              /* For pad allocated buffers we want to leave it up to the 
+               * upstream element
+               */
+              dim.x = sink->xPosition;
+          }
        }
     }else{
        dim.x = (dim.width-sink->width)/2;
@@ -1265,10 +1272,17 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
              inDim.height = 0;
           }
        }else{
-          dim.y = 0;
-          inDim.height = sink->yPosition + sink->height > 0 ? 
-              sink->yPosition + sink->height : 0;
-          inDim.y = -sink->yPosition;
+          if (inBuf) {
+            dim.y = 0;
+            inDim.height = sink->yPosition + sink->height > 0 ? 
+                sink->yPosition + sink->height : 0;
+            inDim.y = -sink->yPosition;
+          } else {
+              /* For pad allocated buffers we want to leave it up to the 
+               * upstream element
+               */
+              dim.y = sink->yPosition;
+          }
        }
     }else{
        dim.y = (dim.height-sink->height)/2;
@@ -1288,9 +1302,9 @@ void allocated_buffer_release_cb(gpointer data,GstTIDmaiBufferTransport *buf){
     if (sink->allocatedBuffers[Buffer_getId(hBuf)]){
         /* The pointer is not null, this buffer is being released
          * without having being pushed back into the sink, likely
-         * beacuse the frame was late and is dropped
+         * because the frame was late and is dropped
          */
-        sink->unusedBuffers[Buffer_getId(hBuf)] = (GstBuffer *)buf;
+        sink->unusedBuffers[Buffer_getId(hBuf)] = hBuf;
         sink->numUnusedBuffers++;
         GST_DEBUG("Pad allocated buffer being drop");
     }
