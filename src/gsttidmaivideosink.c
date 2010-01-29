@@ -138,7 +138,8 @@ static gboolean
 static gboolean
  gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink);
 static gboolean
- gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink * sink);
+ gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink * sink,
+    ColorSpace_Type);
 static GstFlowReturn 
 gst_tidmaivideosink_buffer_alloc(GstBaseSink *sink, 
     guint64 offset, guint size, GstCaps *caps, GstBuffer **buf);
@@ -825,7 +826,8 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
  *    this function sets the display attributes to the DMAI defaults
  *    and overrides those default with user input if entered.
 *******************************************************************************/
-static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink)
+static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
+        ColorSpace_Type colorSpace)
 {
     int ret;
 
@@ -1034,7 +1036,7 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
      * 3.  autoselect was enabled and no working standard could be found
      */
     while (TRUE) {
-        if (!gst_tidmaivideosink_set_display_attrs(sink)) {
+        if (!gst_tidmaivideosink_set_display_attrs(sink,colorSpace)) {
             GST_ERROR("Error while trying to set the display attributes\n");
             return FALSE;
         }
