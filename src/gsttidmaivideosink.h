@@ -109,6 +109,7 @@ struct _GstTIDmaiVideoSink {
   gint              numAllocatedBuffers;
   gint              numUnusedBuffers;
   gboolean          dmaiElementUpstream;
+  gboolean          zeromemcpy;
 
   gboolean      capsAreSet;
   gint          width;

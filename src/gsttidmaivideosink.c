@@ -100,6 +100,7 @@ enum
   PROP_NUMBUFS,
   PROP_AUTOSELECT,
   PROP_ACCEL_FRAME_COPY,
+  PROP_NOMEMCPY,
   PROP_X_POSITION,
   PROP_Y_POSITION
 };
@@ -145,8 +146,6 @@ static GstFlowReturn
  gst_tidmaivideosink_preroll(GstBaseSink * bsink, GstBuffer * buffer);
 static GstFlowReturn
  gst_tidmaivideosink_render(GstBaseSink * bsink, GstBuffer * buffer);
-static void
-    gst_tidmaivideosink_init_env(GstTIDmaiVideoSink *sink);
 
 static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *sink);
 
@@ -228,6 +227,10 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
         g_param_spec_boolean("accelFrameCopy", "Accel frame copy",
              "Use hardware accelerated framecopy", TRUE, G_PARAM_READWRITE));
 
+    g_object_class_install_property(gobject_class, PROP_NOMEMCPY,
+        g_param_spec_boolean("noCopy", "Enable support for pad-allocation (zero memcpy)",
+             "Enable support for pad-allocation (zero memcpy)", FALSE, G_PARAM_READWRITE));
+
     /*Positioning*/
     g_object_class_install_property(gobject_class, PROP_X_POSITION,
         g_param_spec_int("x", "x position", "X positioning of"
@@ -249,64 +252,6 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_render);
     gstbase_sink_class->buffer_alloc =
         GST_DEBUG_FUNCPTR(gst_tidmaivideosink_buffer_alloc);
-}
-
-
-/******************************************************************************
- * gst_tidmaivideosink_init_env
- *  Initialize element property default by reading environment variables.
- *****************************************************************************/
-static void gst_tidmaivideosink_init_env(GstTIDmaiVideoSink *sink)
-{
-    GST_LOG("gst_tidmaivideosink_init_env - begin\n");
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_displayStd")) {
-        sink->displayStd =
-            gst_ti_env_get_string("GST_TI_TIDmaiVideoSink_displayStd");
-        GST_LOG("Setting displayStd=%s\n", sink->displayStd);
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_displayDevice")) {
-        sink->displayDevice =
-            gst_ti_env_get_string("GST_TI_TIDmaiVideoSink_displayDevice");
-        GST_LOG("Setting displayDevice=%s\n", sink->displayDevice);
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_videoStd")) {
-        sink->videoStd = gst_ti_env_get_string("GST_TI_TIDmaiVideoSink_videoStd");
-        GST_LOG("Setting videoStd=%s\n", sink->videoStd);
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_videoOutput")) {
-        sink->videoOutput =
-                gst_ti_env_get_string("GST_TI_TIDmaiVideoSink_videoOutput");
-        GST_LOG("Setting displayBuffer=%s\n", sink->videoOutput);
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_rotation")) {
-        sink->rotation = gst_ti_env_get_int("GST_TI_TIDmaiVideoSink_rotation");
-        GST_LOG("Setting rotation =%d\n", sink->rotation);
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_numBufs")) {
-        sink->numBufs = gst_ti_env_get_int("GST_TI_TIDmaiVideoSink_numBufs");
-        GST_LOG("Setting numBufs=%d\n",sink->numBufs);
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_autoselect")) {
-        sink->autoselect =
-                gst_ti_env_get_boolean("GST_TI_TIDmaiVideoSink_autoselect");
-        GST_LOG("Setting autoselect=%s\n",sink->autoselect ? "TRUE" : "FALSE");
-    }
-
-    if (gst_ti_env_is_defined("GST_TI_TIDmaiVideoSink_accelFrameCopy")) {
-        sink->accelFrameCopy =
-                gst_ti_env_get_boolean("GST_TI_TIDmaiVideoSink_accelFrameCopy");
-        GST_LOG("Setting accelFrameCopy=%s\n",
-                sink->accelFrameCopy ? "TRUE" : "FALSE");
-    }
-
-    GST_LOG("gst_tidmaivideosink_init_env - end\n");
 }
 
 
@@ -344,9 +289,8 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->unusedBuffers = NULL;
     dmaisink->numUnusedBuffers = 0;
     dmaisink->dmaiElementUpstream  = FALSE;
+    dmaisink->zeromemcpy = FALSE;
     dmaisink->lastAllocatedBuffer = NULL;
-
-    gst_tidmaivideosink_init_env(dmaisink);
 }
 
 /*******************************************************************************
@@ -471,6 +415,9 @@ static void gst_tidmaivideosink_set_property(GObject * object, guint prop_id,
         case PROP_ACCEL_FRAME_COPY:
             sink->accelFrameCopy = g_value_get_boolean(value);
             break;
+        case PROP_NOMEMCPY:
+            sink->zeromemcpy = g_value_get_boolean(value);
+            break;
         case PROP_X_POSITION:
             sink->xPosition = (g_value_get_int(value) & ~0x1);
             /*Handling negative and positive number*/
@@ -523,6 +470,9 @@ static void gst_tidmaivideosink_get_property(GObject * object, guint prop_id,
             break;
         case PROP_ACCEL_FRAME_COPY:
             g_value_set_boolean(value, sink->accelFrameCopy);
+            break;
+        case PROP_NOMEMCPY:
+            g_value_set_boolean(value, sink->zeromemcpy);
             break;
         case PROP_X_POSITION:
             g_value_set_int(value, sink->xPosition);
@@ -1324,7 +1274,7 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
         gst_tidmaivideosink_set_caps(bsink,caps);
     }
 
-    if (!sink->dmaiElementUpstream){
+    if (!sink->dmaiElementUpstream || !sink->zeromemcpy){
         return GST_FLOW_OK;
     }
 
