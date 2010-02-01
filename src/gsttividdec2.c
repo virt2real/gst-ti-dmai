@@ -72,6 +72,10 @@ static gboolean gstti_viddec2_create (GstTIDmaidec *dmaidec)
     params.maxWidth          = dmaidec->width;
     params.maxHeight         = dmaidec->height;
 
+    if (dmaidec->downstreamBuffers){
+        dynParams.displayWidth = dmaidec->downstreamWidth;
+    }
+
     GST_DEBUG("opening video decoder \"%s\"\n", dmaidec->codecName);
     dmaidec->hCodec =
         Vdec2_create(dmaidec->hEngine, (Char*)dmaidec->codecName,

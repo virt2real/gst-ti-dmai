@@ -625,7 +625,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
     GST_DEBUG("Init\n");
-    
+
     /* Create codec */
     if (!decoder->dops->codec_create(dmaidec)){
         GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
@@ -694,8 +694,24 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
                     BufferGfx_getBufferAttrs(&gfxAttrs));
             dmaidec->downstreamBuffers = FALSE;
         } else {
+            BufferGfx_Dimensions allocDim;
+
             GST_INFO("Using downstream allocated buffers");
             dmaidec->downstreamBuffers = TRUE;
+            BufferGfx_getDimensions(
+                GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer),
+                &allocDim);
+            dmaidec->downstreamWidth = allocDim.width;
+
+            /* We need to recreate the codec, since some codecs around
+               doesn't support dinamically set the displayWidth
+             */
+            decoder->dops->codec_destroy(dmaidec);
+            if (!decoder->dops->codec_create(dmaidec)){
+                GST_ELEMENT_ERROR(dmaidec,STREAM,CODEC_NOT_FOUND,(NULL),
+                    ("Failed to create codec"));
+                return FALSE;
+            }
         }
         break;
     }
