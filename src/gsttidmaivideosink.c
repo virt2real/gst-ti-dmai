@@ -325,7 +325,7 @@ static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_H
             Int    y;
             Int    bpp = ColorSpace_getBpp(ColorSpace_YUV420PSEMI);
             BufferGfx_Dimensions dim;
-            
+
             BufferGfx_getDimensions(hBuf, &dim);
 
             for (y = 0; y < dim.height; y++) {
@@ -337,7 +337,7 @@ static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_H
                 memset(bufPtr, 0x80, dim.width * bpp / 8);
                 bufPtr += dim.lineLength;
             }
-            
+
             break;
         }
         case ColorSpace_UYVY:
@@ -374,7 +374,7 @@ static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_H
 static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *dmaisink)
 {
    int i;
-   
+
    dmaisink->numBufClean = dmaisink->numBuffers;
    for(i = 0; i < dmaisink->numBuffers; i++){
       dmaisink->cleanBufCtrl[i] = DIRTY;
@@ -527,7 +527,8 @@ static gboolean gst_tidmaivideosink_set_caps(GstBaseSink * bsink,
             sink->colorSpace = ColorSpace_YUV420PSEMI;
             break;
         default:
-            GST_ERROR("unsupport fourcc\n");
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("unsupported fourcc"));
             return FALSE;
     }
     GST_DEBUG("Colorspace %d, width %d, height %d\n", sink->colorSpace, sink->width,
@@ -551,7 +552,8 @@ static gboolean gst_tidmaivideosink_set_caps(GstBaseSink * bsink,
     GST_DEBUG("Frame rate rounded = %d\n", sink->iattrs.framerate);
 
     if (!gst_tidmaivideosink_init_display(sink, sink->colorSpace)) {
-        GST_ERROR("Unable to initialize display\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Failed to initialize display"));
         return FALSE;
     }
 
@@ -563,7 +565,7 @@ static gboolean gst_tidmaivideosink_set_caps(GstBaseSink * bsink,
 
     gst_tidmaivideosink_clean_DisplayBuf(sink);
     sink->capsAreSet = TRUE;
-  
+
     return TRUE;
 }
 
@@ -616,7 +618,6 @@ static int gst_tidmaivideosink_videostd_get_attrs(VideoStd_Type videoStd,
         #endif
 
         default:
-            GST_ERROR("Unknown videoStd entered (VideoStd = %d)\n", videoStd);
             return -1;
     }
     vattrs->videostd = videoStd;
@@ -664,7 +665,8 @@ static VideoStd_Type gst_tidmaivideosink_find_videostd(
     for (i = sink->prevVideoStd + 1; i < VideoStd_COUNT; i++) {
         ret = gst_tidmaivideosink_videostd_get_attrs(i, &tattrs);
         if (ret < 0) {
-            GST_ERROR("Failed to get videostd attrs for videostd %d\n", i);
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Failed to get videostd attrs for videostd %d", i));
             return -1;
         }
 
@@ -734,9 +736,10 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
             else if (!strcasecmp(sink->displayStd, "FBDEV"))
                 return Display_Std_FBDEV;
             else {
-                GST_ERROR("Invalid displayStd entered (%s)"
-                          "Please choose from:\n \tV4L2, FBDEV\n",
-                          sink->displayStd);
+                GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                    ("Invalid displayStd entered (%s)"
+                      "Please choose from:\n \tV4L2, FBDEV",
+                      sink->displayStd));
                 return -1;
             }
             break;
@@ -779,11 +782,12 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
                 return VideoStd_VGA;
             #endif
             else {
-                GST_ERROR("Invalid videoStd entered (%s).  "
+                GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Invalid videoStd entered (%s).  "
                 "Please choose from:\n"
                 "\tAUTO (if supported), CIF, SIF_NTSC, SIF_PAL, VGA, D1_NTSC\n"
                 "\tD1_PAL, 480P, 576P, 720P_60, 720P_50, 1080I_30, 1080I_25\n"
-                "\t1080P_30, 1080P_25, 1080P_24\n", sink->videoStd);
+                "\t1080P_30, 1080P_25, 1080P_24\n", sink->videoStd));
                 return -1;
             }
             break;
@@ -797,22 +801,22 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
                 return Display_Output_COMPOSITE;
             else if (!strcasecmp(sink->videoOutput, "COMPONENT"))
                 return Display_Output_COMPONENT;
-            #if PLATFORM == omap35x
             else if (!strcasecmp(sink->videoOutput, "DVI"))
                 return Display_Output_DVI;
             else if (!strcasecmp(sink->videoOutput, "LCD"))
                 return Display_Output_LCD;
-            #endif
             else {
-                GST_ERROR("Invalid videoOutput entered (%s)."
+                GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                    ("Invalid videoOutput entered (%s)."
                     "Please choose from:\n"
                     "\tSVIDEO, COMPOSITE, COMPONENT, LCD, DVI\n",
-                    sink->videoOutput);
+                    sink->videoOutput));
                 return -1;
             }
             break;
         default:
-            GST_ERROR("Unknown Attribute\n");
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Unknown Attribute"));
             ret = -1;
             break;
     }
@@ -835,7 +839,8 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
 
     /* Determine which device this element is running on */
     if (Cpu_getDevice(NULL, &sink->cpu_dev) < 0) {
-        GST_ERROR("Failed to determine target board\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Failed to determine target board"));
         return FALSE;
     }
 
@@ -898,23 +903,27 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
 
     /* Validate that the inputs the user gave are correct. */
     if (sink->dAttrs.displayStd == -1) {
-        GST_ERROR("displayStd is not valid\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+             ("displayStd is not valid"));
         return FALSE;
     }
 
     if (sink->dAttrs.videoStd == -1) {
-        GST_ERROR("videoStd is not valid\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+             ("videoStd is not valid"));
         return FALSE;
     }
 
     if (sink->dAttrs.videoOutput == -1) {
-        GST_ERROR("videoOutput is not valid\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+             ("videoOutput is not valid"));
         return FALSE;
     }
 
     if (sink->dAttrs.numBufs <= 0) {
-        GST_ERROR("You must have at least 1 buffer to display with.  "
-                  "Current value for numBufs = %d", sink->dAttrs.numBufs);
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+             ("You must have at least 1 buffer to display with.  "
+                  "Current value for numBufs = %d", sink->dAttrs.numBufs));
         return FALSE;
     }
 
@@ -931,7 +940,8 @@ static gboolean gst_tidmaivideosink_set_display_attrs(GstTIDmaiVideoSink *sink,
     ret = gst_tidmaivideosink_videostd_get_attrs(sink->dAttrs.videoStd,
                                                  &sink->oattrs);
     if (ret < 0) {
-        GST_ERROR("Error getting videostd attrs ret = %d\n", ret);
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Error getting videostd attrs ret = %d", ret));
         return FALSE;
     }
 
@@ -1037,7 +1047,8 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
      */
     while (TRUE) {
         if (!gst_tidmaivideosink_set_display_attrs(sink,colorSpace)) {
-            GST_ERROR("Error while trying to set the display attributes\n");
+            GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                ("Error while trying to set the display attributes"));
             return FALSE;
         }
 
@@ -1051,6 +1062,12 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
             sink->prevVideoStd = sink->dAttrs.videoStd;
             continue;
         } else {
+            if (!sink->hDisplay){
+                GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+                    ("Failed to create display"));
+                return FALSE;
+            }
+
             /* This code create a array to control the buffers cleaned after 
              * change of capabilities or some properties 
              */
@@ -1067,7 +1084,8 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
     }
 
     if (sink->hDisplay == NULL) {
-        GST_ERROR("Failed to open display device\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Failed to open display device\n"));
         return FALSE;
     }
 
@@ -1078,7 +1096,8 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
     sink->hFc = Framecopy_create(&fcAttrs);
 
     if (sink->hFc == NULL) {
-        GST_ERROR("Failed to create framcopy\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Failed to create framcopy\n"));
         return FALSE;
     }
     GST_DEBUG("Frame Copy Device Created\n");
@@ -1121,7 +1140,8 @@ static gboolean gst_tidmaivideosink_stop(GstBaseSink *sink)
 
     /* Shutdown any display and frame copy devices */
     if (!gst_tidmaivideosink_exit_display(dmaisink)) {
-        GST_ERROR("Failed to exit the display\n");
+        GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+            ("Failed to exit the display\n"));
         return FALSE;
     }
 
@@ -1273,7 +1293,9 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
     GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK_CAST(bsink);
 
     if (!sink->capsAreSet){
-        gst_tidmaivideosink_set_caps(bsink,caps);
+        if (!gst_tidmaivideosink_set_caps(bsink,caps)){
+            return GST_FLOW_UNEXPECTED;
+        }
     }
 
     if (!sink->dmaiElementUpstream || !sink->zeromemcpy){
