@@ -48,9 +48,7 @@ static gboolean generic_init(GstTIDmaidec *dmaidec){
         goto done;
 
     /* Read extra data passed via demuxer. */
-    if (!gst_structure_get_boolean(capStruct, "parsed",
-            &priv->parsed))
-        goto done;
+    gst_structure_get_boolean(capStruct, "parsed",&priv->parsed);
 
 /* Disable optimization for now, seems like some decoders aren't
  * that happy with it
@@ -66,8 +64,6 @@ static gboolean generic_init(GstTIDmaidec *dmaidec){
             dmaidec->numInputBufs = 1;
         }
     }
-#else 
-    priv->parsed = FALSE;
 #endif
     
     dmaidec->parser_private = priv;
