@@ -373,9 +373,7 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
 
     dmaienc->adapter            = NULL;
 
-    dmaienc->head               = 0;
-    dmaienc->headWrap           = 0;
-    dmaienc->tail               = 0;
+    dmaienc->freeSlices         = NULL;
 
     dmaienc->outBuf             = NULL;
     dmaienc->inBuf              = NULL;
@@ -591,8 +589,7 @@ static gboolean gst_tidmaienc_init_encoder(GstTIDmaienc *dmaienc)
 
     /* Status variables */
     dmaienc->basets = GST_CLOCK_TIME_NONE;
-    dmaienc->head = 0;
-    dmaienc->tail = 0;
+    dmaienc->freeSlices = NULL;
 
     GST_DEBUG("end init_encoder\n");
     return TRUE;
@@ -639,6 +636,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     Buffer_Attrs           Attrs     = Buffer_Attrs_DEFAULT;
     GstTIDmaiencClass      *gclass;
     GstTIDmaiencData       *encoder;
+    struct cmemSlice *slice;
 
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
     encoder = (GstTIDmaiencData *)
@@ -666,7 +664,14 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
         dmaienc->outBufMultiple = 3;
     }
     dmaienc->outBufSize = dmaienc->singleOutBufSize * dmaienc->outBufMultiple;
-    dmaienc->headWrap = dmaienc->outBufSize;
+    
+    slice = g_malloc0(sizeof(struct cmemSlice));
+    slice->start = 0;
+    slice->end = dmaienc->outBufSize;
+    slice->size = dmaienc->outBufSize;
+    dmaienc->freeMutex = g_mutex_new();
+    dmaienc->freeSlices = g_list_append(dmaienc->freeSlices,slice);
+
     GST_DEBUG("Output bufer size %d, Input buffer size %d\n",dmaienc->outBufSize,dmaienc->inBufSize);
 
     /* Create codec output buffers */
@@ -699,9 +704,25 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     /* Wait for free all downstream buffers */
-    if (dmaienc->head != dmaienc->tail){
-        GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
-            ("Not all downstream buffers are free... tail != head\n"));
+    if (dmaienc->freeSlices &&
+        ((struct cmemSlice *)(dmaienc->freeSlices->data))->size != dmaienc->outBufSize){
+        GST_ELEMENT_WARNING(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
+            ("Not all downstream buffers are free... forcing release, this may cause a segfault\n"));
+    }
+    if (dmaienc->freeSlices){
+        g_mutex_lock(dmaienc->freeMutex);
+        GList *e = dmaienc->freeSlices;
+
+        /* Merge free memory */
+        while (e){
+            g_free(e->data);
+            e = g_list_next(e);
+        }
+        g_list_free(dmaienc->freeSlices);
+        
+        dmaienc->freeSlices = NULL;
+        g_mutex_unlock(dmaienc->freeMutex);
+        g_mutex_free(dmaienc->freeMutex);
     }
 
     if (dmaienc->outBuf) {
@@ -932,62 +953,151 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
 
 void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
+    gint spos = Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) -
+        Buffer_getUserPtr(dmaienc->outBuf);
+    gint epos = spos + GST_BUFFER_SIZE(buf);
+    struct cmemSlice *slice, *nslice;
+    GList *e;
 
-    if (Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) !=
-        Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->tail){
+    if (!epos > dmaienc->outBufSize){
         GST_ELEMENT_ERROR(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
-            ("unexpected behavior freeing buffer that is not on the tail"));
+            ("Releasing buffer how ends outside memory boundaries"));
         return;
     }
 
-    GST_LOG("Head %d, Tail %d, OutbufSize %d, Headwrap %d, size %d",
-        dmaienc->head,dmaienc->tail,dmaienc->outBufSize,
-        dmaienc->headWrap, (int)
-            Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)));
-    dmaienc->tail +=
-        Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf));
-    if (dmaienc->tail == dmaienc->head){
-        dmaienc->tail = dmaienc->head = 0;
-    }
-    if (dmaienc->tail >= dmaienc->headWrap){
-        dmaienc->headWrap = dmaienc->outBufSize;
-        dmaienc->tail = 0;
-    }
-}
+    GST_DEBUG("Releasing memory from %d to %d",spos,epos);
+    g_mutex_lock(dmaienc->freeMutex);
+    e = dmaienc->freeSlices;
 
-gint outSpace(GstTIDmaienc *dmaienc){
-    if (dmaienc->head == dmaienc->tail){
-        return dmaienc->outBufSize - dmaienc->head;
-    } else if (dmaienc->head > dmaienc->tail){
-        gint size = dmaienc->outBufSize - dmaienc->head;
-        if (dmaienc->singleOutBufSize > size){
-            GST_LOG("Wrapping the head");
-            dmaienc->headWrap = dmaienc->head;
-            dmaienc->head = 0;
-            size = dmaienc->tail - dmaienc->head;
+    /* Merge free memory */
+    while (e){
+        slice = (struct cmemSlice *)e->data;
+        
+        /* Are we contigous to this block? */
+        if (slice->start == epos){
+            GST_DEBUG("Merging free buffer at beggining free block (%d,%d)",
+                slice->start,slice->end);
+            /* Merge with current block*/
+            slice->start -= GST_BUFFER_SIZE(buf);
+            slice->size += GST_BUFFER_SIZE(buf);
+            /* Merge with previous block? */
+            if (g_list_previous(e)){
+                nslice = (struct cmemSlice *)g_list_previous(e)->data;
+                if (nslice->end == slice->start){
+                    GST_DEBUG("Closing gaps...");
+                    nslice->end += slice->size;
+                    nslice->size += slice->size;
+                    g_free(slice);
+                    dmaienc->freeSlices = 
+                        g_list_delete_link(dmaienc->freeSlices,e);
+                }
+            }
+            g_mutex_unlock(dmaienc->freeMutex);
+            return;
         }
-        return size;
-    } else {
-        return dmaienc->tail - dmaienc->head;
+        if (slice->end == spos){
+            GST_DEBUG("Merging free buffer at end of free block (%d,%d)",
+                slice->start,slice->end);
+            /* Merge with current block*/
+            slice->end += GST_BUFFER_SIZE(buf);
+            slice->size += GST_BUFFER_SIZE(buf);
+            /* Merge with next block? */
+            if (g_list_next(e)){
+                nslice = (struct cmemSlice *)g_list_next(e)->data;
+                if (nslice->start == slice->end){
+                    GST_DEBUG("Closing gaps...");
+                    slice->end += nslice->size;
+                    slice->size += nslice->size;
+                    g_free(nslice);
+                    dmaienc->freeSlices = 
+                        g_list_delete_link(dmaienc->freeSlices,g_list_next(e));
+                }
+            }
+            g_mutex_unlock(dmaienc->freeMutex);
+            return;
+        }
+        /* Create a new free slice */
+        if (slice->start > epos){
+            GST_DEBUG("Creating new free slice %d,%d before %d,%d",spos,epos,
+                slice->start,slice->end);
+            nslice = g_malloc0(sizeof(struct cmemSlice));
+            nslice->start = spos;
+            nslice->end = epos;
+            nslice->size = GST_BUFFER_SIZE(buf);
+            dmaienc->freeSlices = g_list_insert_before(dmaienc->freeSlices,e,
+                nslice);
+            g_mutex_unlock(dmaienc->freeMutex);
+            return;
+        }
+        
+        e = g_list_next(e);
     }
+
+    GST_DEBUG("Creating new free slice %d,%d at end of list",spos,epos);
+    /* We reach the end of the list, so we append the free slice at the 
+       end
+     */
+    nslice = g_malloc0(sizeof(struct cmemSlice));
+    nslice->start = spos;
+    nslice->end = epos;
+    nslice->size = GST_BUFFER_SIZE(buf);
+    dmaienc->freeSlices = g_list_insert_before(dmaienc->freeSlices,NULL,
+        nslice);
+    g_mutex_unlock(dmaienc->freeMutex);
 }
 
-Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc){
+GList *sliceAvailable(GstTIDmaienc *dmaienc, gint size){
+    GList *e;
+    struct cmemSlice *slice;
+    
+    /* Find free memory */
+    GST_DEBUG("Finding free memory");
+    g_mutex_lock(dmaienc->freeMutex);
+    e = dmaienc->freeSlices;
+    while (e){
+        slice = (struct cmemSlice *)e->data;
+        GST_DEBUG("Evaluating free slice from %d to %d",slice->start,slice->end);
+        if (slice->size >= size){
+            /* We mark all the memory as buffer at this point
+             * to avoid merges while we are using the area
+             * Once we know how much memory we actually used, we 
+             * update to the real memory size that was used
+             */
+            slice->start += size;
+            slice->size -= size;
+            g_mutex_unlock(dmaienc->freeMutex);
+            return e;
+        }
+
+        e = g_list_next(e);
+    }    
+    g_mutex_unlock(dmaienc->freeMutex);
+    GST_DEBUG("Free memory not found...");
+    
+    return NULL;
+}
+
+Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc, GList **e){
     Buffer_Attrs  Attrs  = Buffer_Attrs_DEFAULT;
     Buffer_Handle hBuf;
+    struct cmemSlice *slice;
+    gint offset;
 
     Attrs.reference = TRUE;
-    /* Wait until enough data has been processed downstream
-     * This is an heuristic
-     */
-    if (outSpace(dmaienc) < dmaienc->singleOutBufSize){
+    /* Find free buffer */
+    *e = sliceAvailable(dmaienc,dmaienc->singleOutBufSize);
+    if (!*e){
         GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-           	("Not enough space free on the output circular buffer"));
+           	("Not enough space free on the output buffer"));
         return NULL;
     }
+    slice = (struct cmemSlice *)((*e)->data);
+    /* The offset was already reserved, so we need to correct the start */
+    offset = slice->start - dmaienc->singleOutBufSize;
 
     hBuf = Buffer_create(dmaienc->inBufSize,&Attrs);
-    Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + dmaienc->head);
+    GST_DEBUG("Creating buffer at offset %d",offset);
+    Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + offset);
     Buffer_setNumBytesUsed(hBuf,dmaienc->singleOutBufSize);
     Buffer_setSize(hBuf,dmaienc->singleOutBufSize);
 
@@ -1087,6 +1197,9 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     GstTIDmaiencData       *encoder;
     Buffer_Handle  hDstBuf,hSrcBuf;
     GstBuffer     *outBuf;
+    GList *element;
+    gint unused;
+    struct cmemSlice *slice;
     int ret = -1;
 
     gclass = (GstTIDmaiencClass *) (G_OBJECT_GET_CLASS (dmaienc));
@@ -1095,11 +1208,12 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 
     /* Obtain a free output buffer for the decoded data */
     hSrcBuf = get_raw_buffer(dmaienc,rawData);
-    hDstBuf = encode_buffer_get_free(dmaienc);
+    hDstBuf = encode_buffer_get_free(dmaienc,&element);
 
     if (!hSrcBuf || !hDstBuf){
         goto failure;
     }
+    slice = (struct cmemSlice *)element->data;
 
     if (!encoder->eops->codec_process(dmaienc,hSrcBuf,hDstBuf)){
         goto failure;
@@ -1121,7 +1235,16 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     Buffer_setNumBytesUsed(hDstBuf,(Buffer_getNumBytesUsed(hDstBuf) & ~0x1f)
                                     + 0x20);
 #endif
-    dmaienc->head += Buffer_getNumBytesUsed(hDstBuf);
+    g_mutex_lock(dmaienc->freeMutex);
+    /* Return unused memory */
+    unused = dmaienc->singleOutBufSize - Buffer_getNumBytesUsed(hDstBuf);
+    slice->start -= unused;
+    slice->size += unused;
+    if (slice->size == 0){
+        g_free(slice);
+        dmaienc->freeSlices = g_list_delete_link (dmaienc->freeSlices,element);
+    }
+    g_mutex_unlock(dmaienc->freeMutex);
 
     gst_tidmaibuffertransport_set_release_callback(
         (GstTIDmaiBufferTransport *)outBuf,release_cb,dmaienc);
