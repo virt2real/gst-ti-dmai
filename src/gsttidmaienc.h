@@ -53,6 +53,12 @@ typedef struct _GstTIDmaiencClass GstTIDmaiencClass;
 
 #include "gsttiparsers.h"
 
+struct cmemSlice {
+    gint start;
+    gint end;
+    gint size;
+};
+
 /* _GstTIDmaienc object */
 struct _GstTIDmaienc
 {
@@ -81,9 +87,8 @@ struct _GstTIDmaienc
     gint                outBufMultiple;
     Buffer_Handle       outBuf;
     Buffer_Handle       inBuf;
-    gint                head;
-    gint                tail;
-    gint                headWrap;
+    GList               *freeSlices;
+    GMutex              *freeMutex;
 
     /* Audio Data */
     gint                channels;
