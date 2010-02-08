@@ -345,9 +345,31 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             continue;
 #endif
         } else if (!strcmp (encoder->codecName, "jpegenc")) {
+            GstTIDmaiencData *vencoder;
+
             mediaType = IMAGE;
             encoder->streamtype = "jpeg";
             encoder->srcCaps = &gstti_jpeg_caps;
+            
+            /* Install mjpeg video encoder */
+            vencoder = g_malloc0 (sizeof (GstTIDmaiencData));
+            vencoder->codecName = algoname.name;
+            vencoder->engineName = ENCODEENGINE;
+            vencoder->streamtype = "mjpeg";
+            vencoder->srcCaps = &gstti_jpeg_caps;
+            vencoder->sinkCaps = &gstti_yuv_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    vencoder->eops = &gstti_imgenc0_ops;
+                    break;
+                case 1:
+                    vencoder->eops = &gstti_imgenc1_ops;
+            }
+            /* Now register the element */
+            if (!register_dmai_encoder(TICodecPlugin,vencoder)){
+                g_warning("Failed to register one encoder, aborting");
+                return FALSE;
+            }
         } else {
             GST_WARNING ("Element not provided for codec: %s",
                 encoder->codecName);

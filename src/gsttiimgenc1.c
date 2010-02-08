@@ -69,7 +69,7 @@ static void gstti_imgenc1_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_QVALUE,
         g_param_spec_int("qValue",
             "qValue for encoder",
-            "Q compression factor, from 1 (lowest quality)\n"
+            "Q compression factor, from 1 (lowest quality) "
             "to 97 (highest quality). [default: 75]\n",
             1, 97, 75, G_PARAM_READWRITE));
 
