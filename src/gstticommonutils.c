@@ -149,60 +149,79 @@ gboolean gst_ti_env_get_boolean (gchar *env)
     }
 }
 
-/******************************************************************************
- * gst_ti_get_env_string
- *   Function will return environment string.
- *****************************************************************************/
-gchar* gst_ti_env_get_string (gchar *env)
+#define UYVY_BLACK 0x10801080
+
+/*******************************************************************************
+ * gst_tidmaivideosink_blackFill
+ * This funcion paints the display buffers after property or caps changes
+ *******************************************************************************/
+gboolean gst_ti_blackFill(Buffer_Handle hBuf)
 {
-    Char  *env_value;
+    switch (BufferGfx_getColorSpace(hBuf)) {
+        case ColorSpace_YUV422PSEMI:
+        {
+            Int8  *yPtr     = Buffer_getUserPtr(hBuf);
+            Int32  ySize    = Buffer_getSize(hBuf) / 2;
+            Int8  *cbcrPtr  = yPtr + ySize;
+            Int32  cbCrSize = Buffer_getSize(hBuf) - ySize;
+            Int    i;
 
-    gst_ti_commonutils_debug_init();
+            /* Fill the Y plane */
+            for (i = 0; i < ySize; i++) {
+                yPtr[i] = 0x0;
+            }
 
-    env_value = getenv(env);
+            for (i = 0; i < cbCrSize; i++) {
+                cbcrPtr[i] = 0x80;
+            }
+            break;
+        }
+        case ColorSpace_YUV420PSEMI:
+        {
+            Int8  *bufPtr = Buffer_getUserPtr(hBuf);
+            Int    y;
+            Int    bpp = ColorSpace_getBpp(ColorSpace_YUV420PSEMI);
+            BufferGfx_Dimensions dim;
 
-    if (env_value) {
-        return env_value;
+            BufferGfx_getDimensions(hBuf, &dim);
+
+            for (y = 0; y < dim.height; y++) {
+                memset(bufPtr, 0x0, dim.width * bpp / 8);
+                bufPtr += dim.lineLength;
+            }
+
+            for (y = 0; y < (dim.height / 2); y++) {
+                memset(bufPtr, 0x80, dim.width * bpp / 8);
+                bufPtr += dim.lineLength;
+            }
+
+            break;
+        }
+        case ColorSpace_UYVY:
+        {
+            Int32 *bufPtr  = (Int32*)Buffer_getUserPtr(hBuf);
+            Int32  bufSize = Buffer_getSize(hBuf) / sizeof(Int32);
+            Int    i;
+
+            /* Make sure display buffer is 4-byte aligned */
+            assert((((UInt32) bufPtr) & 0x3) == 0);
+
+            for (i = 0; i < bufSize; i++) {
+                bufPtr[i] = UYVY_BLACK;
+            }
+            break;
+        }
+        case ColorSpace_RGB565:
+        {
+            memset(Buffer_getUserPtr(hBuf), 0, Buffer_getSize(hBuf));
+            break;
+        }
+        default:
+            return FALSE;
+            break;
     }
 
-    GST_WARNING("Failed to get value of env '%s' - setting NULL\n", env);
-    return NULL;
-}
-
-/******************************************************************************
- * gst_ti_get_env_int
- *   Function will return environment integer.
- *****************************************************************************/
-gint gst_ti_env_get_int (gchar *env)
-{
-    Char  *env_value;
-
-    env_value = getenv(env);
-
-    /* Covert string into interger */
-    if (env_value) {
-        return atoi(env_value);
-    }
-
-    GST_WARNING("Failed to get int value of env '%s' - setting 0\n", env);
-    return 0;
-}
-
-/******************************************************************************
- * gst_ti_env_is_defined
- *  Function will check if environment variable is defined.
- *****************************************************************************/
-gboolean gst_ti_env_is_defined (gchar *env)
-{
-    Char  *env_value;
-
-    env_value = getenv(env);
-
-    if (env_value) {
-        return TRUE;
-    }
-
-    return FALSE;
+    return TRUE;
 }
 
 /******************************************************************************

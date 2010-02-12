@@ -689,6 +689,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
 
         /* Create an output buffer tab */
         if (!dmaidec->allocated_buffer) {
+            GST_WARNING("NOT using downstream allocated buffers");
             dmaidec->hOutBufTab =
                 BufTab_create(dmaidec->numOutputBufs, dmaidec->outBufSize,
                     BufferGfx_getBufferAttrs(&gfxAttrs));

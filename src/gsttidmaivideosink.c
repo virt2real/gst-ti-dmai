@@ -150,8 +150,6 @@ static GstFlowReturn
 
 static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *sink);
 
-static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_Handle hBuf);
-
 /******************************************************************************
  * gst_tidmaivideosink_base_init
  ******************************************************************************/
@@ -292,77 +290,6 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->dmaiElementUpstream  = FALSE;
     dmaisink->zeromemcpy = FALSE;
     dmaisink->lastAllocatedBuffer = NULL;
-}
-
-/*******************************************************************************
- * gst_tidmaivideosink_blackFill
- * This funcion paints the display buffers after property or caps changes
- *******************************************************************************/
-static void gst_tidmaivideosink_blackFill(GstTIDmaiVideoSink *dmaisink, Buffer_Handle hBuf)
-{
-    switch (BufferGfx_getColorSpace(hBuf)) {
-        case ColorSpace_YUV422PSEMI:
-        {
-            Int8  *yPtr     = Buffer_getUserPtr(hBuf);
-            Int32  ySize    = Buffer_getSize(hBuf) / 2;
-            Int8  *cbcrPtr  = yPtr + ySize;
-            Int32  cbCrSize = Buffer_getSize(hBuf) - ySize;
-            Int    i;
-
-            /* Fill the Y plane */
-            for (i = 0; i < ySize; i++) {
-                yPtr[i] = 0x0;
-            }
-
-            for (i = 0; i < cbCrSize; i++) {
-                cbcrPtr[i] = 0x80;
-            }
-            break;
-        }
-        case ColorSpace_YUV420PSEMI:
-        {
-            Int8  *bufPtr = Buffer_getUserPtr(hBuf);
-            Int    y;
-            Int    bpp = ColorSpace_getBpp(ColorSpace_YUV420PSEMI);
-            BufferGfx_Dimensions dim;
-
-            BufferGfx_getDimensions(hBuf, &dim);
-
-            for (y = 0; y < dim.height; y++) {
-                memset(bufPtr, 0x0, dim.width * bpp / 8);
-                bufPtr += dim.lineLength;
-            }
-
-            for (y = 0; y < (dim.height / 2); y++) {
-                memset(bufPtr, 0x80, dim.width * bpp / 8);
-                bufPtr += dim.lineLength;
-            }
-
-            break;
-        }
-        case ColorSpace_UYVY:
-        {
-            Int32 *bufPtr  = (Int32*)Buffer_getUserPtr(hBuf);
-            Int32  bufSize = Buffer_getSize(hBuf) / sizeof(Int32);
-            Int    i;
-
-            /* Make sure display buffer is 4-byte aligned */
-            assert((((UInt32) bufPtr) & 0x3) == 0);
-
-            for (i = 0; i < bufSize; i++) {
-                bufPtr[i] = UYVY_BLACK;
-            }
-            break;
-        }
-        case ColorSpace_RGB565:
-        {
-            memset(Buffer_getUserPtr(hBuf), 0, Buffer_getSize(hBuf));
-            break;
-        }
-        default:
-            GST_ELEMENT_WARNING(dmaisink, RESOURCE, SETTINGS, (NULL),  ("Unsupported color space, buffers not painted\n"));
-            break;
-    }
 }
 
 
@@ -1183,7 +1110,10 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
     /*Removing garbage on display buffer*/
     if (sink->numBufClean){
         if (sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == DIRTY ){
-            gst_tidmaivideosink_blackFill(sink, hDispBuf);
+            if (!gst_ti_blackFill(hDispBuf)){
+                GST_ELEMENT_WARNING(sink, RESOURCE, SETTINGS, (NULL), 
+                ("Unsupported color space, buffers not painted\n"));
+            }
             sink->numBufClean--;
             GST_LOG("Cleaning Display buffers: %d cleaned of %d buffers\n",
                 sink->numBuffers - sink->numBufClean , sink->numBuffers);

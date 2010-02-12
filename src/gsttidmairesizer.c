@@ -57,7 +57,11 @@ static GstStaticPadTemplate video_src_template_factory =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")));
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")";"
+#if PLATFORM == dm365
+    GST_VIDEO_CAPS_YUV ("NV12")
+#endif
+    ));
 
 static GstStaticPadTemplate video_sink_template_factory =
 GST_STATIC_PAD_TEMPLATE ("sink",
@@ -273,6 +277,8 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->mutex = g_mutex_new ();
   dmairesizer->allocated_buffer = NULL;
   dmairesizer->downstreamBuffers = FALSE;
+  dmairesizer->colorSpace = ColorSpace_NOTSET;
+  dmairesizer->outColorSpace = ColorSpace_NOTSET;
 
 #if PLATFORM == dm6467
   dmairesizer->numOutBuf = 5;
@@ -354,7 +360,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
     BufTab_delete (dmairesizer->outBufTab);
   }
 
-  gfxAttrs.colorSpace = dmairesizer->colorSpace;
+  gfxAttrs.colorSpace = dmairesizer->outColorSpace;
   gfxAttrs.dim.width = dmairesizer->outBufWidth;
   gfxAttrs.dim.height = dmairesizer->outBufHeight;
   gfxAttrs.dim.lineLength =
@@ -363,7 +369,8 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   /* Both the codec and the GStreamer pipeline can own a buffer */
   gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
-  dmairesizer->outBufSize = gfxAttrs.dim.lineLength * gfxAttrs.dim.height;
+  dmairesizer->outBufSize = gst_ti_calculate_bufSize(dmairesizer->outBufWidth,
+    dmairesizer->outBufHeight,dmairesizer->outColorSpace);
 
   /* Trying to get a downstream buffer */
   if (gst_pad_alloc_buffer(dmairesizer->srcpad, 0, dmairesizer->outBufSize, 
@@ -597,7 +604,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
               break;
           default:
               GST_ELEMENT_ERROR(dmairesizer, STREAM, NOT_IMPLEMENTED,
-                  ("unsupported fourcc in video/image stream\n"), (NULL));
+                  ("unsupported input fourcc in video/image stream\n"), (NULL));
                   gst_object_unref(dmairesizer);
               return FALSE;
       }
@@ -607,7 +614,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   othercaps = gst_pad_get_allowed_caps (dmairesizer->srcpad);
   newcaps = gst_caps_copy_nth (othercaps, 0);
   gst_caps_unref(othercaps);
-  
+
   capStruct = gst_caps_get_structure(newcaps, 0);
   gst_structure_set(capStruct,
       "height",G_TYPE_INT,dmairesizer->height,
@@ -616,6 +623,25 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       dmairesizer->fps_n,dmairesizer->fps_d,
       "dmaioutput", G_TYPE_BOOLEAN, TRUE,
       (char *)NULL);
+
+  if (gst_structure_get_fourcc(capStruct, "format", &fourcc)) {
+      switch (fourcc) {
+          case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
+              dmairesizer->outColorSpace = ColorSpace_UYVY;
+              break;
+          case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
+              dmairesizer->outColorSpace = ColorSpace_YUV422PSEMI;
+              break;
+          case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+              dmairesizer->outColorSpace = ColorSpace_YUV420PSEMI;
+              break;
+          default:
+              GST_ELEMENT_ERROR(dmairesizer, STREAM, NOT_IMPLEMENTED,
+                  ("unsupported output fourcc in video/image stream\n"), (NULL));
+                  gst_object_unref(dmairesizer);
+              return FALSE;
+      }
+  }
 
   gst_pad_fixate_caps (dmairesizer->srcpad, newcaps);
   if (!gst_pad_set_caps(dmairesizer->srcpad, newcaps)) {
@@ -636,60 +662,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   return TRUE;
 }
 
-/*******************************************************************************
- * gst_tidmaivideosink_blackFill
- * This funcion paints the display buffers after property or caps changes
- *******************************************************************************/
-static void blackFill(GstTIDmaiResizer *dmairesizer, Buffer_Handle hBuf)
-{
-    switch (BufferGfx_getColorSpace(hBuf)) {
-        case ColorSpace_YUV422PSEMI:
-        {
-            Int8  *yPtr     = Buffer_getUserPtr(hBuf);
-            Int32  ySize    = Buffer_getSize(hBuf) / 2;
-            Int8  *cbcrPtr  = yPtr + ySize;
-            Int32  cbCrSize = Buffer_getSize(hBuf) - ySize;
-            Int    i;
-
-            /* Fill the Y plane */
-            for (i = 0; i < ySize; i++) {
-                yPtr[i] = 0x0;
-            }
-
-            for (i = 0; i < cbCrSize; i++) {
-                cbcrPtr[i] = 0x80;
-            }
-            break;
-        }
-
-        case ColorSpace_UYVY:
-        {
-            Int32 *bufPtr  = (Int32*)Buffer_getUserPtr(hBuf);
-            Int32  bufSize = Buffer_getSize(hBuf) / sizeof(Int32);
-            Int    i;
-
-            /* Make sure display buffer is 4-byte aligned */
-            assert((((UInt32) bufPtr) & 0x3) == 0);
-
-            for (i = 0; i < bufSize; i++) {
-                bufPtr[i] = UYVY_BLACK;
-            }
-            break;
-        }
-
-        case ColorSpace_RGB565:
-        {
-            memset(Buffer_getUserPtr(hBuf), 0, Buffer_getSize(hBuf));
-            break;
-        }
-
-        default:
-            GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),  ("Unsupported color space, buffers not painted\n"));
-            break;
-    }
-}
-
-
 
 /*******
 *   Resize_buffer
@@ -704,8 +676,9 @@ Buffer_Handle
 resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
 {
   Buffer_Handle DstBuf;
-  BufferGfx_Dimensions allocDim;
+  BufferGfx_Dimensions allocDim, srcDim;
   int count;
+  int  IDBuf;
 
   if (!dmairesizer->downstreamBuffers){
       DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
@@ -740,7 +713,9 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
           }
       }
       DstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmairesizer->allocated_buffer);
-      dmairesizer->allocated_buffer = NULL;
+      BufferGfx_getDimensions(DstBuf, &allocDim);
+      BufferGfx_getDimensions(inBuf,&srcDim);
+       dmairesizer->allocated_buffer = NULL;
   }
   
 
@@ -751,19 +726,27 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
     dmairesizer->clean_bufTab=FALSE;
   }
 
- /*Using array to handle the buftab dimension*/
+  IDBuf = Buffer_getId(DstBuf);
 
-  int  IDBuf = Buffer_getId(DstBuf);
-
+  /* If a property change, we need to cleanup our render buffers */
   if(dmairesizer->flagToClean[IDBuf]){
       dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
       dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
       dmairesizer->dim[IDBuf].x = 0;
       dmairesizer->dim[IDBuf].y = 0;
-      dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
+      if (dmairesizer->downstreamBuffers){
+        dmairesizer->dim[IDBuf].lineLength = allocDim.lineLength;
+      } else {
+        dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
         (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
+      }
 
-      blackFill(dmairesizer, DstBuf);
+      /* Cleanup the buffers using original dimmensions */
+      BufferGfx_resetDimensions(DstBuf);
+      if (!gst_ti_blackFill(DstBuf)){
+            GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
+            ("Unsupported color space, buffers not painted\n"));
+      }
 
       if(dmairesizer->keep_aspect_ratio){
          /*Sw/Sh > Tw/Th*/
@@ -804,38 +787,64 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
         }
       }
       
-      /* Handle cropping on downstream allocation scenario */
+      /* Handle cropping of output buffer on downstream allocation scenario */
       if (dmairesizer->downstreamBuffers){
-        BufferGfx_getDimensions(DstBuf, &allocDim);
-        dmairesizer->dim[IDBuf].lineLength = allocDim.lineLength;
+          /* Save the width and height before any cropping once the
+           * the PAR settings has been applied
+           */
+          dmairesizer->precropped_width = dmairesizer->dim[IDBuf].width;
+          dmairesizer->precropped_height = dmairesizer->dim[IDBuf].height;
+          dmairesizer->cropWStart = 0;
+          dmairesizer->cropWEnd = 0;
+          dmairesizer->cropHStart = 0;
+          dmairesizer->cropHEnd = 0;
 
-        dmairesizer->dim[IDBuf].x += allocDim.x;
-        if (dmairesizer->dim[IDBuf].x < 0){
-            dmairesizer->dim[IDBuf].width = dmairesizer->dim[IDBuf].x + allocDim.width > 0 ?
-                dmairesizer->dim[IDBuf].x + allocDim.width : 0;
-            dmairesizer->dim[IDBuf].x = -dmairesizer->dim[IDBuf].x;
-        }
+          dmairesizer->dim[IDBuf].x += allocDim.x;
+          /* If the display buffer is on negative location */
+          if (dmairesizer->dim[IDBuf].x < 0){
+              dmairesizer->dim[IDBuf].width += dmairesizer->dim[IDBuf].x;
+              if (dmairesizer->dim[IDBuf].width < 0){
+                  dmairesizer->dim[IDBuf].width = 0;
+              }
+              dmairesizer->cropWStart = -dmairesizer->dim[IDBuf].x;
+              dmairesizer->dim[IDBuf].x = 0;
+          }
+          /* Rounding */
+          if (dmairesizer->dim[IDBuf].x & 0xf){
+              dmairesizer->dim[IDBuf].x &= ~0xf;
+              GST_WARNING("Rounding the offset to multiple of 16: %d",(int)dmairesizer->dim[IDBuf].x);
+          }
 
-        if (dmairesizer->dim[IDBuf].x & 0xf){
-            dmairesizer->dim[IDBuf].x &= ~0xf;
-            GST_WARNING("Rounding the offset to multiple of 16: %d",(int)dmairesizer->dim[IDBuf].x);
-        }
-        if ((dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width) > allocDim.width){
-            gint availablew = allocDim.width - dmairesizer->dim[IDBuf].x;
-            dmairesizer->precropped_width = dmairesizer->dim[IDBuf].width;
-            dmairesizer->dim[IDBuf].width = availablew > 0 ? availablew : 0;
-        }
-        dmairesizer->dim[IDBuf].y += allocDim.y;
-        if (dmairesizer->dim[IDBuf].y < 0){
-            dmairesizer->dim[IDBuf].height = dmairesizer->dim[IDBuf].y + allocDim.height > 0 ?
-                dmairesizer->dim[IDBuf].y + allocDim.height : 0;
-            dmairesizer->dim[IDBuf].y = -dmairesizer->dim[IDBuf].y;
-        }
-        if ((dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height) > allocDim.height){
-            gint availableh = allocDim.height - dmairesizer->dim[IDBuf].y;
-            dmairesizer->precropped_height = dmairesizer->dim[IDBuf].height;
-            dmairesizer->dim[IDBuf].height = availableh > 0 ? availableh : 0;
-        }
+          /* Final cropping */
+          if ((dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width) > allocDim.width){
+              dmairesizer->cropWEnd = dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width -
+                  allocDim.width;
+              if (dmairesizer->cropWEnd > dmairesizer->dim[IDBuf].width) {
+                  dmairesizer->dim[IDBuf].width = 0;
+              } else {
+                  dmairesizer->dim[IDBuf].width -= dmairesizer->cropWEnd;
+              }
+          }
+
+          dmairesizer->dim[IDBuf].y += allocDim.y;
+          /* If the display buffer is on negative location */
+          if (dmairesizer->dim[IDBuf].y < 0){
+              if (dmairesizer->dim[IDBuf].height < 0){
+                  dmairesizer->dim[IDBuf].height = 0;
+              }
+              dmairesizer->cropHStart = -dmairesizer->dim[IDBuf].y;
+              dmairesizer->dim[IDBuf].y = 0;
+          }
+          /* Final cropping */
+          if ((dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height) > allocDim.height){
+              dmairesizer->cropHEnd = dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height -
+                  allocDim.height;
+              if (dmairesizer->cropHEnd > dmairesizer->dim[IDBuf].height) {
+                  dmairesizer->dim[IDBuf].height = 0;
+              } else {
+                  dmairesizer->dim[IDBuf].height -= dmairesizer->cropHEnd;
+              }
+          }
       }
       
       dmairesizer->flagToClean[IDBuf] = FALSE;
@@ -843,33 +852,70 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
+  /* Setup cropping in the input buffers */
   if (dmairesizer->downstreamBuffers){  
-      BufferGfx_Dimensions srcDim;
       BufferGfx_getDimensions(inBuf,&srcDim);
       BufferGfx_getDimensions(DstBuf, &allocDim);
+      gint origw, origh;
       
+      origw = srcDim.width;
+      origh = srcDim.height;
 
-      if ((dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width) > allocDim.width){
-          gint diff = dmairesizer->dim[IDBuf].x + dmairesizer->dim[IDBuf].width - allocDim.width;
-          if (dmairesizer->dim[IDBuf].width != 0){
-              srcDim.width -=  srcDim.width * diff / dmairesizer->precropped_width;
+      /* Check if we need to crop at the begining */
+      if (dmairesizer->cropWStart && dmairesizer->precropped_width){
+          gint crop = origw * dmairesizer->cropWStart / dmairesizer->precropped_width;
+          if (crop <= srcDim.width){
+              srcDim.x += crop;
+              srcDim.width -= crop;
+          } else {
+              srcDim.width = 0;
+          }
+      } else {
+          srcDim.width = 0;
+      }
+      if (dmairesizer->cropHStart && dmairesizer->precropped_height){
+          gint crop = origh * dmairesizer->cropHStart / dmairesizer->precropped_height;
+          if (crop <= srcDim.width){
+              srcDim.y += crop;
+              srcDim.height -= crop;
+          } else {
+              srcDim.height = 0;
+          }
+      } else {
+          srcDim.height = 0;
+      }
+          
+      /* Check if we need to crop at the end*/
+      if (dmairesizer->cropWEnd && dmairesizer->precropped_width){
+          gint crop = srcDim.width * dmairesizer->cropWEnd / dmairesizer->precropped_width;
+          if (crop <= srcDim.width){
+              srcDim.width -= crop;
           } else {
               srcDim.width = 0;
           }
       }
-      if ((dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height) > allocDim.height){
-          gint diff = dmairesizer->dim[IDBuf].y + dmairesizer->dim[IDBuf].height - allocDim.height;
-          if (dmairesizer->dim[IDBuf].height != 0){
-              srcDim.height -=  srcDim.height * diff / dmairesizer->precropped_height;
+      if (dmairesizer->cropHEnd){
+          gint crop = srcDim.height * dmairesizer->cropHEnd / dmairesizer->precropped_height;
+          if (crop <= srcDim.height){
+              srcDim.height -= crop;
           } else {
               srcDim.height = 0;
           }
       }
+
 GST_DEBUG("Source %dx%d @ %dx%d",(int)srcDim.width,(int)srcDim.height,(int)srcDim.x,(int)srcDim.y);
 GST_DEBUG("Target %dx%d @ %dx%d",(int)dmairesizer->dim[IDBuf].width,(int)dmairesizer->dim[IDBuf].height,(int)dmairesizer->dim[IDBuf].x,(int)dmairesizer->dim[IDBuf].y);
       BufferGfx_setDimensions(inBuf, &srcDim);
   }
-  
+
+///
+      BufferGfx_getDimensions(inBuf,&srcDim);
+      BufferGfx_getDimensions(DstBuf, &allocDim);
+GST_INFO("Test point: %d, %d",(gint)BufferGfx_getColorSpace(inBuf),
+(gint)BufferGfx_getColorSpace(DstBuf));
+GST_INFO("Source %dx%d @ %dx%d",(int)srcDim.width,(int)srcDim.height,(int)srcDim.x,(int)srcDim.y);
+GST_INFO("Target %dx%d @ %dx%d",(int)dmairesizer->dim[IDBuf].width,(int)dmairesizer->dim[IDBuf].height,(int)dmairesizer->dim[IDBuf].x,(int)dmairesizer->dim[IDBuf].y);
+
   /* Configure resizer */
   GST_LOG ("configuring resize\n");
   if (Resize_config (dmairesizer->Resizer, inBuf, DstBuf) < 0) {

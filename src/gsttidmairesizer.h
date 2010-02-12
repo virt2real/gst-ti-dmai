@@ -38,8 +38,6 @@
 #include <ti/sdo/dmai/Resize.h>
 #include "gsttidmaibuffertransport.h"
 
-#define UYVY_BLACK 0x10801080
-
 G_BEGIN_DECLS
 #define GST_TYPE_DMAI_RESIZER             (gst_dmai_resizer_get_type())
 #define GST_DMAI_RESIZER(obj)             (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_DMAI_RESIZER, GstTIDmaiResizer))
@@ -64,6 +62,7 @@ struct _GstTIDmaiResizer
   gint fps_n;
   gint fps_d;
   ColorSpace_Type colorSpace;
+  ColorSpace_Type outColorSpace;
   gboolean setup_outBufTab;
   gboolean flushing;
   gboolean clean_bufTab;
@@ -93,6 +92,10 @@ struct _GstTIDmaiResizer
   gint target_height_max;
   gint precropped_width;
   gint precropped_height;
+  gint cropWStart;
+  gint cropWEnd;
+  gint cropHStart;
+  gint cropHEnd;
   GMutex *mutex;
   gboolean keep_aspect_ratio;
   gint par_d;

@@ -204,6 +204,9 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
     case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
         dmaiaccel->colorSpace = ColorSpace_YUV422PSEMI;
         break;
+    case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+        dmaiaccel->colorSpace = ColorSpace_YUV420PSEMI;
+        break;
     }
 
     dmaiaccel->lineLength = BufferGfx_calcLineLength(dmaiaccel->width,

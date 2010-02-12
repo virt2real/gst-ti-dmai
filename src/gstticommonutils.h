@@ -83,17 +83,8 @@ gint gst_ti_calculate_display_bufSize (Buffer_Handle hDstBuf);
 gint gst_ti_calculate_bufSize (gint width, gint height,
     ColorSpace_Type colorspace);
 
-/* Function to read environment variable and return its boolean value */
-gboolean gst_ti_env_get_boolean (gchar *env);
-
-/* Function to read environment variable and return string value */
-gchar* gst_ti_env_get_string (gchar *env);
-
-/* Function to read environment variable and return integer value */
-gint gst_ti_env_get_int (gchar *env);
-
-/* Function to check if the environment variable is defined */
-gboolean gst_ti_env_is_defined (gchar *env);
+/* Function to black fill a buffer*/
+gboolean gst_ti_blackFill(Buffer_Handle hBuf);
 
 #endif
 

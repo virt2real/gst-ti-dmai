@@ -45,7 +45,6 @@ G_BEGIN_DECLS
 
 #define CLEAN 0
 #define DIRTY 1
-#define UYVY_BLACK 0x10801080
 
 #define GST_TYPE_TIDMAIVIDEOSINK \
   (gst_tidmaivideosink_get_type())
