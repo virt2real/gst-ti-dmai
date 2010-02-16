@@ -48,6 +48,7 @@ enum
 {
     PROP_100 = 100,
     PROP_RATECONTROL,
+    PROP_ENCODINGPRESET,
     PROP_MAXBITRATE,
     PROP_TARGETBITRATE,
     PROP_INTRAFRAMEINTERVAL,
@@ -65,6 +66,16 @@ static void gstti_videnc1_install_properties(GObjectClass *gobject_class){
             "\t\t\t 5 - User defined on extended parameters"
             ,
             1, 5, 1, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_ENCODINGPRESET,
+        g_param_spec_int("encodingpreset",
+            "Encoding Preset Algorithm",
+            "Encoding Preset Algorithm to use:\n"
+            "\t\t\t 0 - Default (High Quality)\n"
+            "\t\t\t 1 - High Quality\n"
+            "\t\t\t 2 - High Speed\n"
+            "\t\t\t 3 - User defined on extended parameters"
+            ,
+            0, 3, 2, G_PARAM_READWRITE));
     g_object_class_install_property(gobject_class, PROP_MAXBITRATE,
         g_param_spec_int("maxbitrate",
             "Maximum bit rate",
@@ -99,6 +110,9 @@ static void gstti_videnc1_set_property(GObject *object, guint prop_id,
     case PROP_RATECONTROL:
         params->rateControlPreset = g_value_get_int(value);
         break;
+    case PROP_ENCODINGPRESET:
+    	params->encodingPreset = g_value_get_int(value);
+        break;
     case PROP_MAXBITRATE:
         params->maxBitRate = g_value_get_int(value);
         break;
@@ -124,6 +138,9 @@ static void gstti_videnc1_get_property(GObject *object, guint prop_id,
     switch (prop_id) {
     case PROP_RATECONTROL:
         g_value_set_int(value,params->rateControlPreset);
+        break;
+    case PROP_ENCODINGPRESET:
+        g_value_set_int(value,params->encodingPreset);
         break;
     case PROP_MAXBITRATE:
         g_value_set_int(value,params->maxBitRate);
