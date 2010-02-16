@@ -571,10 +571,10 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   if (!gst_structure_get_int (structure, "height", &dmairesizer->height)) {
     dmairesizer->height = 0;
   }
-  if (!gst_structure_get_fraction (structure, "framerate", &dmairesizer->fps_d,
-          &dmairesizer->fps_n)) {
-    dmairesizer->fps_d = 30;
-    dmairesizer->fps_n = 1;
+  if (!gst_structure_get_fraction (structure, "framerate", &dmairesizer->fps_n,
+          &dmairesizer->fps_d)) {
+    dmairesizer->fps_n = 30;
+    dmairesizer->fps_d = 1;
   }
   if (!gst_structure_get_fraction (structure, "par", &dmairesizer->par_n,
           &dmairesizer->par_d)) {
