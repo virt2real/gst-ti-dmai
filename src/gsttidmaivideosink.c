@@ -75,8 +75,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
          "framerate=(fraction)[ 0, MAX ], "
          "width=(int)[ 1, MAX ], "
          "height=(int)[ 1, MAX ]"
-    )
 #endif
+)
 );
 
 GST_DEBUG_CATEGORY_STATIC (gst_tidmaivideosink_debug);
