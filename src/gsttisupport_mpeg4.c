@@ -163,6 +163,10 @@ static gint mpeg4_parse(GstTIDmaidec *dmaidec){
         (struct gstti_mpeg4_parser_private *) dmaidec->parser_private;
     gint i;
 
+    if (priv->flushing){
+        return -1;
+    }
+
     if (priv->parsed){
         if (dmaidec->head != dmaidec->tail){
             return dmaidec->head;
@@ -174,10 +178,6 @@ static gint mpeg4_parse(GstTIDmaidec *dmaidec){
         /* Find next VOP start header */
             
         for (i = dmaidec->marker; i <= dmaidec->head - 4; i++) {
-            if (priv->flushing){
-                return -1;
-            }
-            
             if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 1
                 && data[i + 3] == 0xB6) {
                 

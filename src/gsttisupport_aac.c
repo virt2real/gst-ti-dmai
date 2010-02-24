@@ -158,6 +158,10 @@ static gint aac_parse(GstTIDmaidec *dmaidec){
     struct gstti_aac_parser_private *priv =
         (struct gstti_aac_parser_private *) dmaidec->parser_private;
 
+    if (priv->flushing){
+        return -1;
+    }
+    
     if (priv->framed){
         /*
          * When we have a codec_data structure we know we got full frames
@@ -167,6 +171,7 @@ static gint aac_parse(GstTIDmaidec *dmaidec){
         }
     } else {
         gint avail = dmaidec->head - dmaidec->tail;
+        
         return (avail >= dmaidec->inBufSize) ? 
             (dmaidec->inBufSize + dmaidec->tail) : -1;
     }
@@ -179,7 +184,6 @@ static void aac_flush_start(void *private){
         (struct gstti_aac_parser_private *) private;
 
     priv->flushing = TRUE;
-    priv->codecdata_inserted = FALSE;
     GST_DEBUG("Parser flushed");
     return;
 }

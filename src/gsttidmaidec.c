@@ -1170,8 +1170,11 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
     } else {
         dmaidec->tail += bytes;
         /* If we have a precise parser we can optimize
-         * to avoid future extra memcpys on the circular buffer */
-        if (dmaidec->tail == dmaidec->head){
+         * to avoid future extra memcpys on the circular buffer 
+         * We have also see codecs that say they consume more than input,
+         * so we cover our backs here.
+         */
+        if (dmaidec->tail >= dmaidec->head){
             dmaidec->tail = dmaidec->head = 0;
         }
         GST_DEBUG("Flushing %d bytes from the circular buffer, %d remains",bytes,
@@ -1570,7 +1573,11 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             GST_DEBUG("Flushing decoded frames\n");
             Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
                 decoder->dops->outputUseMask);
-            hDstBuf = decoder->dops->codec_get_data(dmaidec);
+            if (decoder->dops->codec_type == VIDEO) {
+                hDstBuf = decoder->dops->codec_get_data(dmaidec);
+            } else {
+                hDstBuf = NULL;
+            }
 
             continue;
         }
@@ -1596,6 +1603,9 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         if (TRUE) { /* Forward playback*/
             GST_LOG("Pushing buffer downstream: %p",outBuf);
 
+            /* In case of failure we lost our reference to the buffer
+             * anyway, so we don't need to call unref
+             */
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
                     GST_DEBUG("push to source pad failed while in flushing state\n");
@@ -1712,8 +1722,10 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
         /* Decode and push */
         if (decode(dmaidec, pushBuffer) != GST_FLOW_OK) {
             GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
-                ("Failed to send buffer downstream"));
-            gst_buffer_unref(pushBuffer);
+                ("Failed to process buffer"));
+            /* We don't release the buffer since the decode function does it
+             * even on case of failure
+             */
             return GST_FLOW_UNEXPECTED;
         }
 
