@@ -617,8 +617,10 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
 
   capStruct = gst_caps_get_structure(newcaps, 0);
   gst_structure_set(capStruct,
-      "height",G_TYPE_INT,dmairesizer->height,
-      "width",G_TYPE_INT,dmairesizer->width,
+      "height",G_TYPE_INT,
+      dmairesizer->target_height?dmairesizer->target_height:dmairesizer->height,
+      "width",G_TYPE_INT,
+      dmairesizer->target_width?dmairesizer->target_width :dmairesizer->width,
       "framerate", GST_TYPE_FRACTION,
       dmairesizer->fps_n,dmairesizer->fps_d,
       "dmaioutput", G_TYPE_BOOLEAN, TRUE,
