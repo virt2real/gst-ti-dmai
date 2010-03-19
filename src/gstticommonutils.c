@@ -53,47 +53,6 @@ Int32 gstti_bufferGFX_getFrameType(Buffer_Handle hBuf)
     return gfxObjectPtr->frameType;
 }
 
-/* Declare variable used to categorize GST_LOG output */
-GST_DEBUG_CATEGORY_STATIC(gst_ticommonutils_debug);
-#define GST_CAT_DEFAULT gst_ticommonutils_debug
-
-/******************************************************************************
- * gst_ti_commonutils_debug_init
- *****************************************************************************/
-static void gst_ti_commonutils_debug_init(void)
-{
-    /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_ticommonutils_debug, "TICommonUtils", 0,
-                                "TI plugin common utils");
-
-}
-
-/******************************************************************************
- * gst_ti_calculate_display_bufSize
- *    Function to calculate video output buffer size.
- *
- *    In some cases codec does not return the correct output buffer size. But
- *    downstream elements like "ffmpegcolorspace" expect the correct output
- *    buffer.
- *****************************************************************************/
-gint gst_ti_calculate_display_bufSize (Buffer_Handle hDstBuf)
-{
-    BufferGfx_Dimensions    dim;
-
-    BufferGfx_getDimensions(hDstBuf, &dim);
-
-    /* If colorspace is YUV422 set the buffer size to width * 2 * height */
-    if (BufferGfx_getColorSpace(hDstBuf) == ColorSpace_UYVY) {
-        return dim.width * 2 * dim.height;
-    }
-
-    /* Return numBytesUsed values for other colorspace like
-     * YUV420PSEMI and YUV422PSEMI because we may need to perform ccv opertion
-     * on codec output data before display the video.
-     */
-    return Buffer_getNumBytesUsed(hDstBuf);
-}
-
 /******************************************************************************
  * gst_ti_calculate_bufSize
  *    Function to calculate video buffer size.
@@ -105,13 +64,22 @@ gint gst_ti_calculate_bufSize (gint width, gint height, ColorSpace_Type
 
     switch (colorspace){
         case ColorSpace_UYVY:
-            size *= 2;
+            size = size * 2;
             break;
         case ColorSpace_YUV422PSEMI:
             size = size * 5 / 2;
             break;
         case ColorSpace_YUV420PSEMI:
+        case ColorSpace_YUV420P:
             size = size * 3 / 2;
+            break;
+        case ColorSpace_RGB888:
+        case ColorSpace_YUV444P:
+            size = size * 3;
+            break;
+        case ColorSpace_RGB565:
+        case ColorSpace_YUV422P:
+            size = size * 2;
             break;
         default:
             GST_WARNING(
@@ -120,33 +88,6 @@ gint gst_ti_calculate_bufSize (gint width, gint height, ColorSpace_Type
     }
 
     return size;
-}
-
-
-/******************************************************************************
- * gst_ti_get_env_boolean
- *   Function will return environment boolean.
- *****************************************************************************/
-gboolean gst_ti_env_get_boolean (gchar *env)
-{
-    Char  *env_value;
-
-    gst_ti_commonutils_debug_init();
-
-    env_value = getenv(env);
-
-    /* If string in set to TRUE then return TRUE else FALSE */
-    if (env_value && !strcmp(env_value,"TRUE")) {
-        return TRUE;
-    }
-    else if (env_value && !strcmp(env_value,"FALSE")) {
-        return FALSE;
-    }
-    else {
-        GST_WARNING("Failed to get boolean value of env '%s'"
-                    " - setting FALSE\n", env);
-        return FALSE;
-    }
 }
 
 #define UYVY_BLACK 0x10801080
