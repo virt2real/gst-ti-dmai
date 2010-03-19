@@ -50,6 +50,7 @@ enum
   ARG_TARGET_WIDTH_MAX,
   ARG_TARGET_HEIGHT_MAX,
   ARG_KEEP_ASPECT_RATIO,
+  ARG_NORMALIZE_PIXEL_ASPECT_RATIO,
   ARG_NUMBER_OUTPUT_BUFFERS,
 };
 
@@ -67,7 +68,7 @@ static GstStaticPadTemplate video_sink_template_factory =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")", par =(fraction) [0/1, MAX ]"));
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")", pixel-aspect-ratio=(fraction) [0/1, MAX ]"));
 
 static void gst_dmai_resizer_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
@@ -78,6 +79,7 @@ static GstStateChangeReturn gst_dmai_resizer_change_state (GstElement *
 static gboolean gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps);
 static gboolean gst_dmai_resizer_sink_event (GstPad * pad, GstEvent *event);
 static GstFlowReturn gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf);
+static void free_buffers (GstTIDmaiResizer * dmairesizer);
 
 GST_BOILERPLATE (GstTIDmaiResizer, gst_dmai_resizer, GstElement,
     GST_TYPE_ELEMENT);
@@ -167,6 +169,11 @@ gst_dmai_resizer_class_init (GstTIDmaiResizerClass * klass)
           "aspect-ratio", "Keep aspect ratio", FALSE, G_PARAM_READWRITE));
 
   g_object_class_install_property (G_OBJECT_CLASS (klass),
+      ARG_NORMALIZE_PIXEL_ASPECT_RATIO,
+      g_param_spec_boolean ("normalize-par",
+          "aspect-ratio", "Normalize the pixel aspect ratio to 1/1", FALSE, G_PARAM_READWRITE));
+
+  g_object_class_install_property (G_OBJECT_CLASS (klass),
       ARG_NUMBER_OUTPUT_BUFFERS,
       g_param_spec_int ("number-output-buffers",
           "number-output-buffers",
@@ -216,6 +223,10 @@ gst_dmai_resizer_get_property (GObject * object, guint prop_id,
       g_value_set_boolean (value, dmairesizer->keep_aspect_ratio);
       break;
     }
+    case ARG_NORMALIZE_PIXEL_ASPECT_RATIO:{
+      g_value_set_boolean (value, dmairesizer->normalize_pixel_aspect_ratio);
+      break;
+    }
     case ARG_NUMBER_OUTPUT_BUFFERS:{
       g_value_set_int (value, dmairesizer->numOutBuf);
       break;
@@ -226,6 +237,135 @@ gst_dmai_resizer_get_property (GObject * object, guint prop_id,
     }
   }
 }
+
+static void
+gst_dmai_resizer_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (object);
+  GstCaps *caps;
+  GstStructure *capStruct;
+
+  /*To prevent the changed unwanted of properties on chain function*/
+  g_mutex_lock (dmairesizer->mutex);
+
+  switch (prop_id) {
+    case ARG_SOURCE_X:{
+      dmairesizer->source_x = g_value_get_int (value);
+      /*Working for dm6446, not tested for other platforms*/
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_SOURCE_Y:{
+      dmairesizer->source_y = g_value_get_int (value);
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_SOURCE_WIDTH:{
+      dmairesizer->source_width = g_value_get_int (value);
+      if (dmairesizer->source_width & 0xF) {
+        dmairesizer->source_width &= ~0xF;
+        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
+            ("Rounding source width to %d (step 16)",
+                dmairesizer->source_width));
+      }
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_SOURCE_HEIGHT:{
+      dmairesizer->source_height = g_value_get_int (value);
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_TARGET_WIDTH:{
+      dmairesizer->target_width = g_value_get_int (value);
+
+      if (dmairesizer->outBufWidth &&
+          (dmairesizer->outBufWidth < dmairesizer->target_width)) {
+        dmairesizer->target_width = dmairesizer->outBufWidth;
+        GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
+           ("Truncating the target width to the max buffer available"));
+      }
+
+      if (dmairesizer->target_width & 0xF) {
+        dmairesizer->target_width &= ~0xF;
+        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
+            ("Rounding target width to %d (step 16)",
+                dmairesizer->target_width));
+      }
+
+      if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
+        caps = gst_caps_make_writable (
+            gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
+        capStruct = gst_caps_get_structure (caps, 0);
+        gst_structure_set (capStruct,
+            "width", G_TYPE_INT, dmairesizer->target_width, (char *) NULL);
+        gst_pad_set_caps (dmairesizer->srcpad, caps);
+        gst_caps_unref (caps);
+      }
+      dmairesizer->clean_bufTab=TRUE;
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_TARGET_HEIGHT:{
+      dmairesizer->target_height = g_value_get_int (value);
+
+      if (dmairesizer->outBufHeight &&
+          (dmairesizer->outBufHeight < dmairesizer->target_height)) {
+        dmairesizer->target_height = dmairesizer->outBufHeight;
+        GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
+           ("Truncating the target height to the max buffer available"));
+      }
+
+      if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
+        caps = gst_caps_make_writable (
+             gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
+        capStruct = gst_caps_get_structure (caps, 0);
+        gst_structure_set (capStruct,
+            "height", G_TYPE_INT, dmairesizer->target_height, (char *) NULL);
+        gst_pad_set_caps (dmairesizer->srcpad, caps);
+        gst_caps_unref (caps);
+      }
+      dmairesizer->clean_bufTab=TRUE;
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_TARGET_WIDTH_MAX:{
+      dmairesizer->target_width_max = g_value_get_int (value);
+      if (dmairesizer->target_width_max & 0xF) {
+        dmairesizer->target_width_max &= ~0xF;
+        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
+            ("Rounding target width max to %d (step 16)",
+                dmairesizer->target_width_max));
+      }
+      break;
+    }
+    case ARG_TARGET_HEIGHT_MAX:{
+      dmairesizer->target_height_max = g_value_get_int (value);
+      break;
+    }
+    case ARG_KEEP_ASPECT_RATIO:{
+      dmairesizer->keep_aspect_ratio = g_value_get_boolean (value);
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_NORMALIZE_PIXEL_ASPECT_RATIO:{
+      dmairesizer->normalize_pixel_aspect_ratio = g_value_get_boolean (value);
+      dmairesizer->configured = FALSE;
+      break;
+    }
+    case ARG_NUMBER_OUTPUT_BUFFERS:{
+      dmairesizer->numOutBuf = g_value_get_int (value);
+      break;
+    }
+    default:{
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+    }
+  }
+  g_mutex_unlock (dmairesizer->mutex);
+}
+
 
 static void
 gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
@@ -268,6 +408,7 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->target_width_max = 0;
   dmairesizer->target_height_max = 0;
   dmairesizer->keep_aspect_ratio = FALSE;
+  dmairesizer->normalize_pixel_aspect_ratio = FALSE;
   dmairesizer->setup_outBufTab = TRUE;
   dmairesizer->flushing = FALSE;
   dmairesizer->clean_bufTab = FALSE;
@@ -279,6 +420,7 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->downstreamBuffers = FALSE;
   dmairesizer->colorSpace = ColorSpace_NOTSET;
   dmairesizer->outColorSpace = ColorSpace_NOTSET;
+  dmairesizer->configured = FALSE;
 
 #if PLATFORM == dm6467
   dmairesizer->numOutBuf = 5;
@@ -320,6 +462,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
 {
   BufferGfx_Attrs gfxAttrs = BufferGfx_Attrs_DEFAULT;
   Rendezvous_Attrs rzvAttrs = Rendezvous_Attrs_DEFAULT;
+  gint outLinePadding = 0;
 
   /***************************************************************
    * If target width/height MAX is set, the outbuffer is created 
@@ -344,6 +487,21 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   } else {
     dmairesizer->outBufWidth = dmairesizer->target_width;
   }
+#if PLATFORM == dm365
+  /* DM365 IPIPE requires 32 byte alignment */
+  switch (dmairesizer->outColorSpace){
+  case ColorSpace_UYVY:
+      outLinePadding = 0xF;
+      break;
+  case ColorSpace_YUV420PSEMI:
+      outLinePadding = 0x1F;
+      break;
+  default:
+      break;
+  }
+#endif
+  dmairesizer->outBufWidth = 
+      (dmairesizer->outBufWidth + outLinePadding) & ~outLinePadding;
 
   /*HEIGHT*/
   if (!dmairesizer->target_height)
@@ -365,7 +523,11 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   gfxAttrs.dim.height = dmairesizer->outBufHeight;
   gfxAttrs.dim.lineLength =
       BufferGfx_calcLineLength (gfxAttrs.dim.width, gfxAttrs.colorSpace);
-
+#if PLATFORM == dm365
+  /* DM365 IPIPE requires 32 byte alignment */
+  gfxAttrs.dim.lineLength =  (gfxAttrs.dim.lineLength + 0x1F) & ~0x1F;
+#endif
+  
   /* Both the codec and the GStreamer pipeline can own a buffer */
   gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
@@ -433,122 +595,6 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   return TRUE;
 }
 
-static void
-gst_dmai_resizer_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec)
-{
-  GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (object);
-  GstCaps *caps;
-  GstStructure *capStruct;
-
-  /*To prevent the changed unwanted of properties on chain function*/
-  g_mutex_lock (dmairesizer->mutex);
-
-  switch (prop_id) {
-    case ARG_SOURCE_X:{
-      dmairesizer->source_x = g_value_get_int (value);
-      /*Working for dm6446, not tested for other platforms*/
-      break;
-    }
-    case ARG_SOURCE_Y:{
-      dmairesizer->source_y = g_value_get_int (value);
-      break;
-    }
-    case ARG_SOURCE_WIDTH:{
-      dmairesizer->source_width = g_value_get_int (value);
-      if (dmairesizer->source_width & 0xF) {
-        dmairesizer->source_width &= ~0xF;
-        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
-            ("Rounding source width to %d (step 16)",
-                dmairesizer->source_width));
-      }
-      break;
-    }
-    case ARG_SOURCE_HEIGHT:{
-      dmairesizer->source_height = g_value_get_int (value);
-      break;
-    }
-    case ARG_TARGET_WIDTH:{
-      dmairesizer->target_width = g_value_get_int (value);
-
-      if (dmairesizer->outBufWidth &&
-          (dmairesizer->outBufWidth < dmairesizer->target_width)) {
-        dmairesizer->target_width = dmairesizer->outBufWidth;
-        GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
-           ("Truncating the target width to the max buffer available"));
-      }
-
-      if (dmairesizer->target_width & 0xF) {
-        dmairesizer->target_width &= ~0xF;
-        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
-            ("Rounding target width to %d (step 16)",
-                dmairesizer->target_width));
-      }
-
-      if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
-        caps = gst_caps_make_writable (
-            gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
-        capStruct = gst_caps_get_structure (caps, 0);
-        gst_structure_set (capStruct,
-            "width", G_TYPE_INT, dmairesizer->target_width, (char *) NULL);
-        gst_pad_set_caps (dmairesizer->srcpad, caps);
-        gst_caps_unref (caps);
-      }
-        dmairesizer->clean_bufTab=TRUE;
-      break;
-    }
-    case ARG_TARGET_HEIGHT:{
-      dmairesizer->target_height = g_value_get_int (value);
-
-      if (dmairesizer->outBufHeight &&
-          (dmairesizer->outBufHeight < dmairesizer->target_height)) {
-        dmairesizer->target_height = dmairesizer->outBufHeight;
-        GST_ELEMENT_WARNING(dmairesizer, RESOURCE, SETTINGS, (NULL),
-           ("Truncating the target height to the max buffer available"));
-      }
-
-      if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
-        caps = gst_caps_make_writable (
-             gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
-        capStruct = gst_caps_get_structure (caps, 0);
-        gst_structure_set (capStruct,
-            "height", G_TYPE_INT, dmairesizer->target_height, (char *) NULL);
-        gst_pad_set_caps (dmairesizer->srcpad, caps);
-        gst_caps_unref (caps);
-      }
-      dmairesizer->clean_bufTab=TRUE;
-      break;
-    }
-    case ARG_TARGET_WIDTH_MAX:{
-      dmairesizer->target_width_max = g_value_get_int (value);
-      if (dmairesizer->target_width_max & 0xF) {
-        dmairesizer->target_width_max &= ~0xF;
-        GST_ELEMENT_WARNING (dmairesizer, RESOURCE, SETTINGS, (NULL),
-            ("Rounding target width max to %d (step 16)",
-                dmairesizer->target_width_max));
-      }
-      break;
-    }
-    case ARG_TARGET_HEIGHT_MAX:{
-      dmairesizer->target_height_max = g_value_get_int (value);
-      break;
-    }
-    case ARG_KEEP_ASPECT_RATIO:{
-      dmairesizer->keep_aspect_ratio = g_value_get_boolean (value);
-      break;
-    }
-    case ARG_NUMBER_OUTPUT_BUFFERS:{
-      dmairesizer->numOutBuf = g_value_get_int (value);
-      break;
-    }
-    default:{
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      break;
-    }
-  }
-  g_mutex_unlock (dmairesizer->mutex);
-}
-
 static gboolean
 gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
 {
@@ -576,7 +622,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
     dmairesizer->fps_n = 30;
     dmairesizer->fps_d = 1;
   }
-  if (!gst_structure_get_fraction (structure, "par", &dmairesizer->par_n,
+  if (!gst_structure_get_fraction (structure, "pixel-aspect-ratio", &dmairesizer->par_n,
           &dmairesizer->par_d)) {
     dmairesizer->par_d = 1;
     dmairesizer->par_n = 1;
@@ -588,6 +634,22 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
     if(dmairesizer->par_n < 1){
       dmairesizer->par_n = 1;
       GST_INFO("The numerator of pixel aspect ratio can't be less than 1, setting to 1");
+    }
+    
+    if (dmairesizer->normalize_pixel_aspect_ratio){
+        if (dmairesizer->par_n > dmairesizer->par_d){
+            if (!dmairesizer->target_width){
+                dmairesizer->target_width = dmairesizer->width * 
+                    dmairesizer->par_n / dmairesizer->par_d;
+            }
+        } else {
+            if (!dmairesizer->target_height){
+                dmairesizer->target_height = dmairesizer->width * 
+                    dmairesizer->par_d / dmairesizer->par_n;
+            }
+        }
+        dmairesizer->par_d = 1;
+        dmairesizer->par_n = 1;
     }
   }
 
@@ -616,16 +678,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   gst_caps_unref(othercaps);
 
   capStruct = gst_caps_get_structure(newcaps, 0);
-  gst_structure_set(capStruct,
-      "height",G_TYPE_INT,
-      dmairesizer->target_height?dmairesizer->target_height:dmairesizer->height,
-      "width",G_TYPE_INT,
-      dmairesizer->target_width?dmairesizer->target_width :dmairesizer->width,
-      "framerate", GST_TYPE_FRACTION,
-      dmairesizer->fps_n,dmairesizer->fps_d,
-      "dmaioutput", G_TYPE_BOOLEAN, TRUE,
-      (char *)NULL);
-
+  
   if (gst_structure_get_fourcc(capStruct, "format", &fourcc)) {
       switch (fourcc) {
           case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
@@ -645,20 +698,40 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       }
   }
 
-  gst_pad_fixate_caps (dmairesizer->srcpad, newcaps);
-  if (!gst_pad_set_caps(dmairesizer->srcpad, newcaps)) {
-      GST_ELEMENT_ERROR(dmairesizer,STREAM,FAILED,(NULL),
-          ("Failed to set the srcpad caps"));
-      gst_object_unref (dmairesizer);
-      return FALSE;
-  }
-
-  /*Setting output buffer */
+  /* Setting output buffers 
+   * We do this before fixating the caps, since we need the pitch information first 
+   */
   if(dmairesizer->setup_outBufTab){
     setup_outputBuf (dmairesizer);
     dmairesizer->setup_outBufTab = FALSE;
   }
+
+  gst_structure_set(capStruct,
+      "height",G_TYPE_INT,
+      dmairesizer->target_height?dmairesizer->target_height:dmairesizer->height,
+      "width",G_TYPE_INT,
+      dmairesizer->target_width?dmairesizer->target_width:dmairesizer->width,
+      "framerate", GST_TYPE_FRACTION,
+      dmairesizer->fps_n,dmairesizer->fps_d,
+      "pixel-aspect-ratio", GST_TYPE_FRACTION,
+      dmairesizer->par_n,dmairesizer->par_d,
+      "dmaioutput", G_TYPE_BOOLEAN, TRUE,
+#if PLATFORM == dm365
+      "pitch",G_TYPE_INT,dmairesizer->outBufWidth,
+#endif
+      (char *)NULL);
+
+  gst_pad_fixate_caps (dmairesizer->srcpad, newcaps);
+  if (!gst_pad_set_caps(dmairesizer->srcpad, newcaps)) {
+      GST_ELEMENT_ERROR(dmairesizer,STREAM,FAILED,(NULL),
+          ("Failed to set the srcpad caps"));
+      free_buffers(dmairesizer);
+      gst_object_unref (dmairesizer);
+      return FALSE;
+  }
+
   dmairesizer->clean_bufTab = TRUE;
+  dmairesizer->configured = FALSE;
   
   gst_object_unref (dmairesizer);
   return TRUE;
@@ -717,7 +790,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       DstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmairesizer->allocated_buffer);
       BufferGfx_getDimensions(DstBuf, &allocDim);
       BufferGfx_getDimensions(inBuf,&srcDim);
-       dmairesizer->allocated_buffer = NULL;
+      dmairesizer->allocated_buffer = NULL;
   }
   
 
@@ -740,7 +813,11 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
         dmairesizer->dim[IDBuf].lineLength = allocDim.lineLength;
       } else {
         dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
-        (dmairesizer->dim[IDBuf].width, dmairesizer->colorSpace);
+        (dmairesizer->dim[IDBuf].width, dmairesizer->outColorSpace);
+#if PLATFORM == dm365
+        /* DM365 IPIPE requires 32 byte alignment */
+        dmairesizer->dim[IDBuf].lineLength = (dmairesizer->dim[IDBuf].lineLength + 0x1F) & ~0x1F;
+#endif
       }
 
       /* Cleanup the buffers using original dimmensions */
@@ -761,32 +838,6 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
            dmairesizer->dim[IDBuf].width = dmairesizer->source_width * dmairesizer->target_height / dmairesizer->source_height;
            dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
          }
-         /*PAR*/
-         if(dmairesizer->par_n > dmairesizer->par_d){
-           /*Vertical*/
-           dmairesizer->dim[IDBuf].width *= dmairesizer->par_d; 
-           dmairesizer->dim[IDBuf].width /= dmairesizer->par_n;
-           dmairesizer->dim[IDBuf].width &= ~0xF;
-           dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
-         }else{
-           /*Horizontal*/
-           dmairesizer->dim[IDBuf].height *= dmairesizer->par_n;
-           dmairesizer->dim[IDBuf].height /= dmairesizer->par_d;
-           dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
-         }
-      }else{
-        /*PAR*/
-        if(dmairesizer->par_n > 1 || dmairesizer->par_d > 1 ){
-          if(dmairesizer->par_n > dmairesizer->par_d){
-           /*Vertical*/
-            dmairesizer->dim[IDBuf].width = (dmairesizer->target_width * dmairesizer->par_d / dmairesizer->par_n) & ~0xF;
-            dmairesizer->dim[IDBuf].x = ((dmairesizer->target_width - dmairesizer->dim[IDBuf].width) / 2) & ~0xF;
-          }else{
-            /*Horizontal*/
-            dmairesizer->dim[IDBuf].height = dmairesizer->target_height * dmairesizer->par_n / dmairesizer->par_d;
-            dmairesizer->dim[IDBuf].y = (dmairesizer->target_height - dmairesizer->dim[IDBuf].height) / 2;
-          }
-        }
       }
       
       /* Handle cropping of output buffer on downstream allocation scenario */
@@ -851,7 +902,8 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       
       dmairesizer->flagToClean[IDBuf] = FALSE;
   }
-  
+
+  /* Set on the target buffer the dimmensions for the resizing operation */
   BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
   /* Setup cropping in the input buffers */
@@ -905,25 +957,18 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
           }
       }
 
-GST_DEBUG("Source %dx%d @ %dx%d",(int)srcDim.width,(int)srcDim.height,(int)srcDim.x,(int)srcDim.y);
-GST_DEBUG("Target %dx%d @ %dx%d",(int)dmairesizer->dim[IDBuf].width,(int)dmairesizer->dim[IDBuf].height,(int)dmairesizer->dim[IDBuf].x,(int)dmairesizer->dim[IDBuf].y);
       BufferGfx_setDimensions(inBuf, &srcDim);
   }
 
-///
-      BufferGfx_getDimensions(inBuf,&srcDim);
-      BufferGfx_getDimensions(DstBuf, &allocDim);
-GST_INFO("Test point: %d, %d",(gint)BufferGfx_getColorSpace(inBuf),
-(gint)BufferGfx_getColorSpace(DstBuf));
-GST_INFO("Source %dx%d @ %dx%d",(int)srcDim.width,(int)srcDim.height,(int)srcDim.x,(int)srcDim.y);
-GST_INFO("Target %dx%d @ %dx%d",(int)dmairesizer->dim[IDBuf].width,(int)dmairesizer->dim[IDBuf].height,(int)dmairesizer->dim[IDBuf].x,(int)dmairesizer->dim[IDBuf].y);
-
-  /* Configure resizer */
-  GST_LOG ("configuring resize\n");
-  if (Resize_config (dmairesizer->Resizer, inBuf, DstBuf) < 0) {
-    GST_ELEMENT_ERROR (dmairesizer, STREAM, ENCODE, (NULL),
-        ("Failed to configure the resizer"));
-    return NULL;
+  if (!dmairesizer->configured) {
+    /* Configure resizer */
+    GST_LOG ("configuring resize\n");
+    if (Resize_config (dmairesizer->Resizer, inBuf, DstBuf) < 0) {
+      GST_ELEMENT_ERROR (dmairesizer, STREAM, ENCODE, (NULL),
+         ("Failed to configure the resizer"));
+      return NULL;
+    }
+    dmairesizer->configured = TRUE;
   }
 
   /* Execute resizer */
@@ -934,15 +979,10 @@ GST_INFO("Target %dx%d @ %dx%d",(int)dmairesizer->dim[IDBuf].width,(int)dmairesi
     return NULL;
   }
 
-  /*Reseting values after resize to send buffer correctly*/
-  if(dmairesizer->keep_aspect_ratio || dmairesizer->par_n > 1 || dmairesizer->par_d > 1){
-       dmairesizer->dim[IDBuf].height = dmairesizer->target_height;
-       dmairesizer->dim[IDBuf].y = 0;
-       dmairesizer->dim[IDBuf].width = dmairesizer->target_width;
-       dmairesizer->dim[IDBuf].x = 0;
+  if (dmairesizer->downstreamBuffers){
+    /* Reset the downstream buffer dimensions to the original value */
+    BufferGfx_setDimensions(DstBuf, &allocDim);
   }
-
-  BufferGfx_setDimensions(DstBuf, &dmairesizer->dim[IDBuf]);
 
   return DstBuf;
 }
@@ -1045,6 +1085,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   GstBuffer *pushBuffer;
   GstCaps *caps;
   GstTIDmaiResizer *dmairesizer = GST_DMAI_RESIZER (GST_OBJECT_PARENT (pad));
+
   BufferGfx_Dimensions srcDim;
 
   /*To prevent unwanted change of properties just before to resize*/
@@ -1076,7 +1117,6 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
     ("setting source-y like width - source-height\n"));
     dmairesizer->source_y = dmairesizer->height - dmairesizer->source_height;
   }
-
   if (dmairesizer->inBufSize == 0) {
     dmairesizer->inBufSize = GST_BUFFER_SIZE (buf);
     GST_DEBUG ("Input buffer size set to %d\n", dmairesizer->inBufSize);
@@ -1157,6 +1197,11 @@ free_buffers (GstTIDmaiResizer * dmairesizer)
     Rendezvous_delete (dmairesizer->waitOnOutBufTab);
     dmairesizer->waitOnOutBufTab = NULL;
   }
+  if (dmairesizer->allocated_buffer){
+      gst_buffer_unref(dmairesizer->allocated_buffer);
+      dmairesizer->allocated_buffer = NULL;
+  }
+
   return;
 }
 

@@ -96,8 +96,10 @@ struct _GstTIDmaiResizer
   gint cropWEnd;
   gint cropHStart;
   gint cropHEnd;
+  gboolean configured;
   GMutex *mutex;
   gboolean keep_aspect_ratio;
+  gboolean normalize_pixel_aspect_ratio;
   gint par_d;
   gint par_n;
  
