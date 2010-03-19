@@ -1222,13 +1222,17 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
     Buffer_Handle hBuf;
     GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK_CAST(bsink);
 
+    if (!sink->zeromemcpy){
+        return GST_FLOW_OK;
+    }
+
     if (!sink->capsAreSet){
         if (!gst_tidmaivideosink_set_caps(bsink,caps)){
             return GST_FLOW_UNEXPECTED;
         }
     }
 
-    if (!sink->dmaiElementUpstream || !sink->zeromemcpy){
+    if (!sink->dmaiElementUpstream){
         return GST_FLOW_OK;
     }
 
