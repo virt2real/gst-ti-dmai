@@ -654,7 +654,15 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
         dmaidec->outBufSize = gst_ti_calculate_bufSize (
             dmaidec->width,dmaidec->height,dmaidec->colorSpace);
         dmaidec->inBufSize = dmaidec->outBufSize;
-
+#if PLATFORM == dm365
+        /* DM365 NV12 decoders inserts padding at the end of each line 
+         * For decoding proposes, the output buffers aren't 1.5 x time the with*height,
+         * but instead around 1.8 
+         */
+        if (dmaidec->colorSpace == ColorSpace_YUV420PSEMI) {
+            dmaidec->outBufSize = (dmaidec->width * dmaidec->height * 9 / 5);
+        }
+#endif
         /* Trying to get a downstream buffer */
         if (gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize, 
             GST_PAD_CAPS(dmaidec->srcpad), &dmaidec->allocated_buffer) !=
@@ -1593,7 +1601,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         if (decoder->dops->codec_type == VIDEO) {
             gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
-                gst_ti_calculate_display_bufSize(hDstBuf));
+                gst_ti_calculate_bufSize(dmaidec->width,dmaidec->height,
+                    BufferGfx_getColorSpace(hDstBuf)));
         } else {
             gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
                 Buffer_getNumBytesUsed(hDstBuf));

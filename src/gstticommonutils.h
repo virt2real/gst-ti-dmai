@@ -76,9 +76,6 @@ extern struct codec_custom_data_entry codec_custom_data[];
 /* Function to replace DMAI's BufferGfx_getFrameType */
 extern Int32 gstti_bufferGFX_getFrameType(Buffer_Handle hBuf);
 
-/* Function to calculate the display buffer size */
-gint gst_ti_calculate_display_bufSize (Buffer_Handle hDstBuf);
-
 /* Function to calculate the buffer size */
 gint gst_ti_calculate_bufSize (gint width, gint height,
     ColorSpace_Type colorspace);
