@@ -30,7 +30,6 @@
 /*
  * TODO LIST
  *
- * - Image encoding
  * - Speech encoding
  */
 
@@ -771,7 +770,8 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
     GST_INFO("requested sink caps:  %s", gst_caps_to_string(caps));
 
     /* Generic Video Properties */
-    if (!strncmp(mime, "video/", 6)) {
+    if (!strncmp(mime, "video/", 6) ||
+        !strncmp(mime, "image/", 6)) {
         gint  framerateNum;
         gint  framerateDen;
 
@@ -787,6 +787,10 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
 
         if (!gst_structure_get_int(capStruct, "width", &dmaienc->width)) {
             dmaienc->width = 0;
+        }
+
+        if (!gst_structure_get_int(capStruct, "pitch", &dmaienc->pitch)) {
+            dmaienc->pitch = 0;
         }
 
         if (gst_structure_get_fourcc(capStruct, "format", &fourcc)) {
@@ -869,8 +873,6 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                GST_DEBUG("Codec can process at most %d samples per call",
                    gclass->codec_data->max_samples);
         }
-    } else { //Add support for images
-        return FALSE;
     }
 
     GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(caps)));

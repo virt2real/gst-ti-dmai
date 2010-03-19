@@ -103,6 +103,7 @@ struct _GstTIDmaienc
     gint                framerateDen;
     gint                height;
     gint                width;
+    gint                pitch;
     ColorSpace_Type     colorSpace;
 };
 
