@@ -813,11 +813,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
         dmairesizer->dim[IDBuf].lineLength = allocDim.lineLength;
       } else {
         dmairesizer->dim[IDBuf].lineLength = BufferGfx_calcLineLength
-        (dmairesizer->dim[IDBuf].width, dmairesizer->outColorSpace);
-#if PLATFORM == dm365
-        /* DM365 IPIPE requires 32 byte alignment */
-        dmairesizer->dim[IDBuf].lineLength = (dmairesizer->dim[IDBuf].lineLength + 0x1F) & ~0x1F;
-#endif
+        (dmairesizer->outBufWidth, dmairesizer->outColorSpace);
       }
 
       /* Cleanup the buffers using original dimmensions */
