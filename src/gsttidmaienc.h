@@ -105,6 +105,7 @@ struct _GstTIDmaienc
     gint                width;
     gint                pitch;
     ColorSpace_Type     colorSpace;
+    GstClockTime        averageDuration;
 };
 
 /* _GstTIDmaiencClass object */

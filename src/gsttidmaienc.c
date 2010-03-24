@@ -772,13 +772,16 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
     /* Generic Video Properties */
     if (!strncmp(mime, "video/", 6) ||
         !strncmp(mime, "image/", 6)) {
-        gint  framerateNum;
-        gint  framerateDen;
+        gint framerateNum;
+        gint framerateDen;
 
         if (gst_structure_get_fraction(capStruct, "framerate", &framerateNum,
             &framerateDen)) {
             dmaienc->framerateNum = framerateNum;
             dmaienc->framerateDen = framerateDen;
+            dmaienc->averageDuration = (framerateDen * 1000000000ll) / (long long)framerateNum;
+        } else {
+            dmaienc->averageDuration = GST_CLOCK_TIME_NONE;
         }
 
         if (!gst_structure_get_int(capStruct, "height", &dmaienc->height)) {
@@ -1292,6 +1295,12 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
 	    } else {
 	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+	    }
+	    /* Lets help the qtmuxer, since it doesn't like buffers with only 
+	     * timestamps
+	     */
+	    if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(outBuf))) {
+	        GST_BUFFER_DURATION(outBuf) = dmaienc->averageDuration;
 	    }
 	} else if (encoder->eops->codec_type == AUDIO) {
 		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
