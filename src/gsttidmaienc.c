@@ -1250,43 +1250,14 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 
     gst_tidmaibuffertransport_set_release_callback(
         (GstTIDmaiBufferTransport *)outBuf,release_cb,dmaienc);
-    gst_buffer_copy_metadata(outBuf,rawData,
-        GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
     gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
         Buffer_getNumBytesUsed(hDstBuf));
-    gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));
-
-	ret = (int)Buffer_getNumBytesUsed(hSrcBuf);
-
-	if (encoder->eops->codec_type == VIDEO
-                || encoder->eops->codec_type == IMAGE) {
-	    /* DMAI set the buffer type on the input buffer, since only this one
-	     * is a GFX buffer
-	     */
-	    if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME){
-	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
-	    } else {
-	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
-	    }
-	} else if (encoder->eops->codec_type == AUDIO) {
-		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
-			* dmaienc->asampleTime;
-	}
-
-    gst_buffer_unref(rawData);
-    rawData = NULL;
-
-    if (dmaienc->copyOutput) {
-        GstBuffer *buf = gst_buffer_copy(outBuf);
-        gst_buffer_unref(outBuf);
-        outBuf = buf;
-    }
 
     if (dmaienc->firstBuffer) {
         dmaienc->firstBuffer = FALSE;
-        if (encoder->parser && encoder->parser->generate_codec_data){
+        if (encoder->stream_ops && encoder->stream_ops->generate_codec_data){
             GstBuffer *codec_data = 
-                encoder->parser->generate_codec_data(dmaienc,&outBuf);
+                encoder->stream_ops->generate_codec_data(dmaienc,outBuf);
             if (codec_data){
                 GstCaps *caps = gst_caps_make_writable(
                     gst_caps_ref (GST_PAD_CAPS(dmaienc->srcpad)));
@@ -1299,6 +1270,41 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
                 GST_WARNING("no codec_data generated");
             }
         }
+    }
+
+    /* If this stream needs any kind of transformation, this is the right time */
+    if (encoder->stream_ops && encoder->stream_ops->transform){
+        outBuf = encoder->stream_ops->transform(dmaienc,outBuf);
+    }
+    
+    gst_buffer_copy_metadata(outBuf,rawData,
+        GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+
+	ret = (int)Buffer_getNumBytesUsed(hSrcBuf);
+
+	if (encoder->eops->codec_type == VIDEO
+                || encoder->eops->codec_type == IMAGE) {
+	    /* DMAI set the buffer type on the input buffer, since only this one
+	     * is a GFX buffer
+	     */
+	    if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME ||
+	        gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_IDR_FRAME){
+	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+	    } else {
+	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+	    }
+	} else if (encoder->eops->codec_type == AUDIO) {
+		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
+			* dmaienc->asampleTime;
+	}
+
+    gst_buffer_unref(rawData);
+    rawData = NULL;
+
+    if (dmaienc->copyOutput && !GST_IS_TIDMAIBUFFERTRANSPORT(outBuf)) {
+        GstBuffer *buf = gst_buffer_copy(outBuf);
+        gst_buffer_unref(outBuf);
+        outBuf = buf;
     }
 
     gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));

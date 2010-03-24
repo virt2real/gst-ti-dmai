@@ -63,7 +63,7 @@ static guint gst_get_aac_rateIdx (guint rate)
 }
 
 static GstBuffer *aac_generate_codec_data (GstTIDmaienc *dmaienc,
-    GstBuffer **buffer){
+    GstBuffer *buffer){
     GstTIDmaiencData *encoder;
     GstBuffer *codec_data = NULL;
     guchar *data;
@@ -301,8 +301,14 @@ struct gstti_parser_ops gstti_aac_parser = {
     .parse = aac_parse,
     .flush_start = aac_flush_start,
     .flush_stop = aac_flush_stop,
-    .generate_codec_data = aac_generate_codec_data,
+};
+
+struct gstti_stream_decoder_ops gstti_aac_stream_dec_ops = {
     .custom_memcpy = aac_custom_memcpy,
+};
+
+struct gstti_stream_encoder_ops gstti_aac_stream_enc_ops = {
+    .generate_codec_data = aac_generate_codec_data,
 };
 
 

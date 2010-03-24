@@ -60,17 +60,6 @@ struct gstti_parser_ops {
      * Parser flush stop
      */
     void            (* flush_stop) (void *);
-    /*
-     * (optional) It copies buffers into the circular input buffer, and
-     * may be used to interleave data (like on h264) 
-     */
-    int             (* custom_memcpy)(GstTIDmaidec *, void *, int, GstBuffer *);
-    /*
-     * This is a function for encoders, not decoders.
-     * It receives the first gst buffer and if finds a codec data it
-     * returns a gst buffer with it
-     */
-    GstBuffer       *(* generate_codec_data)(GstTIDmaienc *,GstBuffer **);
 };
 
 #endif

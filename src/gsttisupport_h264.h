@@ -42,6 +42,8 @@ struct gstti_h264_parser_private {
 };
 
 extern struct gstti_parser_ops gstti_h264_parser;
+extern struct gstti_stream_decoder_ops gstti_h264_stream_dec_ops;
+extern struct gstti_stream_encoder_ops gstti_h264_stream_enc_ops;
 
 /* Get version number from avcC atom  */
 #define AVCC_ATOM_GET_VERSION(header,pos) \

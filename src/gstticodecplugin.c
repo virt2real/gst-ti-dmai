@@ -202,11 +202,13 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             decoder->streamtype = "mpeg4";
             decoder->sinkCaps = &gstti_mpeg4_sink_caps;
             decoder->parser = &gstti_mpeg4_parser;
+            decoder->stream_ops = &gstti_mpeg4_stream_dec_ops;
         } else if (!strcmp (decoder->codecName, "h264dec")) {
             mediaType = VIDEO;
             decoder->streamtype = "h264";
             decoder->sinkCaps = &gstti_h264_caps;
             decoder->parser = &gstti_h264_parser;
+            decoder->stream_ops = &gstti_h264_stream_dec_ops;
         } else if (!strcmp (decoder->codecName, "mpeg2dec")) {
             mediaType = VIDEO;
             decoder->streamtype = "mpeg2";
@@ -218,6 +220,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             decoder->streamtype = "aac";
             decoder->sinkCaps = &gstti_aac_sink_caps;
             decoder->parser = &gstti_aac_parser;
+            decoder->stream_ops = &gstti_aac_stream_dec_ops;
         } else if (!strcmp (decoder->codecName, "mp3dec")) {
             mediaType = AUDIO;
             decoder->streamtype = "mp3";
@@ -313,12 +316,12 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             mediaType = VIDEO;
             encoder->streamtype = "mpeg4";
             encoder->srcCaps = &gstti_mpeg4_src_caps;
-            encoder->parser = &gstti_mpeg4_parser;
+            encoder->stream_ops = &gstti_mpeg4_stream_enc_ops;
         } else if (!strcmp (encoder->codecName, "h264enc")){
             mediaType = VIDEO;
             encoder->streamtype = "h264";
             encoder->srcCaps = &gstti_h264_caps;
-            encoder->parser = &gstti_h264_parser;
+            encoder->stream_ops = &gstti_h264_stream_enc_ops;
         } else if (!strcmp (encoder->codecName, "mpeg2enc")) {
             mediaType = VIDEO;
             encoder->streamtype = "mpeg2";
@@ -328,7 +331,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             mediaType = AUDIO;
             encoder->streamtype = "aac";
             encoder->srcCaps = &gstti_aac_src_caps;
-            encoder->parser = &gstti_aac_parser;
+            encoder->stream_ops = &gstti_aac_stream_enc_ops;
         } else if (!strcmp (encoder->codecName, "mp3enc")) {
             mediaType = AUDIO;
             encoder->streamtype = "mp3";

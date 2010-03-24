@@ -37,6 +37,8 @@ struct gstti_aac_parser_private {
 };
 
 extern struct gstti_parser_ops gstti_aac_parser;
+extern struct gstti_stream_decoder_ops gstti_aac_stream_dec_ops;
+extern struct gstti_stream_encoder_ops gstti_aac_stream_enc_ops;
 
 #define MAIN_PROFILE 1
 #define LC_PROFILE 2

@@ -137,6 +137,18 @@ struct gstti_encoder_ops {
                                  Buffer_Handle);
 };
 
+struct gstti_stream_encoder_ops {
+    /*
+     * (optional) It transforms output buffers if required (like with h264 streams)
+     */
+    GstBuffer *(* transform)(GstTIDmaienc *, GstBuffer *);
+    /*
+     * It receives the first gst buffer and if finds a codec data it
+     * returns a gst buffer with it, it may modify the input buffer
+     */
+    GstBuffer  *(* generate_codec_data)(GstTIDmaienc *,GstBuffer *);
+};
+
 /* Data definition for each instance of decoder */
 struct _GstTIDmaiencData
 {
@@ -145,7 +157,7 @@ struct _GstTIDmaiencData
     const gchar                 *engineName;
     const gchar                 *codecName;
     struct gstti_encoder_ops    *eops;
-    struct gstti_parser_ops     *parser;
+    struct gstti_stream_encoder_ops *stream_ops;
 };
 
 /* Function to initialize the decoders */

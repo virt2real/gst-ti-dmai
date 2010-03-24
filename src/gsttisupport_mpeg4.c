@@ -66,13 +66,13 @@ GstStaticCaps gstti_mpeg4_src_caps = GST_STATIC_CAPS(
 );
 
 static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc, 
-    GstBuffer **buffer){
-    guchar *data = GST_BUFFER_DATA(*buffer);
+    GstBuffer *buffer){
+    guchar *data = GST_BUFFER_DATA(buffer);
     gint i;
     GstBuffer *codec_data = NULL;
 
     /* Search the object layer start code */
-    for (i = 0; i < GST_BUFFER_SIZE(*buffer) - 4; ++i) {
+    for (i = 0; i < GST_BUFFER_SIZE(buffer) - 4; ++i) {
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && 
             data[i + 3] == 0x20) {
                 break;
@@ -80,13 +80,13 @@ static GstBuffer *mpeg4_generate_codec_data (GstTIDmaienc *dmaienc,
     }
     i++;
     /* Search next start code */
-    for (; i < GST_BUFFER_SIZE(*buffer) - 4; ++i) {
+    for (; i < GST_BUFFER_SIZE(buffer) - 4; ++i) {
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
                 break;
         }
     }
 
-    if ((i != (GST_BUFFER_SIZE(*buffer) - 4)) &&
+    if ((i != (GST_BUFFER_SIZE(buffer) - 4)) &&
         (i != 0)) {
         /* We found a codec data */
         codec_data = gst_buffer_new_and_alloc(i);
@@ -258,8 +258,14 @@ struct gstti_parser_ops gstti_mpeg4_parser = {
     .parse = mpeg4_parse,
     .flush_start = mpeg4_flush_start,
     .flush_stop = mpeg4_flush_stop,
-    .generate_codec_data = mpeg4_generate_codec_data,
+};
+
+struct gstti_stream_decoder_ops gstti_mpeg4_stream_dec_ops = {
     .custom_memcpy = mpeg4_custom_memcpy,
+};
+
+struct gstti_stream_encoder_ops gstti_mpeg4_stream_enc_ops = {
+    .generate_codec_data = mpeg4_generate_codec_data,
 };
 
 /******************************************************************************

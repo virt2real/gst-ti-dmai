@@ -1268,8 +1268,8 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
         goto out;
     }
     
-    if (decoder->parser->custom_memcpy){
-        bytes = decoder->parser->custom_memcpy(dmaidec,&data[dmaidec->head],
+    if (decoder->stream_ops->custom_memcpy){
+        bytes = decoder->stream_ops->custom_memcpy(dmaidec,&data[dmaidec->head],
             dmaidec->end - dmaidec->head,buf);
         if (bytes == -1){
             ret = FALSE;

@@ -144,6 +144,14 @@ struct gstti_decoder_ops {
     gint16                  outputUseMask;
 };
 
+struct gstti_stream_decoder_ops {
+    /*
+     * (optional) It copies buffers into the circular input buffer, and
+     * may be used to interleave data (like on h264) 
+     */
+    int             (* custom_memcpy)(GstTIDmaidec *, void *, int, GstBuffer *);
+};
+
 /* Data definition for each instance of decoder */
 struct _GstTIDmaidecData
 {
@@ -153,6 +161,7 @@ struct _GstTIDmaidecData
     const gchar                 *codecName;
     struct gstti_decoder_ops    *dops;
     struct gstti_parser_ops     *parser;
+    struct gstti_stream_decoder_ops *stream_ops;
 };
 
 /* Function to initialize the decoders */

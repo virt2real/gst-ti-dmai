@@ -34,6 +34,8 @@ struct gstti_mpeg4_parser_private {
 };
 
 extern struct gstti_parser_ops gstti_mpeg4_parser;
+extern struct gstti_stream_decoder_ops gstti_mpeg4_stream_dec_ops;
+extern struct gstti_stream_encoder_ops gstti_mpeg4_stream_enc_ops;
 
 #endif /* __GSTTI_SUPPORT_MPEG4_H__ */
 
