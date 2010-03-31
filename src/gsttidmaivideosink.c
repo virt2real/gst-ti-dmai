@@ -1268,11 +1268,14 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
 static GstFlowReturn gst_tidmaivideosink_preroll(GstBaseSink * bsink,
                          GstBuffer * buf){
     GstTIDmaiVideoSink   *sink      = GST_TIDMAIVIDEOSINK_CAST(bsink);
+    GstFlowReturn ret;
+
+    ret = gst_tidmaivideosink_render(bsink,buf);
 
     if (!sink->prerolledBuffer)
         sink->prerolledBuffer = buf;
-    
-    return gst_tidmaivideosink_render(bsink,buf);
+
+    return ret;
 }
 
 /*******************************************************************************
