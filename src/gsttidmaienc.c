@@ -1310,7 +1310,10 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     gst_buffer_unref(rawData);
     rawData = NULL;
 
-    if (dmaienc->copyOutput && !GST_IS_TIDMAIBUFFERTRANSPORT(outBuf)) {
+	/* The transform function may have already created an non DMAI output 
+	 * buffer, so we have to check to avoid doing a memcpy twice.
+	 */
+    if (dmaienc->copyOutput && GST_IS_TIDMAIBUFFERTRANSPORT(outBuf)) {//HERE
         GstBuffer *buf = gst_buffer_copy(outBuf);
         gst_buffer_unref(outBuf);
         outBuf = buf;
