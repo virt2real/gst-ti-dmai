@@ -168,6 +168,13 @@ if test "x$preset" = "xdm365" ; then
   	with_platform=dm365;
 fi
 
+if test "x$preset" = "xdm365s" ; then
+	AC_MSG_NOTICE(The following preset has been selected: $preset);
+	AC_DEFINE([AACLC_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM AACLC Encoder])
+  	with_platform=dm365;
+  	with_xdc_config_basename=dm365s;
+fi
+
 if test "x$preset" = "xdm357" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
   	with_platform=dm357;
@@ -225,9 +232,6 @@ if test "x$PLATFORM" = "xomapl138" ; then
   with_xdcplatform=ti.platforms.evmOMAPL138;
   with_xdctarget=gnu.targets.MVArm9;
 fi
-
-dnl Options for compilation
-AM_CONDITIONAL([ENABLE_ITTIAM_CODECS], [test x$preset = xdm355s])
 
 dnl Define the xdcplatform
 AC_ARG_WITH(xdcplatform,

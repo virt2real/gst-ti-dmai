@@ -183,11 +183,11 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
         /* Get the algo info */
         Engine_getAlgInfo (DECODEENGINE, &algoname, numalgo);
 
-        if (g_strstr_len (*algoname.typeTab, 30, "DEC2")) {
+        if (g_strstr_len (*algoname.typeTab, 100, "DEC2")) {
             xdm_ver = 2;
-        } else if (g_strstr_len (*algoname.typeTab, 30, "DEC1")) {
+        } else if (g_strstr_len (*algoname.typeTab, 100, "DEC1")) {
             xdm_ver = 1;
-        } else if (g_strstr_len (*algoname.typeTab, 30, "DEC")) {
+        } else if (g_strstr_len (*algoname.typeTab, 100, "DEC")) {
             xdm_ver = 0;
         } else {
             /* Nothing we handle, maybe an encoder */
@@ -300,9 +300,9 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
         /* Get the algo info */
         Engine_getAlgInfo (ENCODEENGINE, &algoname, numalgo);
 
-        if (g_strstr_len (*algoname.typeTab, 30, "ENC1")) {
+        if (g_strstr_len (*algoname.typeTab, 100, "ENC1")) {
             xdm_ver = 1;
-        } else if (g_strstr_len (*algoname.typeTab, 30, "ENC")) {
+        } else if (g_strstr_len (*algoname.typeTab, 100, "ENC")) {
             xdm_ver = 0;
         } else {
             /* Nothing we handle, maybe an decoder */
@@ -353,7 +353,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             mediaType = IMAGE;
             encoder->streamtype = "jpeg";
             encoder->srcCaps = &gstti_jpeg_caps;
-            
+
             /* Install mjpeg video encoder */
             vencoder = g_malloc0 (sizeof (GstTIDmaiencData));
             vencoder->codecName = algoname.name;
