@@ -283,11 +283,10 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
     gstelement_class->change_state = gst_tidmaienc_change_state;
 
     g_object_class_install_property(gobject_class, PROP_SIZE_OUTPUT_BUF,
-        g_param_spec_int("sizeOutputMultiple",
-            "Number of times the output buffer size is"
-            " respect to the input buffer size",
-            "Times the input buffer size that the output buffer size will be",
-            0, G_MAXINT32, 3, G_PARAM_WRITABLE));
+        g_param_spec_int("outputBufferSize",
+            "Size of the output buffer",
+            "Size of the output buffer",
+            0, G_MAXINT32, 0, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_COPY_OUTPUT,
         g_param_spec_boolean("copyOutput",
@@ -378,6 +377,7 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->inBuf              = NULL;
     dmaienc->inBufSize          = 0;
     dmaienc->singleOutBufSize   = 0;
+    dmaienc->outBufSize         = 0;
 
     /* Initialize TIDmaienc video state */
 
@@ -415,9 +415,9 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
 
     switch (prop_id) {
     case PROP_SIZE_OUTPUT_BUF:
-        dmaienc->outBufMultiple = g_value_get_int(value);
-        GST_LOG("setting \"outBufMultiple\" to \"%d\"\n",
-            dmaienc->outBufMultiple);
+        dmaienc->outBufSize = g_value_get_int(value);
+        GST_LOG("setting \"outBufSize\" to \"%d\"\n",
+            dmaienc->outBufSize);
         break;
     case PROP_COPY_OUTPUT:
         dmaienc->copyOutput = g_value_get_boolean(value);
@@ -457,7 +457,7 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
 
     switch (prop_id) {
     case PROP_SIZE_OUTPUT_BUF:
-        g_value_set_int(value,dmaienc->outBufMultiple);
+        g_value_set_int(value,dmaienc->outBufSize);
         break;
     case PROP_COPY_OUTPUT:
         g_value_set_boolean(value,dmaienc->copyOutput);
@@ -659,11 +659,10 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
-    if (dmaienc->outBufMultiple == 0) {
-        dmaienc->outBufMultiple = 3;
+    if (dmaienc->outBufSize == 0) {
+        dmaienc->outBufSize = dmaienc->singleOutBufSize * 3;
     }
-    dmaienc->outBufSize = dmaienc->singleOutBufSize * dmaienc->outBufMultiple;
-    
+
     slice = g_malloc0(sizeof(struct cmemSlice));
     slice->start = 0;
     slice->end = dmaienc->outBufSize;

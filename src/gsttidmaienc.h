@@ -84,7 +84,6 @@ struct _GstTIDmaienc
     gint                outBufSize;
     gint                singleOutBufSize;
     gint                inBufSize;
-    gint                outBufMultiple;
     Buffer_Handle       outBuf;
     Buffer_Handle       inBuf;
     GList               *freeSlices;
