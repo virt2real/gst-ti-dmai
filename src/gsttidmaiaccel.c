@@ -69,6 +69,8 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
     GstCaps *in, GstCaps *out);
 static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     *trans, GstBuffer *inBuf, gint size, GstCaps *caps, GstBuffer **outBuf);
+static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans);
+    
 
 /******************************************************************************
  * gst_tidmaiaccel_init
@@ -162,6 +164,7 @@ static void gst_tidmaiaccel_class_init(GstTIDmaiaccelClass *klass)
     GST_LOG("Begin\n");
     trans_class->transform = GST_DEBUG_FUNCPTR(gst_tidmaiaccel_transform);
     trans_class->set_caps  = GST_DEBUG_FUNCPTR(gst_tidmaiaccel_set_caps);
+    trans_class->stop = GST_DEBUG_FUNCPTR(gst_tidmaiaccel_stop);
     trans_class->prepare_output_buffer =
         GST_DEBUG_FUNCPTR(gst_tidmaiaccel_prepare_output_buffer);
     trans_class->get_unit_size =
@@ -170,6 +173,19 @@ static void gst_tidmaiaccel_class_init(GstTIDmaiaccelClass *klass)
     GST_LOG("Finish\n");
 }
 
+/******************************************************************************
+ * gst_tidmaiaccel_stop
+ *****************************************************************************/
+static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans)
+{
+    GstTIDmaiaccel *dmaiaccel = GST_TIDMAIACCEL(trans);
+
+    if (dmaiaccel->hOutBufTab){
+        BufTab_delete(dmaiaccel->hOutBufTab);
+    }
+    
+	return TRUE;
+}
 
 /******************************************************************************
  * gst_tidmaiaccel_set_caps
