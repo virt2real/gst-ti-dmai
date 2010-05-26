@@ -246,7 +246,7 @@ check_header:
              if (aac_header_buf == NULL) {
                  GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                      ("Failed to allocate buffer for aac header"));
-                 return NULL;
+                 return 0;
              }
 
              memset(GST_BUFFER_DATA(aac_header_buf), 0, MAX_AAC_HEADER_LENGTH);
