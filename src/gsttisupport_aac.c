@@ -229,10 +229,11 @@ static int aac_custom_memcpy(GstTIDmaidec *dmaidec, void *target,
 
         if (!(value = gst_structure_get_value(capStruct, "codec_data"))){
             GST_WARNING("No codec_data found, assuming an AAC LC stream");
+        } else {
+            codec_data = gst_value_get_buffer(value);
+            aacprofile = (GST_BUFFER_DATA(codec_data)[0] >> 3) - 1;
         }
-        codec_data = gst_value_get_buffer(value);
 
-        aacprofile = (GST_BUFFER_DATA(codec_data)[0] >> 3) - 1;
         GST_INFO("AAC profile is %d",aacprofile);
 
 check_header:
@@ -274,18 +275,20 @@ check_header:
 
              GST_INFO("Generating ADIF header: profile %d, channels %d,rate %d",
                  aacprofile,dmaidec->channels,dmaidec->rate);
+
+             if (available < 
+                 (GST_BUFFER_SIZE(buf) + GST_BUFFER_SIZE(aac_header_buf))){
+                 gst_buffer_unref(aac_header_buf);
+                 return ret;
+             }
+
+             memcpy(target,GST_BUFFER_DATA(aac_header_buf),
+                 GST_BUFFER_SIZE(aac_header_buf));
+             ret = GST_BUFFER_SIZE(aac_header_buf);
+             priv->codecdata_inserted = TRUE;
+         } else {
+            ret = 0;
          }
-         
-         if (available < 
-             (GST_BUFFER_SIZE(buf) + GST_BUFFER_SIZE(aac_header_buf))){
-             gst_buffer_unref(aac_header_buf);
-             return ret;
-         }
-        
-         memcpy(target,GST_BUFFER_DATA(aac_header_buf),
-             GST_BUFFER_SIZE(aac_header_buf));
-         ret = GST_BUFFER_SIZE(aac_header_buf);
-         priv->codecdata_inserted = TRUE;
     }
 
     memcpy(&(((char *)target)[ret]),GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
