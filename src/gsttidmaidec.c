@@ -1265,8 +1265,8 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
         ret = FALSE;
         goto out;
     }
-    
-    if (decoder->stream_ops->custom_memcpy){
+
+    if (decoder->stream_ops && decoder->stream_ops->custom_memcpy){
         bytes = decoder->stream_ops->custom_memcpy(dmaidec,&data[dmaidec->head],
             dmaidec->end - dmaidec->head,buf);
         if (bytes == -1){
@@ -1281,7 +1281,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
 
     GST_BUFFER_SIZE(meta) = bytes;
     dmaidec->circMeta = g_list_append(dmaidec->circMeta,meta);
-    
+
     /* Increases the head */
     dmaidec->head += bytes;
 
@@ -1706,7 +1706,7 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
         gst_buffer_unref(buf);
         return GST_FLOW_OK;
     }
-    
+
     if (!gstti_dmaidec_circ_buffer_push(dmaidec,buf)){
         return GST_FLOW_UNEXPECTED;
     }
