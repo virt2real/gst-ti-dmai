@@ -165,14 +165,9 @@ fi
 
 if test "x$preset" = "xdm365" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
-  	with_platform=dm365;
-fi
-
-if test "x$preset" = "xdm365s" ; then
-	AC_MSG_NOTICE(The following preset has been selected: $preset);
 	AC_DEFINE([AACLC_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM AACLC Encoder])
   	with_platform=dm365;
-  	with_xdc_config_basename=dm365s;
+  	with_xdc_config_basename=dm365;
 fi
 
 if test "x$preset" = "xdm357" ; then
