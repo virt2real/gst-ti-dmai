@@ -105,9 +105,14 @@ static void gstti_viddec2_destroy (GstTIDmaidec *dmaidec)
 
 static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
                     Buffer_Handle hDstBuf,gboolean codecFlushed){
+    GstTIDmaidecData *decoder;
     Buffer_Handle   hEncData = NULL;
     Int32           encDataConsumed, originalBufferSize;
     Int             ret;
+
+    decoder = (GstTIDmaidecData *)
+       g_type_get_qdata(G_OBJECT_CLASS_TYPE(G_OBJECT_GET_CLASS(dmaidec)),
+       GST_TIDMAIDEC_PARAMS_QDATA);
 
     hEncData = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encData);
     g_assert(hEncData != NULL);
@@ -130,12 +135,20 @@ static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
     }
 
     /* If no encoded data was used we cannot find the next frame */
-    if (ret == Dmai_EBITERROR &&
-        (encDataConsumed == 0 || encDataConsumed == originalBufferSize) &&
-        !codecFlushed) {
-        GST_ELEMENT_ERROR(dmaidec,STREAM,DECODE,(NULL),
-            ("fatal bit error"));
-        return FALSE;
+    if (ret == Dmai_EBITERROR){
+        if ((encDataConsumed == 0 || encDataConsumed == originalBufferSize) &&
+            !codecFlushed) {
+            GST_ELEMENT_ERROR(dmaidec,STREAM,DECODE,(NULL),
+                ("fatal bit error"));
+            return FALSE;
+        } else {
+            /* We failed to process this buffer, so we need to release it
+               because the codec won't do it.
+             */
+            GST_DEBUG("Freeing buffer because of bit error on the stream");
+            Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
+                decoder->dops->outputUseMask);
+        }
     }
 
     return TRUE;

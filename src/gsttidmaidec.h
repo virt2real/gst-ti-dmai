@@ -37,6 +37,8 @@
 
 G_BEGIN_DECLS
 
+#define GST_TIDMAIDEC_PARAMS_QDATA g_quark_from_static_string("dmaidec-params")
+
 /* Constants */
 #define gst_tidmaidec_CODEC_FREE 0x2
 

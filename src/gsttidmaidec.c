@@ -65,8 +65,6 @@ enum
     PROP_QOS,             /* qos (boolean */
 };
 
-#define GST_TIDMAIDEC_PARAMS_QDATA g_quark_from_static_string("dmaidec-params")
-
 /* Declare a global pointer to our element base class */
 static GstElementClass *parent_class = NULL;
 
