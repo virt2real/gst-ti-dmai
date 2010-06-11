@@ -290,6 +290,8 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->dmaiElementUpstream  = FALSE;
     dmaisink->zeromemcpy = FALSE;
     dmaisink->lastAllocatedBuffer = NULL;
+
+    gst_base_sink_set_max_lateness((GstBaseSink *)dmaisink,-1);
 }
 
 
