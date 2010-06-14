@@ -773,6 +773,8 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         !strncmp(mime, "image/", 6)) {
         gint framerateNum;
         gint framerateDen;
+        gint parNum;
+        gint parDen;
 
         if (gst_structure_get_fraction(capStruct, "framerate", &framerateNum,
             &framerateDen)) {
@@ -781,6 +783,11 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
             dmaienc->averageDuration = (framerateDen * 1000000000ll) / (long long)framerateNum;
         } else {
             dmaienc->averageDuration = GST_CLOCK_TIME_NONE;
+        }
+
+        if (!gst_structure_get_fraction(capStruct, "pixel-aspect-ratio", &parNum, &parDen)) {
+            parNum = 0;
+            parDen = 0;
         }
 
         if (!gst_structure_get_int(capStruct, "height", &dmaienc->height)) {
@@ -823,6 +830,10 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     "framerate", GST_TYPE_FRACTION,
                                         dmaienc->framerateNum,dmaienc->framerateDen,
                                     (char *)NULL);
+        if (parNum && parDen) {
+          gst_structure_set(capStruct,
+                    "pixel-aspect-ratio", GST_TYPE_FRACTION, parNum, parDen, (char*) NULL);
+        }
 
         dmaienc->inBufSize = gst_ti_calculate_bufSize (
             dmaienc->width,dmaienc->height,dmaienc->colorSpace);
