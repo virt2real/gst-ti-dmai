@@ -53,7 +53,7 @@ static gboolean gstti_auddec1_create (GstTIDmaidec *dmaidec)
         "DMAI Audio1 Decoder");
 
     /* Set up codec parameters depending on device MAYBE NEEDS TO BE IMPLEMENTED */
-#if defined(dm365)
+#if PLATFORM == dm365
     params.dataEndianness = XDM_LE_16;
 #endif
 
