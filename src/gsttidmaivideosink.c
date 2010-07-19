@@ -927,7 +927,6 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
     }
     sink->lastAllocatedBuffer = NULL;
     sink->numAllocatedBuffers = 0;
-    
     if (sink->unusedBuffers){
         g_free(sink->unusedBuffers);
         sink->unusedBuffers = NULL;
@@ -1088,7 +1087,7 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
     Buffer_Handle hDispBuf = NULL;
     BufferGfx_Dimensions dim, inDim;
     int i;
-    
+
     if (sink->numUnusedBuffers > 0){
         /* Recicle some unused buffer */
         for (i = 0; i < sink->numBuffers ; i++){
@@ -1108,7 +1107,7 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
             return NULL;
         }
     }
-    
+
     /*Removing garbage on display buffer*/
     if (sink->numBufClean){
         if (sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == DIRTY ){
@@ -1123,23 +1122,22 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
             GST_LOG("Display buffers had been cleaned");
         }
     }
-    
+
     /* Retrieve the dimensions of the display buffer */
     BufferGfx_getDimensions(hDispBuf, &dim);
     GST_LOG("Display size %dx%d pitch %d\n",
             (Int) dim.width, (Int) dim.height, (Int) dim.lineLength);
-    
+
     /* We will only display the
      * portion of the video that fits on the screen.  If the video is
      * smaller than the display center or place it in the screen.
      */
     /*WIDTH*/
-    
     if (inBuf) {
         BufferGfx_getDimensions(inBuf, &inDim);
         BufferGfx_getDimensions(inBuf, inDimSave);
     }
-    
+
     if(!sink->xCentering){
        if(sink->xPosition > 0){
           dim.x = sink->xPosition;
@@ -1195,14 +1193,14 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
     if (inBuf)
         BufferGfx_setDimensions(inBuf, &inDim);
     BufferGfx_setDimensions(hDispBuf, &dim);
-    
+
     return hDispBuf;
 }
 
 void allocated_buffer_release_cb(gpointer data,GstTIDmaiBufferTransport *buf){
     GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK_CAST(data);
     Buffer_Handle hBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
-    
+
     if (sink->allocatedBuffers[Buffer_getId(hBuf)]){
         /* The pointer is not null, this buffer is being released
          * without having being pushed back into the sink, likely

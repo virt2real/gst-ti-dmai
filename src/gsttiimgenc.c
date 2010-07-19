@@ -45,8 +45,8 @@
 #include "gsttidmaienc.h"
 
 /* Declare variable used to categorize GST_LOG output */
-GST_DEBUG_CATEGORY_STATIC (gstti_imgenc0_debug);
-#define GST_CAT_DEFAULT gstti_imgenc0_debug
+GST_DEBUG_CATEGORY_STATIC (gstti_imgenc_debug);
+#define GST_CAT_DEFAULT gstti_imgenc_debug
 
 /* Element property identifiers */
 enum
@@ -57,13 +57,13 @@ enum
 
 /* Static Function Declarations */
 static void
- gstti_imgenc0_set_property (GObject *object, guint prop_id,
+ gstti_imgenc_set_property (GObject *object, guint prop_id,
      const GValue *value, GParamSpec *pspec);
 static void
- gstti_imgenc0_get_property (GObject *object, guint prop_id, GValue *value,
+ gstti_imgenc_get_property (GObject *object, guint prop_id, GValue *value,
      GParamSpec *pspec);
 
-static void gstti_imgenc0_install_properties(GObjectClass *gobject_class){
+static void gstti_imgenc_install_properties(GObjectClass *gobject_class){
     GST_LOG("Begin\n");
 
     g_object_class_install_property(gobject_class, PROP_QVALUE,
@@ -77,10 +77,10 @@ static void gstti_imgenc0_install_properties(GObjectClass *gobject_class){
 }
 
 /******************************************************************************
- * gstti_imgenc0_set_property
+ * gstti_imgenc_set_property
  *     Set element properties when requested.
  ******************************************************************************/
-static void gstti_imgenc0_set_property(GObject *object, guint prop_id,
+static void gstti_imgenc_set_property(GObject *object, guint prop_id,
                 const GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
@@ -101,10 +101,10 @@ static void gstti_imgenc0_set_property(GObject *object, guint prop_id,
 }
 
 /******************************************************************************
- * gstti_imgenc0_get_property
+ * gstti_imgenc_get_property
  *     Return values for requested element property.
  ******************************************************************************/
-static void gstti_imgenc0_get_property(GObject *object, guint prop_id,
+static void gstti_imgenc_get_property(GObject *object, guint prop_id,
                 GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
@@ -125,14 +125,14 @@ static void gstti_imgenc0_get_property(GObject *object, guint prop_id,
 }
 
 /******************************************************************************
- * gstti_imgenc0_setup_params
+ * gstti_imgenc_setup_params
  *****************************************************************************/
-static gboolean gstti_imgenc0_setup_params(GstTIDmaienc *dmaienc){
+static gboolean gstti_imgenc_setup_params(GstTIDmaienc *dmaienc){
     IMGENC_Params *params;
     IMGENC_DynamicParams *dynParams;
 
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gstti_imgenc0_debug, "TIImgenc0", 0,
+    GST_DEBUG_CATEGORY_INIT(gstti_imgenc_debug, "TIImgenc0", 0,
         "DMAI Image0 Encoder");
 
     if (!dmaienc->params){
@@ -153,14 +153,14 @@ static gboolean gstti_imgenc0_setup_params(GstTIDmaienc *dmaienc){
 }
 
 /*******************************************************************************
- * gstti_imgenc0_set_sink_caps_helper
+ * gstti_imgenc_set_sink_caps_helper
  *     This function will look at the capabilities given and set the values
  *     for the encoder if they were not specified on the command line.
  *     It returns TRUE if everything passes and FALSE if there is no
  *     capability in the buffer and the value was not specified on the
  *     command line.
  ******************************************************************************/
-static void gstti_imgenc0_set_codec_caps(GstTIDmaienc *dmaienc)
+static void gstti_imgenc_set_codec_caps(GstTIDmaienc *dmaienc)
 {
     IMGENC_Params *params = (IMGENC_Params *)dmaienc->params;
     IMGENC_DynamicParams *dynParams = (IMGENC_DynamicParams *)dmaienc->dynParams;
@@ -181,13 +181,13 @@ static void gstti_imgenc0_set_codec_caps(GstTIDmaienc *dmaienc)
 }
 
 /******************************************************************************
- * gstti_imgenc0_create
+ * gstti_imgenc_create
  *     Initialize codec
  *****************************************************************************/
-static gboolean gstti_imgenc0_create (GstTIDmaienc *dmaienc)
+static gboolean gstti_imgenc_create (GstTIDmaienc *dmaienc)
 {
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gstti_imgenc0_debug, "TIImgenc0", 0,
+    GST_DEBUG_CATEGORY_INIT(gstti_imgenc_debug, "TIImgenc0", 0,
         "DMAI Image0 Encoder");
 
     GST_DEBUG("opening Image encoder \"%s\"\n", dmaienc->codecName);
@@ -207,10 +207,10 @@ static gboolean gstti_imgenc0_create (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gstti_imgenc0_destroy
+ * gstti_imgenc_destroy
  *     free codec resources
  *****************************************************************************/
-static void gstti_imgenc0_destroy (GstTIDmaienc *dmaienc)
+static void gstti_imgenc_destroy (GstTIDmaienc *dmaienc)
 {
     g_assert (dmaienc->hCodec);
 
@@ -218,16 +218,16 @@ static void gstti_imgenc0_destroy (GstTIDmaienc *dmaienc)
 }
 
 /******************************************************************************
- * gstti_imgenc0_get_outBufSize
+ * gstti_imgenc_get_outBufSize
  ******************************************************************************/
-static gint gstti_imgenc0_get_outBufSize(GstTIDmaienc *dmaienc){
+static gint gstti_imgenc_get_outBufSize(GstTIDmaienc *dmaienc){
     return Ienc_getOutBufSize(dmaienc->hCodec);
 }
 
 /******************************************************************************
- * gstti_imgenc0_process
+ * gstti_imgenc_process
  ******************************************************************************/
-static gboolean gstti_imgenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
+static gboolean gstti_imgenc_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
     Int             ret;
 
@@ -245,18 +245,18 @@ static gboolean gstti_imgenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     return TRUE;
 }
 
-struct gstti_encoder_ops gstti_imgenc0_ops = {
+struct gstti_encoder_ops gstti_imgenc_ops = {
     .xdmversion = "xDM 0.9",
     .codec_type = IMAGE,
-    .default_setup_params = gstti_imgenc0_setup_params,
-    .set_codec_caps = gstti_imgenc0_set_codec_caps,
-    .install_properties = gstti_imgenc0_install_properties,
-    .set_property = gstti_imgenc0_set_property,
-    .get_property = gstti_imgenc0_get_property,
-    .codec_get_outBufSize = gstti_imgenc0_get_outBufSize,
-    .codec_create = gstti_imgenc0_create,
-    .codec_destroy = gstti_imgenc0_destroy,
-    .codec_process = gstti_imgenc0_process,
+    .default_setup_params = gstti_imgenc_setup_params,
+    .set_codec_caps = gstti_imgenc_set_codec_caps,
+    .install_properties = gstti_imgenc_install_properties,
+    .set_property = gstti_imgenc_set_property,
+    .get_property = gstti_imgenc_get_property,
+    .codec_get_outBufSize = gstti_imgenc_get_outBufSize,
+    .codec_create = gstti_imgenc_create,
+    .codec_destroy = gstti_imgenc_destroy,
+    .codec_process = gstti_imgenc_process,
 };
 
 

@@ -43,21 +43,77 @@
 GST_DEBUG_CATEGORY_STATIC (gst_tiauddec_debug);
 #define GST_CAT_DEFAULT gst_tiauddec_debug
 
-static gboolean gstti_auddec_create (GstTIDmaidec *dmaidec)
+enum
 {
-    AUDDEC_Params         params    = Adec_Params_DEFAULT;
-    AUDDEC_DynamicParams  dynParams = Adec_DynamicParams_DEFAULT;
+    PROP_100 = 100,
+};
+
+static void gstti_auddec_install_properties(GObjectClass *gobject_class){
+}
+
+
+static void gstti_auddec_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    switch (prop_id) {
+    default:
+        break;
+    }
+}
+
+
+static void gstti_auddec_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    switch (prop_id) {
+    default:
+        break;
+    }
+}
+
+/******************************************************************************
+ * gst_tiauddec_setup_params
+ *****************************************************************************/
+static gboolean gstti_auddec_setup_params(GstTIDmaidec *dmaidec){
+    AUDDEC_Params *params;
+    AUDDEC_DynamicParams *dynParams;
 
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tiauddec_debug, "TIAuddec", 0,
         "DMAI Audio Decoder");
 
-    /* Set up codec parameters depending on device MAYBE NEEDS TO BE IMPLEMENTED */
+    if (!dmaidec->params){
+        dmaidec->params = g_malloc0(sizeof (AUDDEC_Params));
+    }
+    if (!dmaidec->dynParams){
+        dmaidec->dynParams = g_malloc0(sizeof (AUDDEC_DynamicParams));
+    }
+    *(AUDDEC_Params *)dmaidec->params     = Adec_Params_DEFAULT;
+    *(AUDDEC_DynamicParams *)dmaidec->dynParams  = Adec_DynamicParams_DEFAULT;
+    params = (AUDDEC_Params *)dmaidec->params;
+    dynParams = (AUDDEC_DynamicParams *)dmaidec->dynParams;
+    
+    GST_WARNING("Setting up default params for the Codec, would be better if"
+        " the CodecServer used implements his own setup_params function...");
 
+    return TRUE;
+}
+
+
+/******************************************************************************
+ * gst_tiauddec_set_codec_caps
+ *****************************************************************************/
+static void gstti_auddec_set_codec_caps(GstTIDmaidec *dmaidec){
+}
+
+
+static gboolean gstti_auddec_create (GstTIDmaidec *dmaidec)
+{
     GST_DEBUG("opening audio decoder \"%s\"\n", dmaidec->codecName);
     dmaidec->hCodec =
         Adec_create(dmaidec->hEngine, (Char*)dmaidec->codecName,
-                    &params, &dynParams);
+            (AUDDEC_Params *)dmaidec->params,
+            (AUDDEC_DynamicParams *)dmaidec->dynParams);
 
     if (dmaidec->hCodec == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,OPEN_READ_WRITE,(NULL),
@@ -115,9 +171,14 @@ static gint gstti_auddec_get_out_buffer_size(GstTIDmaidec *dmaidec){
     return Adec_getOutBufSize(dmaidec->hCodec);
 }
 
-struct gstti_decoder_ops gstti_auddec0_ops = {
+struct gstti_decoder_ops gstti_auddec_ops = {
     .xdmversion = "xDM 0.9",
     .codec_type = AUDIO,
+    .default_setup_params = gstti_auddec_setup_params,
+    .set_codec_caps = gstti_auddec_set_codec_caps,
+    .install_properties = gstti_auddec_install_properties,
+    .set_property = gstti_auddec_set_property,
+    .get_property = gstti_auddec_get_property,
     .codec_create = gstti_auddec_create,
     .codec_destroy = gstti_auddec_destroy,
     .codec_process = gstti_auddec_process,

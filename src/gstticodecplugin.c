@@ -121,17 +121,19 @@ GstStaticCaps gstti_mpeg2_caps = GST_STATIC_CAPS(
     "   height=(int)[ 1, MAX ] ;"
 );
 
+extern struct gstti_decoder_ops gstti_viddec_ops;
 extern struct gstti_decoder_ops gstti_viddec2_ops;
-extern struct gstti_decoder_ops gstti_viddec0_ops;
-extern struct gstti_decoder_ops gstti_auddec0_ops;
+extern struct gstti_decoder_ops gstti_auddec_ops;
 extern struct gstti_decoder_ops gstti_auddec1_ops;
+extern struct gstti_decoder_ops gstti_imgdec_ops;
+extern struct gstti_decoder_ops gstti_imgdec1_ops;
 
+extern struct gstti_encoder_ops gstti_videnc_ops;
 extern struct gstti_encoder_ops gstti_videnc1_ops;
-extern struct gstti_encoder_ops gstti_videnc0_ops;
-extern struct gstti_encoder_ops gstti_audenc0_ops;
+extern struct gstti_encoder_ops gstti_audenc_ops;
 extern struct gstti_encoder_ops gstti_audenc1_ops;
+extern struct gstti_encoder_ops gstti_imgenc_ops;
 extern struct gstti_encoder_ops gstti_imgenc1_ops;
-extern struct gstti_encoder_ops gstti_imgenc0_ops;
 
 #if PLATFORM == dm357
 #  define DECODEENGINE "hmjcp"
@@ -231,6 +233,35 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             decoder->streamtype = "wma";
             decoder->sinkCaps = &gstti_wma_caps;
             decoder->parser = &gstti_generic_parser;
+        } else if (!strcmp (decoder->codecName, "jpegdec")) {
+            GstTIDmaidecData *vdecoder;
+
+            mediaType = IMAGE;
+            decoder->streamtype = "jpeg";
+            decoder->sinkCaps = &gstti_jpeg_caps;
+            decoder->parser = &gstti_jpeg_parser;
+
+            /* Install mjpeg video encoder */
+            vdecoder = g_malloc0 (sizeof (GstTIDmaidecData));
+            vdecoder->codecName = algoname.name;
+            vdecoder->engineName = DECODEENGINE;
+            vdecoder->streamtype = "mjpeg";
+            vdecoder->parser = &gstti_jpeg_parser;
+            vdecoder->sinkCaps = &gstti_jpeg_caps;
+            vdecoder->srcCaps = &gstti_yuv_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    vdecoder->dops = &gstti_imgdec_ops;
+                    break;
+                case 1:
+                    vdecoder->dops = &gstti_imgdec1_ops;
+            }
+            /* Now register the element */
+            if (!register_dmai_decoder(TICodecPlugin,vdecoder)){
+                g_warning("Failed to register one decoder, aborting");
+                return FALSE;
+            }
+
 #if 0
         } else if (!strcmp (decoder->codecName, "g711dec")) {
             decoder->streamtype = "g711";
@@ -251,7 +282,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             decoder->srcCaps = &gstti_yuv_caps;
             switch (xdm_ver) {
                 case 0: 
-                    decoder->dops = &gstti_viddec0_ops;
+                    decoder->dops = &gstti_viddec_ops;
                     break;
                 case 2:
                     decoder->dops = &gstti_viddec2_ops;
@@ -261,10 +292,20 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             decoder->srcCaps = &gstti_pcm_caps;
             switch (xdm_ver) {
                 case 0: 
-                    decoder->dops = &gstti_auddec0_ops;
+                    decoder->dops = &gstti_auddec_ops;
                     break;
                 case 1:
                     decoder->dops = &gstti_auddec1_ops;
+            }
+            break;
+        case IMAGE:
+            decoder->srcCaps = &gstti_yuv_caps;
+            switch (xdm_ver) {
+                case 0: 
+                    decoder->dops = &gstti_imgdec_ops;
+                    break;
+                case 1:
+                    decoder->dops = &gstti_imgdec1_ops;
             }
             break;
         default:
@@ -363,7 +404,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             vencoder->sinkCaps = &gstti_yuv_caps;
             switch (xdm_ver) {
                 case 0: 
-                    vencoder->eops = &gstti_imgenc0_ops;
+                    vencoder->eops = &gstti_imgenc_ops;
                     break;
                 case 1:
                     vencoder->eops = &gstti_imgenc1_ops;
@@ -391,7 +432,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
 #endif
             switch (xdm_ver) {
                 case 0: 
-                    encoder->eops = &gstti_videnc0_ops;
+                    encoder->eops = &gstti_videnc_ops;
                     break;
                 case 1:
                     encoder->eops = &gstti_videnc1_ops;
@@ -401,7 +442,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             encoder->sinkCaps = &gstti_yuv_caps;
             switch (xdm_ver) {
                 case 0: 
-                    encoder->eops = &gstti_imgenc0_ops;
+                    encoder->eops = &gstti_imgenc_ops;
                     break;
                 case 1:
                     encoder->eops = &gstti_imgenc1_ops;
@@ -411,7 +452,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             encoder->sinkCaps = &gstti_pcm_caps;
             switch (xdm_ver) {
                 case 0: 
-                    encoder->eops = &gstti_audenc0_ops;
+                    encoder->eops = &gstti_audenc_ops;
                     break;
                 case 1:
                     encoder->eops = &gstti_audenc1_ops;

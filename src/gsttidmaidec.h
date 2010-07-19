@@ -63,6 +63,8 @@ struct _GstTIDmaidec
     /* Element state */
     Engine_Handle    	hEngine;
     gpointer         	hCodec;
+    gpointer            *params;
+    gpointer            *dynParams;
 
     /* Output thread */
     GList               *outList;
@@ -77,6 +79,9 @@ struct _GstTIDmaidec
     GstClockTime        frameDuration;
     gint                height;
     gint                width;
+    gint                pitch;
+    gint                allocatedHeight;
+    gint                allocatedWidth;
     ColorSpace_Type     colorSpace;
 
     /* Audio Information */
@@ -109,6 +114,7 @@ struct _GstTIDmaidec
     gboolean            downstreamBuffers;
     gint                downstreamWidth;
     gboolean            require_configure;
+    gboolean            src_pad_caps_fixed;
 
     /* Parser structures */
     void                *parser_private;
@@ -122,14 +128,23 @@ struct _GstTIDmaidec
 struct _GstTIDmaidecClass
 {
     GstElementClass         parent_class;
-
     GstPadTemplate   *srcTemplateCaps, *sinkTemplateCaps;
+    /* Custom Codec Data */
+    struct codec_custom_data    *codec_data;
 };
 
 /* Decoder operations */
 struct gstti_decoder_ops {
     const gchar             *xdmversion;
     enum dmai_codec_type    codec_type;
+    /* Functions to provide custom properties */
+    void                    (*install_properties)(GObjectClass *);
+    void                    (*set_property)
+                                (GObject *,guint,const GValue *,GParamSpec *);
+    void                    (*get_property)(GObject *,guint,GValue *, GParamSpec *);
+    /* Functions to manipulate codecs */
+    gboolean                (* default_setup_params)(GstTIDmaidec *);
+    void                    (* set_codec_caps)(GstTIDmaidec *);
     gboolean                (* codec_create) (GstTIDmaidec *);
     void                    (* set_outBufTab) (GstTIDmaidec *,BufTab_Handle);
     void                    (* codec_destroy) (GstTIDmaidec *);

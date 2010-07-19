@@ -604,7 +604,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   guint32 fourcc;
   GstCaps *othercaps, *newcaps;
   dmairesizer = GST_DMAI_RESIZER (gst_pad_get_parent (pad));
-  
   if (!GST_PAD_IS_SINK (pad))
     return TRUE;
 
@@ -732,7 +731,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
 
   dmairesizer->clean_bufTab = TRUE;
   dmairesizer->configured = FALSE;
-  
   gst_object_unref (dmairesizer);
   return TRUE;
 }
@@ -792,7 +790,6 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       BufferGfx_getDimensions(inBuf,&srcDim);
       dmairesizer->allocated_buffer = NULL;
   }
-  
 
   if(dmairesizer->clean_bufTab){
     for(count = 0; count < dmairesizer->numOutBuf; count++){
@@ -934,7 +931,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       } else {
           srcDim.height = 0;
       }
-          
+
       /* Check if we need to crop at the end*/
       if (dmairesizer->cropWEnd && dmairesizer->precropped_width){
           gint crop = srcDim.width * dmairesizer->cropWEnd / dmairesizer->precropped_width;

@@ -43,6 +43,9 @@ static gboolean generic_init(GstTIDmaidec *dmaidec){
     g_assert(priv != NULL);
     priv->parsed = FALSE;
 
+    if (!caps)
+        goto done;
+    
     capStruct = gst_caps_get_structure(caps,0);
     if (!capStruct)
         goto done;
@@ -65,10 +68,10 @@ static gboolean generic_init(GstTIDmaidec *dmaidec){
         }
     }
 #endif
-    
-    dmaidec->parser_private = priv;
 
 done:
+    dmaidec->parser_private = priv;
+    
     GST_DEBUG("Parser initialized");
     return TRUE;
 }

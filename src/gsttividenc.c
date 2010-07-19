@@ -41,8 +41,8 @@
 #include "gsttidmaibuffertransport.h"
 
 /* Declare variable used to categorize GST_LOG output */
-GST_DEBUG_CATEGORY_STATIC (gst_tividenc0_debug);
-#define GST_CAT_DEFAULT gst_tividenc0_debug
+GST_DEBUG_CATEGORY_STATIC (gst_tividenc_debug);
+#define GST_CAT_DEFAULT gst_tividenc_debug
 
 enum
 {
@@ -54,7 +54,7 @@ enum
 };
 
 
-static void gstti_videnc0_install_properties(GObjectClass *gobject_class){
+static void gstti_videnc_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_RATECONTROL,
         g_param_spec_int("ratecontrol",
             "Rate Control Algorithm",
@@ -89,7 +89,7 @@ static void gstti_videnc0_install_properties(GObjectClass *gobject_class){
 }
 
 
-static void gstti_videnc0_set_property(GObject *object, guint prop_id,
+static void gstti_videnc_set_property(GObject *object, guint prop_id,
     const GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
@@ -115,7 +115,7 @@ static void gstti_videnc0_set_property(GObject *object, guint prop_id,
 }
 
 
-static void gstti_videnc0_get_property(GObject *object, guint prop_id,
+static void gstti_videnc_get_property(GObject *object, guint prop_id,
     GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
@@ -141,14 +141,14 @@ static void gstti_videnc0_get_property(GObject *object, guint prop_id,
 }
 
 /******************************************************************************
- * gst_tividenc0_setup_params
+ * gst_tividenc_setup_params
  *****************************************************************************/
-static gboolean gstti_videnc0_setup_params(GstTIDmaienc *dmaienc){
+static gboolean gstti_videnc_setup_params(GstTIDmaienc *dmaienc){
     VIDENC_Params *params;
     VIDENC_DynamicParams *dynParams;
 
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tividenc0_debug, "TIAudenc0", 0,
+    GST_DEBUG_CATEGORY_INIT(gst_tividenc_debug, "TIAudenc0", 0,
         "DMAI Audio1 Encoder");
 
     if (!dmaienc->params){
@@ -172,9 +172,9 @@ static gboolean gstti_videnc0_setup_params(GstTIDmaienc *dmaienc){
 
 
 /******************************************************************************
- * gst_tividenc0_set_codec_caps
+ * gst_tividenc_set_codec_caps
  *****************************************************************************/
-static void gstti_videnc0_set_codec_caps(GstTIDmaienc *dmaienc){
+static void gstti_videnc_set_codec_caps(GstTIDmaienc *dmaienc){
     VIDENC_Params *params = (VIDENC_Params *)dmaienc->params;
     VIDENC_DynamicParams *dynParams = (VIDENC_DynamicParams *)dmaienc->dynParams;
 
@@ -198,13 +198,13 @@ static void gstti_videnc0_set_codec_caps(GstTIDmaienc *dmaienc){
 
 
 /******************************************************************************
- * gst_tividenc0_create
+ * gst_tividenc_create
  *     Initialize codec
  *****************************************************************************/
-static gboolean gstti_videnc0_create (GstTIDmaienc *dmaienc)
+static gboolean gstti_videnc_create (GstTIDmaienc *dmaienc)
 {
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tividenc0_debug, "TIVidenc0", 0,
+    GST_DEBUG_CATEGORY_INIT(gst_tividenc_debug, "TIVidenc0", 0,
         "DMAI Video1 Encoder");
 
     GST_DEBUG("opening video encoder \"%s\"\n", dmaienc->codecName);
@@ -224,10 +224,10 @@ static gboolean gstti_videnc0_create (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gst_tividenc0_destroy
+ * gst_tividenc_destroy
  *     free codec resources
  *****************************************************************************/
-static void gstti_videnc0_destroy (GstTIDmaienc *dmaienc)
+static void gstti_videnc_destroy (GstTIDmaienc *dmaienc)
 {
     g_assert (dmaienc->hCodec);
 
@@ -236,17 +236,17 @@ static void gstti_videnc0_destroy (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gstti_videnc0_get_outBufSize
+ * gstti_videnc_get_outBufSize
  ******************************************************************************/
-static gint gstti_videnc0_get_outBufSize(GstTIDmaienc *dmaienc){
+static gint gstti_videnc_get_outBufSize(GstTIDmaienc *dmaienc){
     return Venc_getOutBufSize(dmaienc->hCodec);
 }
 
 
 /******************************************************************************
- * gst_tividenc0_process
+ * gst_tividenc_process
  ******************************************************************************/
-static gboolean gstti_videnc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
+static gboolean gstti_videnc_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
     Int             ret;
 
@@ -264,18 +264,18 @@ static gboolean gstti_videnc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
     return TRUE;
 }
 
-struct gstti_encoder_ops gstti_videnc0_ops = {
+struct gstti_encoder_ops gstti_videnc_ops = {
     .xdmversion = "xDM 0.9",
     .codec_type = VIDEO,
-    .default_setup_params = gstti_videnc0_setup_params,
-    .set_codec_caps = gstti_videnc0_set_codec_caps,
-    .install_properties = gstti_videnc0_install_properties,
-    .set_property = gstti_videnc0_set_property,
-    .get_property = gstti_videnc0_get_property,
-    .codec_get_outBufSize = gstti_videnc0_get_outBufSize,
-    .codec_create = gstti_videnc0_create,
-    .codec_destroy = gstti_videnc0_destroy,
-    .codec_process = gstti_videnc0_process,
+    .default_setup_params = gstti_videnc_setup_params,
+    .set_codec_caps = gstti_videnc_set_codec_caps,
+    .install_properties = gstti_videnc_install_properties,
+    .set_property = gstti_videnc_set_property,
+    .get_property = gstti_videnc_get_property,
+    .codec_get_outBufSize = gstti_videnc_get_outBufSize,
+    .codec_create = gstti_videnc_create,
+    .codec_destroy = gstti_videnc_destroy,
+    .codec_process = gstti_videnc_process,
 };
 
 /******************************************************************************

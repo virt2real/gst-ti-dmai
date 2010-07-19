@@ -1,10 +1,10 @@
 /*
- * gsttisupport_aac.h
+ * gsttisupport_jpeg.h
  *
  * Original Author:
- *     Kapil Agrawal, RidgeRun
+ *     Diego Dompe, RidgeRun
  *
- * Copyright (C) 2009 RidgeRun
+ * Copyright (C) 2010 RidgeRun
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -20,8 +20,16 @@
 
 #include <gst/gst.h>
 
-/* Caps for aac */
+/* Caps for jpeg */
 extern GstStaticCaps gstti_jpeg_caps;
+
+/* JPEG Parser */
+struct gstti_jpeg_parser_private {
+    gboolean firstSOI;
+    gboolean flushing;
+};
+
+extern struct gstti_parser_ops gstti_jpeg_parser;
 
 #endif /* __GSTTI_SUPPORT_JPEG_H__ */
 

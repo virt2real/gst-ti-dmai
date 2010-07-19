@@ -7,6 +7,7 @@ gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c gsttidmaiaccel.c gsttipriorit
 gsttividdec2.c gsttividdec.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
 gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c gsttisupport_jpeg.c \
 gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c gsttiimgenc1.c gsttiimgenc.c \
+gsttiimgdec.c gsttiimgdec1.c \
 gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c gsttidmaiperf.c\
 gstticommonutils.c ti_encoders.c ittiam_encoders.c ittiam_caps.c caps.c
 

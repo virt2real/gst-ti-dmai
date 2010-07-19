@@ -39,8 +39,8 @@
 
 /* Declare variable used to categorize GST_LOG output */
 /* Debug variable for xDM 0.9 */
-GST_DEBUG_CATEGORY_STATIC (gst_tiaudenc0_debug);
-#define GST_CAT_DEFAULT gst_tiaudenc0_debug
+GST_DEBUG_CATEGORY_STATIC (gst_tiaudenc_debug);
+#define GST_CAT_DEFAULT gst_tiaudenc_debug
 
 enum
 {
@@ -50,7 +50,7 @@ enum
 };
 
 
-static void gstti_audenc0_install_properties(GObjectClass *gobject_class){
+static void gstti_audenc_install_properties(GObjectClass *gobject_class){
     g_object_class_install_property(gobject_class, PROP_BITRATE,
         g_param_spec_int("bitrate",
             "Bit rate",
@@ -64,7 +64,7 @@ static void gstti_audenc0_install_properties(GObjectClass *gobject_class){
 }
 
 
-static void gstti_audenc0_set_property(GObject *object, guint prop_id,
+static void gstti_audenc_set_property(GObject *object, guint prop_id,
     const GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
@@ -84,7 +84,7 @@ static void gstti_audenc0_set_property(GObject *object, guint prop_id,
 }
 
 
-static void gstti_audenc0_get_property(GObject *object, guint prop_id,
+static void gstti_audenc_get_property(GObject *object, guint prop_id,
     GValue *value, GParamSpec *pspec)
 {
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
@@ -105,9 +105,9 @@ static void gstti_audenc0_get_property(GObject *object, guint prop_id,
 
 
 /******************************************************************************
- * gst_tiaudenc0_set_codec_caps
+ * gst_tiaudenc_set_codec_caps
  *****************************************************************************/
-static void gstti_audenc0_set_codec_caps(GstTIDmaienc *dmaienc){
+static void gstti_audenc_set_codec_caps(GstTIDmaienc *dmaienc){
     AUDENC_Params *params = (AUDENC_Params *)dmaienc->params;
     AUDENC_DynamicParams *dynParams = (AUDENC_DynamicParams *)dmaienc->dynParams;
 
@@ -136,12 +136,12 @@ static void gstti_audenc0_set_codec_caps(GstTIDmaienc *dmaienc){
  * gst_tiaudenc1_setup_params Support for xDM1.0
  *     Setup default codec params
  *****************************************************************************/
-static gboolean gstti_audenc0_setup_params(GstTIDmaienc *dmaienc){
+static gboolean gstti_audenc_setup_params(GstTIDmaienc *dmaienc){
     AUDENC_Params *params;
     AUDENC_DynamicParams *dynParams;
 
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tiaudenc0_debug, "TIAudenc1", 0,
+    GST_DEBUG_CATEGORY_INIT(gst_tiaudenc_debug, "TIAudenc1", 0,
         "DMAI Audio1 Encoder");
 
     if (!dmaienc->params){
@@ -165,13 +165,13 @@ static gboolean gstti_audenc0_setup_params(GstTIDmaienc *dmaienc){
 
 
 /******************************************************************************
- * gst_tiaudenc0_create Support for xDM 0.9
+ * gst_tiaudenc_create Support for xDM 0.9
  *     Initialize codec
  *****************************************************************************/
-static gboolean gstti_audenc0_create (GstTIDmaienc *dmaienc)
+static gboolean gstti_audenc_create (GstTIDmaienc *dmaienc)
 {
     /* Initialize GST_LOG for this object */
-    GST_DEBUG_CATEGORY_INIT(gst_tiaudenc0_debug, "TIAudenc", 0,
+    GST_DEBUG_CATEGORY_INIT(gst_tiaudenc_debug, "TIAudenc", 0,
         "DMAI Audio Encoder");
 
     GST_DEBUG("opening audio encoder \"%s\"\n", dmaienc->codecName);
@@ -191,10 +191,10 @@ static gboolean gstti_audenc0_create (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gst_tiaudenc0_destroy Support for xDM 0.9
+ * gst_tiaudenc_destroy Support for xDM 0.9
  *     free codec resources
  *****************************************************************************/
-static void gstti_audenc0_destroy (GstTIDmaienc *dmaienc)
+static void gstti_audenc_destroy (GstTIDmaienc *dmaienc)
 {
     g_assert (dmaienc->hCodec);
 
@@ -203,9 +203,9 @@ static void gstti_audenc0_destroy (GstTIDmaienc *dmaienc)
 
 
 /******************************************************************************
- * gst_tiaudenc0_process Support for xDM 0.9
+ * gst_tiaudenc_process Support for xDM 0.9
  ******************************************************************************/
-static gboolean gstti_audenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
+static gboolean gstti_audenc_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
     Int ret;
 
@@ -224,33 +224,33 @@ static gboolean gstti_audenc0_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcB
 }
 
 /******************************************************************************
- * gstti_audenc0_get_outBufSize
+ * gstti_audenc_get_outBufSize
  ******************************************************************************/
-static gint gstti_audenc0_get_outBufSize(GstTIDmaienc *dmaienc){
+static gint gstti_audenc_get_outBufSize(GstTIDmaienc *dmaienc){
     return Aenc_getOutBufSize(dmaienc->hCodec);
 }
 
 /******************************************************************************
- * gstti_audenc0_get_inBufSize
+ * gstti_audenc_get_inBufSize
  ******************************************************************************/
-static gint gstti_audenc0_get_inBufSize(GstTIDmaienc *dmaienc){
+static gint gstti_audenc_get_inBufSize(GstTIDmaienc *dmaienc){
     return Aenc_getInBufSize(dmaienc->hCodec);
 }
 
 /* Support for xDM 0.9 */
-struct gstti_encoder_ops gstti_audenc0_ops = {
+struct gstti_encoder_ops gstti_audenc_ops = {
     .xdmversion = "xDM 0.9",
     .codec_type = AUDIO,
-    .default_setup_params = gstti_audenc0_setup_params,
-    .set_codec_caps = gstti_audenc0_set_codec_caps,
-    .install_properties = gstti_audenc0_install_properties,
-    .codec_get_inBufSize = gstti_audenc0_get_inBufSize,
-    .codec_get_outBufSize = gstti_audenc0_get_outBufSize,
-    .set_property = gstti_audenc0_set_property,
-    .get_property = gstti_audenc0_get_property,
-    .codec_create = gstti_audenc0_create,
-    .codec_destroy = gstti_audenc0_destroy,
-    .codec_process = gstti_audenc0_process,
+    .default_setup_params = gstti_audenc_setup_params,    
+    .set_codec_caps = gstti_audenc_set_codec_caps,
+    .install_properties = gstti_audenc_install_properties,
+    .codec_get_inBufSize = gstti_audenc_get_inBufSize,
+    .codec_get_outBufSize = gstti_audenc_get_outBufSize,
+    .set_property = gstti_audenc_set_property,
+    .get_property = gstti_audenc_get_property,
+    .codec_create = gstti_audenc_create,
+    .codec_destroy = gstti_audenc_destroy,
+    .codec_process = gstti_audenc_process,
 };
 
 /******************************************************************************
