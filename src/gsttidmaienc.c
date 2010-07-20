@@ -970,7 +970,8 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
     gint spos = Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) -
         Buffer_getUserPtr(dmaienc->outBuf);
-    gint epos = spos + GST_BUFFER_SIZE(buf);
+    gint buffer_size = Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf));
+    gint epos = spos + buffer_size;
     struct cmemSlice *slice, *nslice;
     GList *e;
 
@@ -993,8 +994,8 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
             GST_DEBUG("Merging free buffer at beggining free block (%d,%d)",
                 slice->start,slice->end);
             /* Merge with current block*/
-            slice->start -= GST_BUFFER_SIZE(buf);
-            slice->size += GST_BUFFER_SIZE(buf);
+            slice->start -= buffer_size;
+            slice->size += buffer_size;
             /* Merge with previous block? */
             if (g_list_previous(e)){
                 nslice = (struct cmemSlice *)g_list_previous(e)->data;
@@ -1014,8 +1015,8 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
             GST_DEBUG("Merging free buffer at end of free block (%d,%d)",
                 slice->start,slice->end);
             /* Merge with current block*/
-            slice->end += GST_BUFFER_SIZE(buf);
-            slice->size += GST_BUFFER_SIZE(buf);
+            slice->end += buffer_size;
+            slice->size += buffer_size;
             /* Merge with next block? */
             if (g_list_next(e)){
                 nslice = (struct cmemSlice *)g_list_next(e)->data;
@@ -1038,7 +1039,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
             nslice = g_malloc0(sizeof(struct cmemSlice));
             nslice->start = spos;
             nslice->end = epos;
-            nslice->size = GST_BUFFER_SIZE(buf);
+            nslice->size = buffer_size;
             dmaienc->freeSlices = g_list_insert_before(dmaienc->freeSlices,e,
                 nslice);
             g_mutex_unlock(dmaienc->freeMutex);
@@ -1055,7 +1056,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     nslice = g_malloc0(sizeof(struct cmemSlice));
     nslice->start = spos;
     nslice->end = epos;
-    nslice->size = GST_BUFFER_SIZE(buf);
+    nslice->size = buffer_size;
     dmaienc->freeSlices = g_list_insert_before(dmaienc->freeSlices,NULL,
         nslice);
     g_mutex_unlock(dmaienc->freeMutex);
@@ -1263,8 +1264,6 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 
     gst_tidmaibuffertransport_set_release_callback(
         (GstTIDmaiBufferTransport *)outBuf,release_cb,dmaienc);
-    gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
-        Buffer_getNumBytesUsed(hDstBuf));
 
     if (dmaienc->firstBuffer) {
         dmaienc->firstBuffer = FALSE;
