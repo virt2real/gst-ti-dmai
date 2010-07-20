@@ -1571,6 +1571,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     GstTIDmaidecClass      *gclass;
     GstTIDmaidecData       *decoder;
     gboolean       codecFlushed   = FALSE;
+    gboolean skip_frame = FALSE;
     Buffer_Handle  hDstBuf;
     Buffer_Handle  hFreeBuf;
     GstBuffer     *outBuf;
@@ -1664,9 +1665,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
 
     if (!decoder->dops->codec_process(dmaidec,encData,hDstBuf,codecFlushed)){
-        GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
-            ("Failed to decode buffer"));
-        goto failure;
+        skip_frame = TRUE;
     }
 
     if (decoder->parser->trustme){
@@ -1678,7 +1677,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
     gst_buffer_unref(encData);
     encData = NULL;
-
+    
     if (decoder->dops->codec_type == VIDEO) {
         /* Obtain the display buffer returned by the codec (it may be a
          * different one than the one we passed it.
@@ -1695,6 +1694,9 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         }
     }
+
+    if (skip_frame)
+        return GST_FLOW_OK;
     
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {

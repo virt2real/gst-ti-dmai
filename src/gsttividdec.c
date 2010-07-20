@@ -229,12 +229,10 @@ static gboolean gstti_viddec_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
         return FALSE;
     }
 
-    /* If no encoded data was used we cannot find the next frame */
-    if (ret == Dmai_EBITERROR &&
-        (encDataConsumed == 0 || encDataConsumed == originalBufferSize) &&
-        !codecFlushed) {
-        GST_ELEMENT_ERROR(dmaidec,STREAM,DECODE,(NULL),
-            ("fatal bit error"));
+    if (ret == Dmai_EBITERROR){
+        GST_ELEMENT_WARNING(dmaidec,STREAM,DECODE,(NULL),
+            ("Unable to decode frame with timestamp %"GST_TIME_FORMAT,
+                GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(encData))));
         return FALSE;
     }
 

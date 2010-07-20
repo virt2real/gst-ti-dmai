@@ -227,15 +227,15 @@ static gboolean gstti_imgdec1_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
             ("failed to decode Image buffer"));
          return FALSE;
      }
-    /* If no encoded data was used we cannot find the next frame */
-    if (ret == Dmai_EBITERROR &&
-        (encDataConsumed == 0 || encDataConsumed == originalBufferSize) &&
-        !codecFlushed) {
-        GST_ELEMENT_ERROR(dmaidec,STREAM,DECODE,(NULL),
-            ("fatal bit error"));
+    
+    if (ret == Dmai_EBITERROR){
+        GST_ELEMENT_WARNING(dmaidec,STREAM,DECODE,(NULL),
+            ("Unable to decode frame with timestamp %"GST_TIME_FORMAT,
+                GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(encData))));
         return FALSE;
-     }
-     return TRUE;
+    }
+
+    return TRUE;
 }
 
 static gint gstti_imgdec1_get_in_buffer_size(GstTIDmaidec *dmaidec){
