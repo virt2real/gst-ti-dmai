@@ -157,6 +157,11 @@ static gboolean gstti_auddec_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
         GST_ELEMENT_WARNING(dmaidec,STREAM,DECODE,(NULL),
             ("Unable to decode frame with timestamp %"GST_TIME_FORMAT,
                 GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(encData))));
+        /* We failed to process this buffer, so we need to release it
+               because the codec won't do it.
+         */
+        GST_DEBUG("Freeing buffer because of bit error on the stream");
+        Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE);
         return FALSE;
     }
 
