@@ -121,6 +121,9 @@ static gboolean mpeg4_init(GstTIDmaidec *dmaidec){
     dmaidec->parser_private = priv;
 
     /* Try to find the codec_data */
+    if (!caps)
+        goto done;
+
     capStruct = gst_caps_get_structure(caps,0);
 
     if (!capStruct)
