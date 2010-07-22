@@ -80,6 +80,8 @@ struct _GstTIDmaidec
     gint                height;
     gint                width;
     gint                pitch;
+    gint                par_d;
+    gint                par_n;
     gint                allocatedHeight;
     gint                allocatedWidth;
     ColorSpace_Type     colorSpace;

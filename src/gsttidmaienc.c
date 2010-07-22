@@ -385,6 +385,8 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->framerateDen       = 0;
     dmaienc->height	            = 0;
     dmaienc->width	            = 0;
+    dmaienc->par_n = 1;
+    dmaienc->par_d = 1;
 
     /*Initialize TIDmaienc audio state */
 
@@ -773,8 +775,6 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         !strncmp(mime, "image/", 6)) {
         gint framerateNum;
         gint framerateDen;
-        gint parNum;
-        gint parDen;
 
         if (gst_structure_get_fraction(capStruct, "framerate", &framerateNum,
             &framerateDen)) {
@@ -785,9 +785,9 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
             dmaienc->averageDuration = GST_CLOCK_TIME_NONE;
         }
 
-        if (!gst_structure_get_fraction(capStruct, "pixel-aspect-ratio", &parNum, &parDen)) {
-            parNum = 0;
-            parDen = 0;
+        if (!gst_structure_get_fraction(capStruct, "pixel-aspect-ratio", &dmaienc->par_n, &dmaienc->par_d)) {
+            dmaienc->par_n = 1;
+            dmaienc->par_d = 1;
         }
 
         if (!gst_structure_get_int(capStruct, "height", &dmaienc->height)) {
@@ -829,11 +829,9 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                                     "width",G_TYPE_INT,dmaienc->width,
                                     "framerate", GST_TYPE_FRACTION,
                                         dmaienc->framerateNum,dmaienc->framerateDen,
+                                    "pixel-aspect-ratio", GST_TYPE_FRACTION, 
+                                    dmaienc->par_n, dmaienc->par_d,
                                     (char *)NULL);
-        if (parNum && parDen) {
-          gst_structure_set(capStruct,
-                    "pixel-aspect-ratio", GST_TYPE_FRACTION, parNum, parDen, (char*) NULL);
-        }
 
         dmaienc->inBufSize = gst_ti_calculate_bufSize (
             dmaienc->width,dmaienc->height,dmaienc->colorSpace);

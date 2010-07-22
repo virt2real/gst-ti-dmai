@@ -27,10 +27,6 @@
  * TODO LIST
  *
  *  * Add reverse playback
- *  * Reduce minimal input buffer requirements to 1 frame size and
- *    implement heuristics to break down the input tab into smaller chunks.
- *  * Allow custom properties for the class.
- *  * Add handling of pixel aspect ratio
  */
 
 #ifdef HAVE_CONFIG_H
@@ -384,6 +380,8 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->allocatedHeight    = 0;
     dmaidec->width		        = 0;
     dmaidec->pitch = 0;
+    dmaidec->par_n = 1;
+    dmaidec->par_d = 1;
     dmaidec->allocatedWidth     = 0;
     dmaidec->colorSpace         = ColorSpace_NOTSET;
     
@@ -999,6 +997,8 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
             "width",G_TYPE_INT,dmaidec->width,
             "framerate", GST_TYPE_FRACTION,
             dmaidec->framerateNum,dmaidec->framerateDen,
+            "pixel-aspect-ratio", GST_TYPE_FRACTION,
+            dmaidec->par_n,dmaidec->par_d,
             "dmaioutput", G_TYPE_BOOLEAN, TRUE,
             (char *)NULL);
         break;
@@ -1070,6 +1070,12 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
             &framerateDen)) {
                 dmaidec->framerateNum = framerateNum;
                 dmaidec->framerateDen = framerateDen;
+            }
+
+            if (!gst_structure_get_fraction (capStruct, "pixel-aspect-ratio", &dmaidec->par_n,
+                &dmaidec->par_d)) {
+                dmaidec->par_d = 1;
+                dmaidec->par_n = 1;
             }
 
             if (!gst_structure_get_int(capStruct, "height", &dmaidec->height)) {
