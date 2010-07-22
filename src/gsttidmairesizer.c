@@ -625,7 +625,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
           &dmairesizer->par_d)) {
     dmairesizer->par_d = 1;
     dmairesizer->par_n = 1;
-  }else{
+  } else {
     if(dmairesizer->par_d < 1){
       dmairesizer->par_d = 1;
       GST_INFO("The denominator of pixel aspect ratio can't be less than 1, setting to 1");
@@ -697,14 +697,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       }
   }
 
-  /* Setting output buffers 
-   * We do this before fixating the caps, since we need the pitch information first 
-   */
-  if(dmairesizer->setup_outBufTab){
-    setup_outputBuf (dmairesizer);
-    dmairesizer->setup_outBufTab = FALSE;
-  }
-
   gst_structure_set(capStruct,
       "height",G_TYPE_INT,
       dmairesizer->target_height?dmairesizer->target_height:dmairesizer->height,
@@ -715,9 +707,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       "pixel-aspect-ratio", GST_TYPE_FRACTION,
       dmairesizer->par_n,dmairesizer->par_d,
       "dmaioutput", G_TYPE_BOOLEAN, TRUE,
-#if PLATFORM == dm365
-      "pitch",G_TYPE_INT,dmairesizer->outBufWidth,
-#endif
       (char *)NULL);
 
   gst_pad_fixate_caps (dmairesizer->srcpad, newcaps);
@@ -727,6 +716,12 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       free_buffers(dmairesizer);
       gst_object_unref (dmairesizer);
       return FALSE;
+  }
+
+  /* Setting output buffers */
+  if(dmairesizer->setup_outBufTab){
+    setup_outputBuf (dmairesizer);
+    dmairesizer->setup_outBufTab = FALSE;
   }
 
   dmairesizer->clean_bufTab = TRUE;
@@ -917,9 +912,7 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
           } else {
               srcDim.width = 0;
           }
-      } else {
-          srcDim.width = 0;
-      }
+      } 
       if (dmairesizer->cropHStart && dmairesizer->precropped_height){
           gint crop = origh * dmairesizer->cropHStart / dmairesizer->precropped_height;
           if (crop <= srcDim.width){
@@ -928,8 +921,6 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
           } else {
               srcDim.height = 0;
           }
-      } else {
-          srcDim.height = 0;
       }
 
       /* Check if we need to crop at the end*/
