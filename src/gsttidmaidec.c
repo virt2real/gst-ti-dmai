@@ -674,7 +674,7 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     }
 
     if (dmaidec->metaTab) {
-        free(dmaidec->metaTab);
+        g_free(dmaidec->metaTab);
         dmaidec->metaTab = NULL;
     }
 

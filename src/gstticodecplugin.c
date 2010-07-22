@@ -272,7 +272,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
         } else {
            GST_WARNING ("Element not provided for codec: %s",
                decoder->codecName);
-           free(decoder);
+           g_free(decoder);
            continue;
         }
 
@@ -417,7 +417,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
         } else {
             GST_WARNING ("Element not provided for codec: %s",
                 encoder->codecName);
-            free(encoder);
+            g_free(encoder);
             continue;
         }
 

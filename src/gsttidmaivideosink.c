@@ -918,7 +918,7 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
     }
 
     if(sink->cleanBufCtrl){
-      free(sink->cleanBufCtrl);
+      g_free(sink->cleanBufCtrl);
     }
 
     if (sink->allocatedBuffers){
