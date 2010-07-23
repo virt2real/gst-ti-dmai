@@ -1182,6 +1182,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
          * packets
          */
         while ((pushBuffer = gstti_dmaidec_circ_buffer_drain(dmaidec))){
+            gboolean empty = (GST_BUFFER_SIZE(pushBuffer) == 0);
             if (decode(dmaidec,pushBuffer) < 0) {
                 GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
                     ("Failed to decode buffer"));
@@ -1193,7 +1194,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
             /* When the drain function returns a zero-size buffer
              * we are done
              */
-            if (GST_BUFFER_SIZE(pushBuffer) == 0)
+            if (empty)
                 break;
         }
 
