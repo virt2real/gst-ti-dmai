@@ -218,7 +218,7 @@ static void gstti_videnc1_set_codec_caps(GstTIDmaienc *dmaienc){
 
     params->maxWidth = dynParams->inputWidth = dmaienc->width;
     params->maxHeight = dynParams->inputHeight = dmaienc->height;
-    params->maxFrameRate = (dmaienc->framerateNum * 1000) / dmaienc->framerateDen;
+    dynParams->refFrameRate = dynParams->targetFrameRate = (dmaienc->framerateNum * 1000) / dmaienc->framerateDen;
     if (dmaienc->pitch) {
         dynParams->captureWidth = dmaienc->pitch;
     }

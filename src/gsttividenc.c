@@ -178,9 +178,6 @@ static void gstti_videnc_set_codec_caps(GstTIDmaienc *dmaienc){
     VIDENC_Params *params = (VIDENC_Params *)dmaienc->params;
     VIDENC_DynamicParams *dynParams = (VIDENC_DynamicParams *)dmaienc->dynParams;
 
-    params->maxWidth = dynParams->inputWidth = dmaienc->width;
-    params->maxHeight = dynParams->inputHeight = dmaienc->height;
-
     /* Set up codec parameters depending on device */
     switch (dmaienc->colorSpace) {
         case ColorSpace_UYVY:
@@ -193,6 +190,13 @@ static void gstti_videnc_set_codec_caps(GstTIDmaienc *dmaienc){
             GST_ELEMENT_ERROR(dmaienc,STREAM, NOT_IMPLEMENTED,
                 ("unsupported fourcc in video stream\n"), (NULL));
             return;
+    }
+    
+    params->maxWidth = dynParams->inputWidth = dmaienc->width;
+    params->maxHeight = dynParams->inputHeight = dmaienc->height;
+    dynParams->refFrameRate = dynParams->targetFrameRate = (dmaienc->framerateNum * 1000) / dmaienc->framerateDen;
+    if (dmaienc->pitch) {
+        dynParams->captureWidth = dmaienc->pitch;
     }
 }
 
