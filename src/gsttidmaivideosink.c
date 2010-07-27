@@ -277,7 +277,6 @@ static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
     dmaisink->prevVideoStd   = 0;
     dmaisink->xPosition     = -1;
     dmaisink->yPosition     = -1;
-    dmaisink->numBufClean    = 0;
     dmaisink->xCentering    = FALSE;
     dmaisink->yCentering    = FALSE;
     dmaisink->width          = 0;
@@ -304,7 +303,6 @@ static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *dmaisink)
 {
    int i;
 
-   dmaisink->numBufClean = dmaisink->numBuffers;
    for(i = 0; i < dmaisink->numBuffers; i++){
       dmaisink->cleanBufCtrl[i] = DIRTY;
    }
@@ -1001,7 +999,6 @@ static gboolean gst_tidmaivideosink_init_display(GstTIDmaiVideoSink * sink,
              */
             sink->numBuffers = BufTab_getNumBufs(Display_getBufTab(sink->hDisplay));
             sink->cleanBufCtrl = (gchar *)g_malloc0(sink->numBuffers);
-            sink->numBufClean = 0;
             sink->unusedBuffers = g_malloc0(sink->numBuffers * sizeof(Buffer_Handle));
             sink->numUnusedBuffers = 0;
             sink->allocatedBuffers = g_malloc0(sink->numBuffers * sizeof(GstBuffer *));
@@ -1109,18 +1106,14 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
     }
 
     /*Removing garbage on display buffer*/
-    if (sink->numBufClean){
-        if (sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == DIRTY ){
-            if (!gst_ti_blackFill(hDispBuf)){
-                GST_ELEMENT_WARNING(sink, RESOURCE, SETTINGS, (NULL), 
-                ("Unsupported color space, buffers not painted\n"));
-            }
-            sink->numBufClean--;
-            GST_LOG("Cleaning Display buffers: %d cleaned of %d buffers\n",
-                sink->numBuffers - sink->numBufClean , sink->numBuffers);
-        } else{
-            GST_LOG("Display buffers had been cleaned");
+    if (sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == DIRTY ){
+        if (!gst_ti_blackFill(hDispBuf)){
+            GST_ELEMENT_WARNING(sink, RESOURCE, SETTINGS, (NULL), 
+            ("Unsupported color space, buffers not painted\n"));
         }
+        sink->cleanBufCtrl[Buffer_getId (hDispBuf)] = CLEAN;
+        GST_LOG("Cleaning Display buffers: buffer %d cleaned",
+            (int)Buffer_getId (hDispBuf));
     }
 
     /* Retrieve the dimensions of the display buffer */

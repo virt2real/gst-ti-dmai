@@ -91,7 +91,6 @@ struct _GstTIDmaiVideoSink {
   gint          yCentering;
   gboolean      resizer;
   gboolean      autoselect;
-  gint          numBufClean; 
   gint          numDispBuf; 
   gchar         *cleanBufCtrl;
 
