@@ -1238,7 +1238,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
      * buffer for re-use in this element when the source pad calls
      * gst_buffer_unref().
          */
-    outBuf = gst_tidmaibuffertransport_new(hDstBuf,NULL);
+    outBuf = gst_tidmaibuffertransport_new(hDstBuf,NULL, NULL);
     GST_BUFFER_SIZE(outBuf) = Buffer_getNumBytesUsed(hDstBuf);
 
 #if (PLATFORM != dm355) && (PLATFORM != dm365)

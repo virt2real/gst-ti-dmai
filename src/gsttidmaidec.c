@@ -367,7 +367,6 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->outBufSize         = 0;
     dmaidec->inBufSize          = 0;
-    dmaidec->waitOnOutBufTab    = NULL;
     dmaidec->outList            = NULL;
     dmaidec->require_configure  = TRUE;
     dmaidec->src_pad_caps_fixed = FALSE;
@@ -399,6 +398,8 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->numOutputBufs      = 0UL;
     dmaidec->numInputBufs       = 0UL;
     dmaidec->metaTab            = NULL;
+
+
 }
 
 
@@ -560,7 +561,6 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
 {
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
-    Rendezvous_Attrs  rzvAttrs  = Rendezvous_Attrs_DEFAULT;
     int i;
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
@@ -634,8 +634,10 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
         GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
     }
 
-    /* Initialize rendezvous objects for making threads wait on conditions */
-    dmaidec->waitOnOutBufTab = Rendezvous_create(2, &rzvAttrs);
+    /* Initialize the mutex and the conditional objects
+       for making threads wait on conditions */
+    pthread_mutex_init(&dmaidec->bufTabMutex, NULL);
+    pthread_cond_init(&dmaidec->bufTabCond, NULL);
 
     GST_DEBUG("end init_decoder\n");
     return TRUE;
@@ -668,9 +670,12 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
         dmaidec->outList = NULL;
     }
 
-    if (dmaidec->waitOnOutBufTab) {
-        Rendezvous_delete(dmaidec->waitOnOutBufTab);
-        dmaidec->waitOnOutBufTab = NULL;
+    if (&dmaidec->bufTabMutex) {
+        pthread_mutex_destroy(&dmaidec->bufTabMutex);
+    }
+
+    if (&dmaidec->bufTabCond) {
+        pthread_cond_destroy(&dmaidec->bufTabCond);
     }
 
     if (dmaidec->metaTab) {
@@ -1483,7 +1488,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         Buffer_setNumBytesUsed(hBuf,size);
         Buffer_setSize(hBuf,size);
         
-        buf = gst_tidmaibuffertransport_new(hBuf, NULL);
+        buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
 
         /* We have to find the metadata for this buffer */
         element = g_list_first(dmaidec->circMeta);
@@ -1546,7 +1551,7 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
         Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaidec->circBuf));
         Buffer_setNumBytesUsed(hBuf,1);
         Buffer_setSize(hBuf,1);
-        buf = gst_tidmaibuffertransport_new(hBuf, NULL);
+        buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
         GST_BUFFER_SIZE(buf) = 0;
     }
     
@@ -1611,19 +1616,25 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
 
     if (!dmaidec->downstreamBuffers) {
         /* Obtain a free output buffer for the decoded data */
+
+        pthread_mutex_lock(&dmaidec->bufTabMutex);
         hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
+
         if (hDstBuf == NULL) {
             GST_INFO("Failed to get free buffer, waiting on bufTab\n");
-            Rendezvous_meet(dmaidec->waitOnOutBufTab);
-    
+            pthread_cond_wait(&dmaidec->bufTabCond, &dmaidec->bufTabMutex);
+
             hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
-    
+
             if (hDstBuf == NULL) {
                 GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                     ("failed to get a free contiguous buffer from BufTab"));
+                    printf("failed to get a free contiguous buffer from BufTab\n");
+                pthread_mutex_unlock(&dmaidec->bufTabMutex);
                 goto failure;
             }
         }
+        pthread_mutex_unlock(&dmaidec->bufTabMutex);
     } else {
         if (!dmaidec->allocated_buffer) {
             if (gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize, 
@@ -1635,7 +1646,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                  !GST_IS_TIDMAIBUFFERTRANSPORT(dmaidec->allocated_buffer)){
                 dmaidec->allocated_buffer = NULL;
             }
-            
+
             if (!dmaidec->allocated_buffer){
                 GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                     ("failed to get a dmai transport downstream buffer"));
@@ -1775,7 +1786,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * gst_buffer_unref().
          */
         outBuf = gst_tidmaibuffertransport_new(hDstBuf,
-            dmaidec->waitOnOutBufTab);
+            &dmaidec->bufTabMutex, &dmaidec->bufTabCond);
         gst_buffer_copy_metadata(outBuf,&dmaidec->metaTab[Buffer_getId(hDstBuf)],
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         if (decoder->dops->codec_type == VIDEO ||

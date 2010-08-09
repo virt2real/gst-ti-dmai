@@ -122,6 +122,8 @@ static void gst_tidmaibuffertransport_init(GTypeInstance *instance,
 
     buf->release_cb = NULL;
     buf->cb_data = NULL;
+    buf->mutex = NULL;
+    buf->cond = NULL;
 }
 
 
@@ -142,19 +144,26 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
      * destroy the buffer.
      */
     if (Buffer_getBufTab(cbuf->dmaiBuffer) != NULL) {
+        /* Hold mutex, if available */
+        if (cbuf->mutex)
+            pthread_mutex_lock(cbuf->mutex);
+
         Buffer_freeUseMask(cbuf->dmaiBuffer,
             gst_tidmaibuffertransport_GST_FREE);
 
         GST_DEBUG("clearing useMask bit so buffer %p can be reused: new mask %dh\n",
             cbuf->dmaiBuffer,Buffer_getUseMask(cbuf->dmaiBuffer));
-        /* If rendezvous handle is set then wake-up caller */
-        if (cbuf->hRv) {
+        /* If pthread conditional is set then wake-up caller */
+        if (cbuf->cond) {
             if (Buffer_getUseMask(cbuf->dmaiBuffer) == 0) {
-                Rendezvous_forceAndReset(cbuf->hRv);
+                pthread_cond_broadcast(cbuf->cond);
             } else {
                 GST_DEBUG("Not broadcasting buffer free at finalize, since use mask is not clean yet");
             }
         }
+        /* Release mutex, if available */
+        if (cbuf->mutex)
+           pthread_mutex_unlock(cbuf->mutex);
     } else {
         GST_LOG("calling Buffer_delete()\n");
         Buffer_delete(cbuf->dmaiBuffer);
@@ -172,7 +181,7 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
  *       this handle during finalize method.
  ******************************************************************************/
 GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
-    Rendezvous_Handle hRv)
+    pthread_mutex_t *mutex, pthread_cond_t *cond)
 {
     GstTIDmaiBufferTransport *buf;
 
@@ -192,7 +201,8 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
     }
 
     buf->dmaiBuffer = hBuf;
-    buf->hRv = hRv;
+    buf->mutex = mutex;
+    buf->cond = cond;
     GST_LOG("end new\n");
 
     return GST_BUFFER(buf);

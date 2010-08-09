@@ -395,7 +395,6 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
 
   dmairesizer->outBufTab = NULL;
   dmairesizer->inBuf = NULL;
-  dmairesizer->waitOnOutBufTab = NULL;
 
   dmairesizer->source_x = 0;
   dmairesizer->source_y = 0;
@@ -461,7 +460,6 @@ gboolean
 setup_outputBuf (GstTIDmaiResizer * dmairesizer)
 {
   BufferGfx_Attrs gfxAttrs = BufferGfx_Attrs_DEFAULT;
-  Rendezvous_Attrs rzvAttrs = Rendezvous_Attrs_DEFAULT;
   gint outLinePadding = 0;
 
   /***************************************************************
@@ -587,10 +585,15 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
     return FALSE;
   }
 
-  if (dmairesizer->waitOnOutBufTab) {
-    Rendezvous_delete (dmairesizer->waitOnOutBufTab);
+  if (&dmairesizer->bufTabMutex) {
+    pthread_mutex_destroy (&dmairesizer->bufTabMutex);
   }
-  dmairesizer->waitOnOutBufTab = Rendezvous_create (2, &rzvAttrs);
+  pthread_mutex_init(&dmairesizer->bufTabMutex, NULL);
+
+  if (&dmairesizer->bufTabCond) {
+    pthread_cond_destroy (&dmairesizer->bufTabCond);
+  }
+  pthread_cond_init(&dmairesizer->bufTabCond, NULL);
 
   return TRUE;
 }
@@ -749,19 +752,22 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   int  IDBuf;
 
   if (!dmairesizer->downstreamBuffers){
+      pthread_mutex_lock(&dmairesizer->bufTabMutex);
       DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
       if (DstBuf == NULL) {
         GST_INFO ("Failed to get free buffer, waiting on bufTab\n");
-
-        Rendezvous_meet (dmairesizer->waitOnOutBufTab);
+        pthread_cond_wait(&dmairesizer->bufTabCond,
+            &dmairesizer->bufTabMutex);
         DstBuf = BufTab_getFreeBuf (dmairesizer->outBufTab);
 
         if (DstBuf == NULL) {
           GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
               ("failed to get a free contiguous buffer from BufTab"));
+          pthread_mutex_unlock(&dmairesizer->bufTabMutex);
           return NULL;
         }
       }
+      pthread_mutex_unlock(&dmairesizer->bufTabMutex);
   } else {
       if (!dmairesizer->allocated_buffer) {
           if (gst_pad_alloc_buffer(dmairesizer->srcpad, 0, dmairesizer->outBufSize, 
@@ -1126,7 +1132,8 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
 
   /*Push buffer */
   pushBuffer =
-      gst_tidmaibuffertransport_new (outBuffer, dmairesizer->waitOnOutBufTab);
+      gst_tidmaibuffertransport_new (outBuffer, &dmairesizer->bufTabMutex,
+          &dmairesizer->bufTabCond);
   if (!pushBuffer) {
     GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
         ("Failed to create dmai buffer"));
@@ -1177,9 +1184,11 @@ free_buffers (GstTIDmaiResizer * dmairesizer)
     BufTab_delete (dmairesizer->outBufTab);
     dmairesizer->outBufTab = NULL;
   }
-  if (dmairesizer->waitOnOutBufTab) {
-    Rendezvous_delete (dmairesizer->waitOnOutBufTab);
-    dmairesizer->waitOnOutBufTab = NULL;
+  if (&dmairesizer->bufTabMutex) {
+    pthread_mutex_destroy(&dmairesizer->bufTabMutex);
+  }
+  if (&dmairesizer->bufTabCond) {
+    pthread_cond_destroy(&dmairesizer->bufTabCond);
   }
   if (dmairesizer->allocated_buffer){
       gst_buffer_unref(dmairesizer->allocated_buffer);

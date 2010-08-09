@@ -33,7 +33,6 @@
 #include <ti/sdo/dmai/Buffer.h>
 #include <ti/sdo/dmai/Fifo.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
 
 G_BEGIN_DECLS
 
@@ -70,7 +69,8 @@ struct _GstTIDmaidec
     GList               *outList;
 
     /* Blocking Conditions to Throttle I/O */
-    Rendezvous_Handle   waitOnOutBufTab;
+    pthread_mutex_t     bufTabMutex;
+    pthread_cond_t      bufTabCond;
     gint16              outputUseMask;
 
     /* Video Information */

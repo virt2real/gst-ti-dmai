@@ -34,7 +34,6 @@
 
 #include <ti/sdo/dmai/Dmai.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
 #include <ti/sdo/dmai/Resize.h>
 #include "gsttidmaibuffertransport.h"
 
@@ -73,7 +72,8 @@ struct _GstTIDmaiResizer
   BufTab_Handle outBufTab;
   gint outBufWidth;
   gint outBufHeight;
-  Rendezvous_Handle waitOnOutBufTab;
+  pthread_mutex_t bufTabMutex;
+  pthread_cond_t bufTabCond;
   Buffer_Handle inBuf;
   gint inBufSize;
   gint outBufSize;

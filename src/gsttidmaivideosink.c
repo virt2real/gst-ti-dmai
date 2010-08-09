@@ -1237,7 +1237,7 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
 
     hBuf = gst_tidmaivideosink_get_display_buffer(sink,NULL,NULL);
     if (hBuf){
-        *buf = gst_tidmaibuffertransport_new(hBuf,NULL);
+        *buf = gst_tidmaibuffertransport_new(hBuf,NULL, NULL);
         sink->allocatedBuffers[Buffer_getId(hBuf)] = *buf;
         gst_tidmaibuffertransport_set_release_callback(
             (GstTIDmaiBufferTransport *)*buf,

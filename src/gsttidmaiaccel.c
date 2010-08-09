@@ -183,8 +183,16 @@ static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans)
     if (dmaiaccel->hOutBufTab){
         BufTab_delete(dmaiaccel->hOutBufTab);
     }
-    
-	return TRUE;
+
+    if (&dmaiaccel->bufTabMutex) {
+        pthread_mutex_destroy(&dmaiaccel->bufTabMutex);
+    }
+
+    if (&dmaiaccel->bufTabCond) {
+        pthread_cond_destroy(&dmaiaccel->bufTabCond);
+    }
+
+    return TRUE;
 }
 
 /******************************************************************************
@@ -266,7 +274,7 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
         hOutBuf = Buffer_create(GST_BUFFER_SIZE(inBuf), &gfxAttrs.bAttrs);
         Buffer_setUserPtr(hOutBuf, (Int8*)GST_BUFFER_DATA(inBuf));
         Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
-        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL);
+        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL);
         gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
             Buffer_getSize(hOutBuf));
         gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
@@ -278,7 +286,6 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
 
         if (!dmaiaccel->disabled){
             /* Initialize our buffer tab */
-            Rendezvous_Attrs  rzvAttrs  = Rendezvous_Attrs_DEFAULT;
             BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
 
             gfxAttrs.dim.width          = dmaiaccel->width;
@@ -289,7 +296,8 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
             dmaiaccel->hOutBufTab =
                         BufTab_create(2, GST_BUFFER_SIZE(inBuf),
                             BufferGfx_getBufferAttrs(&gfxAttrs));
-            dmaiaccel->waitOnOutBufTab = Rendezvous_create(2, &rzvAttrs);
+            pthread_mutex_init(&dmaiaccel->bufTabMutex, NULL);
+            pthread_cond_init(&dmaiaccel->bufTabCond, NULL);
             if (dmaiaccel->hOutBufTab == NULL) {
                 GST_ELEMENT_ERROR(dmaiaccel,RESOURCE,NO_SPACE_LEFT,(NULL),
                     ("failed to create output buffer tab"));
@@ -298,24 +306,28 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
             dmaiaccel->disabled = TRUE;
         }
 
+        pthread_mutex_lock(&dmaiaccel->bufTabMutex);
         hOutBuf = BufTab_getFreeBuf(dmaiaccel->hOutBufTab);
         if (hOutBuf == NULL) {
             GST_INFO("Failed to get free buffer, waiting on bufTab\n");
-            Rendezvous_meet(dmaiaccel->waitOnOutBufTab);
+            pthread_cond_wait(&dmaiaccel->bufTabCond, &dmaiaccel->bufTabMutex);
 
             hOutBuf = BufTab_getFreeBuf(dmaiaccel->hOutBufTab);
 
             if (hOutBuf == NULL) {
                 GST_ELEMENT_ERROR(dmaiaccel,RESOURCE,NO_SPACE_LEFT,(NULL),
                     ("failed to get a free contiguous buffer from BufTab"));
+                pthread_mutex_unlock(&dmaiaccel->bufTabMutex);
                 return GST_FLOW_ERROR;
             }
         }
+        pthread_mutex_unlock(&dmaiaccel->bufTabMutex);
 
         memcpy(Buffer_getUserPtr(hOutBuf),GST_BUFFER_DATA(inBuf),
             GST_BUFFER_SIZE(inBuf));
         Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
-        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, dmaiaccel->waitOnOutBufTab);
+        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, &dmaiaccel->bufTabMutex,
+            &dmaiaccel->bufTabCond);
         gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
             Buffer_getSize(hOutBuf));
         gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);

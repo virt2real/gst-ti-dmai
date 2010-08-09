@@ -26,7 +26,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 #include <ti/sdo/dmai/BufTab.h>
-#include <ti/sdo/dmai/Rendezvous.h>
 
 G_BEGIN_DECLS
 
@@ -60,7 +59,8 @@ struct _GstTIDmaiaccel
   gint                lineLength;
 
   BufTab_Handle       hOutBufTab;
-  Rendezvous_Handle   waitOnOutBufTab;
+  pthread_mutex_t     bufTabMutex;
+  pthread_cond_t      bufTabCond;
 };
 
 /* _GstTIDmaiaccelClass object */
