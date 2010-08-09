@@ -176,9 +176,6 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
 /******************************************************************************
  * gst_tidmaibuffertransport_new
  *    Create a new DMAI buffer transport object.
- *
- * Note: If rendenzvous handle is set then Rendenzvous_force will be called for
- *       this handle during finalize method.
  ******************************************************************************/
 GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
     pthread_mutex_t *mutex, pthread_cond_t *cond)
