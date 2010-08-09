@@ -43,7 +43,7 @@ int gst_ti_flush_fifo = 0;
 Int32 gstti_bufferGFX_getFrameType(Buffer_Handle hBuf)
 {
     if (hBuf->type != Buffer_Type_GRAPHICS) {
-        return NULL;
+        return 0;
     }
 
     _BufferGfx_Object *gfxObjectPtr = (_BufferGfx_Object *) hBuf;

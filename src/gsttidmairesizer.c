@@ -26,6 +26,7 @@
 #include <string.h>
 #include <gst/video/video.h>
 #include <gst/gst.h>
+#include <stdlib.h>
 #include "gsttidmaibuffertransport.h"
 #include "gsttidmairesizer.h"
 
