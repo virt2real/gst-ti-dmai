@@ -607,11 +607,14 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   GstStructure *structure, *capStruct;
   guint32 fourcc;
   GstCaps *othercaps, *newcaps;
-  dmairesizer = GST_DMAI_RESIZER (gst_pad_get_parent (pad));
+
   if (!GST_PAD_IS_SINK (pad))
     return TRUE;
-
+    
   g_return_val_if_fail (gst_caps_is_fixed (caps), FALSE);
+
+  dmairesizer = GST_DMAI_RESIZER (gst_pad_get_parent (pad));
+
   structure = gst_caps_get_structure (caps, 0);
 
   if (!gst_structure_get_int (structure, "width", &dmairesizer->width)) {
@@ -717,10 +720,12 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   if (!gst_pad_set_caps(dmairesizer->srcpad, newcaps)) {
       GST_ELEMENT_ERROR(dmairesizer,STREAM,FAILED,(NULL),
           ("Failed to set the srcpad caps"));
+      gst_caps_unref(newcaps);
       free_buffers(dmairesizer);
       gst_object_unref (dmairesizer);
       return FALSE;
   }
+  gst_caps_unref(newcaps);
 
   /* Setting output buffers */
   if(dmairesizer->setup_outBufTab){

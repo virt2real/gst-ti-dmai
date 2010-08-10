@@ -716,9 +716,11 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     if (decoder->dops->codec_type == VIDEO ||
         decoder->dops->codec_type == IMAGE) {
         GstStructure *capStruct;
+        GstCaps *caps;
         guint32 fourcc;
 
-        capStruct = gst_caps_get_structure(gst_pad_get_allowed_caps (dmaidec->srcpad), 0);
+        caps = gst_pad_get_allowed_caps (dmaidec->srcpad);
+        capStruct = gst_caps_get_structure(caps, 0);
 
         if (!gst_structure_get_int(capStruct, "pitch", &dmaidec->pitch)) {
             dmaidec->pitch = 0;
@@ -738,13 +740,16 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             default:
                 GST_ELEMENT_ERROR(dmaidec, STREAM, NOT_IMPLEMENTED,
                     ("unsupported fourcc in video/image stream\n"), (NULL));
+                gst_caps_unref(caps);
                 return FALSE;
             }
         } else {
             GST_ELEMENT_ERROR(dmaidec, STREAM, NOT_IMPLEMENTED,
                 ("unsupported fourcc in video/image stream\n"), (NULL));
+            gst_caps_unref(caps);
             return FALSE;
         }
+        gst_caps_unref(caps);
     }
     
     /* Set the caps on the parameters of the decoder */
@@ -1027,8 +1032,10 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
     if (!gst_pad_set_caps(dmaidec->srcpad, newcaps)) {
         GST_ELEMENT_ERROR(dmaidec,STREAM,FAILED,(NULL),
             ("Failed to set the srcpad caps"));
+        gst_caps_unref(newcaps);
         return FALSE;
     }
+    gst_caps_unref(newcaps);
     dmaidec->src_pad_caps_fixed = TRUE;
 
     GST_DEBUG("Setting source pad caps to: '%s'", (str = gst_caps_to_string(GST_PAD_CAPS(dmaidec->srcpad))));
@@ -1046,7 +1053,6 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
     GstTIDmaidec *dmaidec;
     GstStructure *capStruct;
     const gchar  *mime;
-    GstCaps *othercaps, *newcaps;
     char * str = NULL;
     GstTIDmaidecData *decoder;
 
@@ -1057,11 +1063,6 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
 
     capStruct = gst_caps_get_structure(caps, 0);
     mime      = gst_structure_get_name(capStruct);
-
-    /* Pick the output caps */
-    othercaps = gst_pad_get_allowed_caps (dmaidec->srcpad);
-    newcaps = gst_caps_copy_nth (othercaps, 0);
-    gst_caps_unref(othercaps);
 
     switch (decoder->dops->codec_type) {
     case VIDEO:
@@ -1106,6 +1107,7 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
         break;
     default:
         GST_ERROR("the codec provided doesn't belong to a know category (VIDEO/AUDIO/IMAGE)");
+        gst_object_unref(dmaidec);
         return FALSE;
     }
 
@@ -1249,12 +1251,6 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
         GST_EVENT_TYPE_NAME(event));
 
     switch (GST_EVENT_TYPE(event)) {
-    case GST_EVENT_LATENCY:
-        gst_event_parse_latency(event,&dmaidec->latency);
-        GST_DEBUG("Latency is %"GST_TIME_FORMAT,GST_TIME_ARGS(dmaidec->latency));
-
-        ret = TRUE;
-        goto done;
     case GST_EVENT_QOS:
     {
         GstClockTime timestamp;
