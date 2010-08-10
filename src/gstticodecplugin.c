@@ -426,7 +426,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
         case VIDEO:
             encoder->sinkCaps = &gstti_yuv_caps;
 #if PLATFORM == dm365
-            if (!strcmp (encoder->codecName, "h264enc")) {
+            if (!strcmp (encoder->codecName, "h264enc") || !strcmp (encoder->codecName, "mpeg4enc")) {
                 encoder->sinkCaps = &gstti_nv12_caps;
             }
 #endif
