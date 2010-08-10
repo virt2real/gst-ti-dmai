@@ -296,8 +296,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
       }
 
       if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
-        caps = gst_caps_make_writable (
-            gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
+        caps = gst_caps_copy(GST_PAD_CAPS (dmairesizer->srcpad));
         capStruct = gst_caps_get_structure (caps, 0);
         gst_structure_set (capStruct,
             "width", G_TYPE_INT, dmairesizer->target_width, (char *) NULL);
@@ -319,8 +318,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
       }
 
       if (GST_IS_CAPS(GST_PAD_CAPS (dmairesizer->srcpad))) {
-        caps = gst_caps_make_writable (
-             gst_caps_ref (GST_PAD_CAPS (dmairesizer->srcpad)));
+        caps = gst_caps_copy(GST_PAD_CAPS (dmairesizer->srcpad));
         capStruct = gst_caps_get_structure (caps, 0);
         gst_structure_set (capStruct,
             "height", G_TYPE_INT, dmairesizer->target_height, (char *) NULL);
@@ -1132,6 +1130,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   if(outBuffer == NULL){
     gst_buffer_unref (buf);
     /*GST_ELEMENT_ERROR called before */
+    gst_caps_unref(caps);
     g_mutex_unlock (dmairesizer->mutex);
     return GST_FLOW_UNEXPECTED;
   }
@@ -1143,6 +1142,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   if (!pushBuffer) {
     GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
         ("Failed to create dmai buffer"));
+    gst_caps_unref(caps);
     g_mutex_unlock (dmairesizer->mutex);
     return GST_FLOW_UNEXPECTED;
   }

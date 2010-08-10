@@ -342,9 +342,6 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
         dmaienc->sinkpad, GST_DEBUG_FUNCPTR(gst_tidmaienc_sink_event));
     gst_pad_set_chain_function(
         dmaienc->sinkpad, GST_DEBUG_FUNCPTR(gst_tidmaienc_chain));
-    gst_pad_fixate_caps(dmaienc->sinkpad,
-        gst_caps_make_writable(
-            gst_caps_copy(gst_pad_get_pad_template_caps(dmaienc->sinkpad))));
 
     /* Instantiate encoded source pad.
      *
@@ -353,9 +350,6 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
      */
     dmaienc->srcpad =
         gst_pad_new_from_template(gclass->srcTemplateCaps, "src");
-    gst_pad_fixate_caps(dmaienc->srcpad,
-        gst_caps_make_writable(
-            gst_caps_copy(gst_pad_get_pad_template_caps(dmaienc->srcpad))));
 
     /* Add pads to TIDmaienc element */
     gst_element_add_pad(GST_ELEMENT(dmaienc), dmaienc->sinkpad);
@@ -757,6 +751,7 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
     const gchar  *mime;
     char * str = NULL;
     guint32 fourcc;
+    GstCaps *othercaps, *newcaps = NULL;
     GstTIDmaiencClass *gclass;
     GstTIDmaiencData *encoder;
 
@@ -817,14 +812,17 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
                 default:
                     GST_ELEMENT_ERROR(dmaienc, STREAM, NOT_IMPLEMENTED,
                         ("unsupported fourcc in video stream\n"), (NULL));
-                        gst_object_unref(dmaienc);
+                    gst_object_unref(dmaienc);
                     return FALSE;
             }
         }
 
-        caps = gst_caps_make_writable(
-            gst_caps_copy(gst_pad_get_pad_template_caps(dmaienc->srcpad)));
-        capStruct = gst_caps_get_structure(caps, 0);
+        /* Pick the output caps */
+        othercaps = gst_pad_get_allowed_caps (dmaienc->srcpad);
+        newcaps = gst_caps_copy_nth (othercaps, 0);
+        gst_caps_unref(othercaps);
+
+        capStruct = gst_caps_get_structure(newcaps, 0);
         gst_structure_set(capStruct,"height",G_TYPE_INT,dmaienc->height,
                                     "width",G_TYPE_INT,dmaienc->width,
                                     "framerate", GST_TYPE_FRACTION,
@@ -858,13 +856,15 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
             dmaienc->rate = 0;
         }
 
-        caps = gst_caps_make_writable(
-            gst_caps_copy(gst_pad_get_pad_template_caps(dmaienc->srcpad)));
+        /* Pick the output caps */
+        othercaps = gst_pad_get_allowed_caps (dmaienc->srcpad);
+        newcaps = gst_caps_copy_nth (othercaps, 0);
+        gst_caps_unref(othercaps);
 
         /* gst_pad_get_pad_template_caps: gets the capabilities of
          * dmaienc->srcpad, then creates a copy and makes it writable
          */
-        capStruct = gst_caps_get_structure(caps, 0);
+        capStruct = gst_caps_get_structure(newcaps, 0);
 
         gst_structure_set(capStruct,"channels",G_TYPE_INT,dmaienc->channels,
                                     "rate",G_TYPE_INT,dmaienc->rate,
@@ -886,10 +886,17 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         }
     }
 
-    GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(caps)));
+    if (!newcaps){
+        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+            ("Failed to calculate the srcpad caps"));
+        gst_object_unref(dmaienc);
+        return FALSE;
+    }
+    
+    GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(newcaps)));
     g_free(str);
 
-    if (!gst_pad_set_caps(dmaienc->srcpad, caps)) {
+    if (!gst_pad_set_caps(dmaienc->srcpad, newcaps)) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
            	("Failed to set the srcpad caps"));
     } else {
@@ -910,14 +917,15 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         if (!gst_tidmaienc_configure_codec(dmaienc)) {
             GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
                 ("Failed to configure codec"));
+            gst_caps_unref(newcaps);
             gst_object_unref(dmaienc);
-            return GST_FLOW_UNEXPECTED;
+            return FALSE;
         }
-
-        gst_object_unref(dmaienc);
 
         GST_DEBUG("sink caps negotiation successful\n");
     }
+    gst_caps_unref(newcaps);
+    gst_object_unref(dmaienc);
 
     return TRUE;
 }
