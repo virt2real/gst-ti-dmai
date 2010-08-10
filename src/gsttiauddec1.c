@@ -108,7 +108,7 @@ static void gstti_auddec1_set_codec_caps(GstTIDmaidec *dmaidec){
     AUDDEC1_Params *params = (AUDDEC1_Params *)dmaidec->params;
 
     /* Set up codec parameters depending on device MAYBE NEEDS TO BE IMPLEMENTED */
-    params.dataEndianness = XDM_LE_16;
+    params->dataEndianness = XDM_LE_16;
 #endif
 }
 
