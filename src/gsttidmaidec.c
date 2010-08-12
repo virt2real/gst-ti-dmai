@@ -312,6 +312,8 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 {
     GstTIDmaidecData *decoder;
 
+    GST_LOG("Entry");
+
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
@@ -399,7 +401,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->numInputBufs       = 0UL;
     dmaidec->metaTab            = NULL;
 
-
+    GST_LOG("Leave");
 }
 
 
@@ -690,6 +692,7 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     }
 
     GST_DEBUG("end exit_decoder\n");
+
     return TRUE;
 }
 
@@ -708,7 +711,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_DEBUG("Init\n");
+    GST_LOG("Entry");
 
     /* For video and image codecs we need to know the requested colorspace
      * ahead of creating the codec
@@ -921,6 +924,8 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->marker = 0;
     dmaidec->end = dmaidec->numInputBufs * dmaidec->inBufSize;
 
+    GST_LOG("Leave");
+
     return TRUE;
 }
 
@@ -934,6 +939,8 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
 {
     GstTIDmaidecClass      *gclass;
     GstTIDmaidecData       *decoder;
+
+    GST_LOG("Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -976,6 +983,8 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->flushing = FALSE;
     dmaidec->current_timestamp  = 0;
 
+    GST_LOG("Leave");
+
     return TRUE;
 }
 
@@ -988,6 +997,8 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
     GstCaps *othercaps, *newcaps;
     char * str = NULL;
     GstTIDmaidecData *decoder;
+
+    GST_LOG("Entry");
 
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(G_OBJECT_GET_CLASS (dmaidec)),
@@ -1041,6 +1052,7 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
     GST_DEBUG("Setting source pad caps to: '%s'", (str = gst_caps_to_string(GST_PAD_CAPS(dmaidec->srcpad))));
     g_free(str);
 
+    GST_LOG("Leave");
     return TRUE;
 }
 
@@ -1056,6 +1068,7 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
     char * str = NULL;
     GstTIDmaidecData *decoder;
 
+    GST_LOG("Entry");
     dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(G_OBJECT_GET_CLASS (dmaidec)),
@@ -1122,6 +1135,7 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
 
     gst_object_unref(dmaidec);
 
+    GST_LOG("Leave");
     GST_DEBUG("sink caps negotiation successful\n");
     return TRUE;
 }
@@ -1139,6 +1153,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
+    GST_LOG("Entry");
     dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1226,6 +1241,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
     }
 
 done:
+    GST_LOG("Leave");
     gst_object_unref(dmaidec);
     return ret;
 }
@@ -1241,6 +1257,8 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
     gboolean      ret = FALSE;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
+
+    GST_LOG("Entry");
 
     dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
@@ -1274,6 +1292,7 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
     }
 
 done:
+    GST_LOG("Leave");
     gst_object_unref(dmaidec);
     return ret;
 }
@@ -1288,6 +1307,8 @@ static gboolean gst_tidmaidec_query(GstPad * pad, GstQuery * query){
     GstPad      *peer   = NULL;
     GstTIDmaidec *dmaidec;
 
+    GST_LOG("Entry");
+
     dmaidec = (GstTIDmaidec *) gst_pad_get_parent(pad);
 
     if ((peer = gst_pad_get_peer (dmaidec->sinkpad))) {
@@ -1297,14 +1318,19 @@ static gboolean gst_tidmaidec_query(GstPad * pad, GstQuery * query){
     }
 
     gst_object_unref(dmaidec);
+    GST_LOG("Leave");
     return res;
 }
 
 /* Helper function to free metadata from the linked list */
 static void meta_free(gpointer data, gpointer user_data){
+    GST_LOG("Entry");
+
     GstBuffer *buf = (GstBuffer *) data;
     GST_DEBUG("Freeing meta data");
     gst_buffer_unref(buf);
+
+    GST_LOG("Leave");
 }
 
 /*
@@ -1313,6 +1339,8 @@ static void meta_free(gpointer data, gpointer user_data){
  * buffer and the metadata
  */
 static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
+    GST_LOG("Entry");
+
     if (dmaidec->flushing){
         GST_DEBUG("Flushing the circular buffer completely");
         dmaidec->head = dmaidec->tail = dmaidec->marker = 0;
@@ -1334,13 +1362,16 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
         GST_DEBUG("Flushing %d bytes from the circular buffer, %d remains",bytes,
             dmaidec->head - dmaidec->tail);
     }
+    GST_LOG("Leave");
 }
 
 /* Helper function to correct metadata offsets */
 static void meta_correct(gpointer data, gpointer user_data){
+    GST_LOG("Entry");
     GstBuffer *buf = (GstBuffer *) data;
     gint correction = *(gint *)user_data;
     GST_BUFFER_OFFSET(buf) -= correction; 
+    GST_LOG("Leave");
 }
 
 /*
@@ -1349,10 +1380,13 @@ static void meta_correct(gpointer data, gpointer user_data){
  */
 static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
     gint available = dmaidec->end - dmaidec->head;
+    GST_LOG("Entry");
+
     if (available < space){
         if ((available + dmaidec->tail) < space) {
             GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                 ("Not enough free space on the input circular buffer"));
+            GST_LOG("Leave");
             return FALSE;
         } else {
             /* Move data */
@@ -1370,6 +1404,7 @@ static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
         }
     }
 
+    GST_LOG("Leave");
     return TRUE;
 }
 
@@ -1383,6 +1418,8 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     GstTIDmaidecData *decoder;
     int bytes = 0;
     gboolean ret = TRUE;
+    
+    GST_LOG("Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1435,6 +1472,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
 
 out:
     gst_buffer_unref(buf);
+    GST_LOG("Leave");
     return ret;
 }
 
@@ -1450,6 +1488,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
+    GST_LOG("Entry");
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -1505,18 +1544,20 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
                  * metadata because we don't know if would be required later 
                  */
                 n = g_list_position(dmaidec->circMeta,element);
-                while (n > 0){
+                do {
                     data = (GstBuffer *)g_list_first(dmaidec->circMeta)->data;
                     gst_buffer_unref(data);
                     dmaidec->circMeta = g_list_delete_link(dmaidec->circMeta,
                         g_list_first(dmaidec->circMeta));
                     n--;
-                }
+                } while (n >= 0);
                 break;
             }
             element = g_list_next(element);
         }
     }
+
+    GST_LOG("Leave");
 
     GST_DEBUG("Returning a buffer %p",buf);
     return buf;
@@ -1550,7 +1591,8 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
         buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
         GST_BUFFER_SIZE(buf) = 0;
     }
-    
+    GST_LOG("Leave");
+
     return buf;
 }
 
@@ -1559,15 +1601,19 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
  * if the frame should be displayed.
  ******************************************************************************/
 static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,gint64 timestamp){
+    GST_LOG("Entry");
+
     if (GST_CLOCK_TIME_IS_VALID(dmaidec->segment_start) &&
         GST_CLOCK_TIME_IS_VALID(dmaidec->segment_stop) &&
         (timestamp < dmaidec->segment_start ||
         timestamp > dmaidec->segment_stop)){
         GST_WARNING("Timestamp %llu is outside of segment boundaries [%llu %llu] , clipping",
             timestamp,dmaidec->segment_start,dmaidec->segment_stop);
+        GST_LOG("Leave");
         return TRUE;
     }
 
+    GST_LOG("Leave");
     return FALSE;
 }
 
@@ -1583,6 +1629,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     Buffer_Handle  hDstBuf;
     Buffer_Handle  hFreeBuf;
     GstBuffer     *outBuf;
+
+    GST_LOG("Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1711,6 +1759,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
 
     if (skip_frame)
         return GST_FLOW_OK;
+    
+    GST_LOG("Test point");
     
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {
@@ -1852,6 +1902,8 @@ codec_flushed:
         GST_DEBUG("Codec is flushed\n");
     }
 
+    GST_LOG("Leave");
+
     return GST_FLOW_OK;
 
 failure:
@@ -1859,6 +1911,8 @@ failure:
         gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
         gst_buffer_unref(encData);
     }
+
+    GST_LOG("Leave");
 
     return GST_FLOW_UNEXPECTED;
 }
@@ -1877,6 +1931,8 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
     GstBuffer    *pushBuffer = NULL;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
+
+    GST_LOG("Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1897,7 +1953,8 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
     }
 
     if (!gstti_dmaidec_circ_buffer_push(dmaidec,buf)){
-        return GST_FLOW_UNEXPECTED;
+        GST_LOG("Leave");
+       return GST_FLOW_UNEXPECTED;
     }
 
     while ((pushBuffer = gstti_dmaidec_circ_buffer_peek(dmaidec))){
@@ -1940,6 +1997,7 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
         }
     }
 
+    GST_LOG("Leave");
     return GST_FLOW_OK;
 }
 
@@ -2014,6 +2072,8 @@ static GstClockTime gst_tidmaidec_frame_duration(GstTIDmaidec *dmaidec)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
+    GST_LOG("Entry");
+
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -2031,6 +2091,7 @@ static GstClockTime gst_tidmaidec_frame_duration(GstTIDmaidec *dmaidec)
             * GST_SECOND);
     }
 
+    GST_LOG("Leave");
     return 0;
 }
 
