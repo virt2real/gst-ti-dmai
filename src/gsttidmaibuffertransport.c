@@ -133,6 +133,8 @@ static void gst_tidmaibuffertransport_init(GTypeInstance *instance,
  ******************************************************************************/
 static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
 {
+    g_return_if_fail (cbuf != NULL);
+    
     GST_LOG("begin finalize\n");
 
     if (cbuf->release_cb){
@@ -168,7 +170,12 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
         GST_LOG("calling Buffer_delete()\n");
         Buffer_delete(cbuf->dmaiBuffer);
     }
+    
+    gst_caps_replace (&GST_BUFFER_CAPS (GST_BUFFER(cbuf)), NULL);
 
+    GST_MINI_OBJECT_CLASS (parent_class)->finalize                                                             
+        (GST_MINI_OBJECT_CAST (cbuf)); 
+    
     GST_LOG("end finalize\n");
 }
 
