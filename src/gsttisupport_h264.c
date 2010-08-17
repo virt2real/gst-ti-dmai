@@ -197,13 +197,12 @@ static GstBuffer * h264_buffer_transform(GstTIDmaienc *dmaienc, GstBuffer *buffe
     GstBuffer  *outBuf = gst_buffer_new_and_alloc(size);
     guchar *dest = GST_BUFFER_DATA(outBuf);
 
-    for (i = 0; i < size - 5; i++) {
-        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0 
-            && data[i + 3] == 1) {
+    for (i = 0; i < size - 4; i++) {
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
             /* Do not copy if current NAL is nothing, PPS or SPS */
             if (nal_type == -1 || nal_type == 7 || nal_type == 8){
                 /* Mark where next NALU starts */
-                mark = i + 4;
+                mark = i + 3;
             } else {
                 // Insert the lenght and the NAL data
                 gint length = i - mark ;
@@ -214,13 +213,13 @@ static GstBuffer * h264_buffer_transform(GstTIDmaienc *dmaienc, GstBuffer *buffe
                 }
                 memcpy(&dest[j+NAL_LENGTH],&data[mark], i-mark);
                 j += NAL_LENGTH + (i-mark);
-                mark = i + 4;
+                mark = i + 3;
             }
             
-            nal_type = (data[i + 4]) & 0x1f;
+            nal_type = (data[i + 3]) & 0x1f;
         }
     }
-    if (i == (size - 5)){
+    if (i == (size - 4)){
         /* We reach the end of the buffer */
         if (nal_type != -1 && nal_type != 7 && nal_type != 8){
             // Insert the lenght and the NAL data
@@ -375,15 +374,14 @@ static gint h264_parse(GstTIDmaidec *dmaidec){
         GST_DEBUG("Marker is at %d",dmaidec->marker);
         /* Find next VOP start header */
             
-        for (i = dmaidec->marker; i <= dmaidec->head - 5; i++) {
+        for (i = dmaidec->marker; i <= dmaidec->head - 4; i++) {
             if (priv->flushing){
                 priv->au_delimiters = FALSE;
                 return -1;
             }
             
-            if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0
-                && data[i + 3] == 0x1) { /* Find a NAL header */
-                gint nal_type = data[i+4]&0x1f;
+            if (data[i + 0] == 0 && data[i + 1] == 0 && data[i + 2] == 0x1) { /* Find a NAL header */
+                gint nal_type = data[i+3]&0x1f;
                 
                 if (nal_type == 9) {
                     priv->au_delimiters = TRUE;
@@ -601,7 +599,7 @@ static int h264_custom_memcpy(GstTIDmaidec *dmaidec, void *target,
     struct gstti_h264_parser_private *priv =
         (struct gstti_h264_parser_private *) dmaidec->parser_private;
     gchar *dest = (gchar *)target;
-    int ret = -1;
+    int ret = 0;
 
     if (priv->sps_pps_data){
         /*
