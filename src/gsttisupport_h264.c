@@ -655,7 +655,7 @@ static int h264_custom_memcpy(GstTIDmaidec *dmaidec, void *target,
     } else {
         /* Byte stream, just pass it on */
         if (available < GST_BUFFER_SIZE(buf))
-            return ret;
+            return -1;
 
         memcpy(target,GST_BUFFER_DATA(buf),GST_BUFFER_SIZE(buf));
         ret = GST_BUFFER_SIZE(buf);

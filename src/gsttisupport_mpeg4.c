@@ -229,17 +229,16 @@ static int mpeg4_custom_memcpy(GstTIDmaidec *dmaidec, void *target,
     struct gstti_mpeg4_parser_private *priv =
         (struct gstti_mpeg4_parser_private *) dmaidec->parser_private;
     gchar *dest = (gchar *)target;
-    int ret = -1;
+    int ret = 0;
 
     GST_DEBUG("MPEG4 memcpy, buffer %d, avail %d",GST_BUFFER_SIZE(buf),available);
     if (priv->codecdata_inserted || !priv->codecdata){
         if (available < GST_BUFFER_SIZE(buf))
-            return ret;
-        ret = 0;
+            return -1;
     } else {
         if (available < 
             (GST_BUFFER_SIZE(buf) + GST_BUFFER_SIZE(priv->codecdata)))
-            return ret;
+            return -1;
 
         memcpy(dest,GST_BUFFER_DATA(priv->codecdata),
             GST_BUFFER_SIZE(priv->codecdata));
