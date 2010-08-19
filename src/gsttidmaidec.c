@@ -312,7 +312,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 {
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -320,11 +320,11 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     /* Initialize the rest of the codec */
     if (gclass->codec_data && gclass->codec_data->setup_params) {
         /* If our specific codec provides custom parameters... */
-        GST_DEBUG("Use custom setup params");
+        GST_DEBUG_OBJECT(dmaidec,"Use custom setup params");
         gclass->codec_data->setup_params(GST_ELEMENT(dmaidec));
     } else {
         /* Otherwise just use the default decoder implementation */
-        GST_DEBUG("Use default setup params");
+        GST_DEBUG_OBJECT(dmaidec,"Use default setup params");
         decoder->dops->default_setup_params(dmaidec);
     }
 
@@ -401,7 +401,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->numInputBufs       = 0UL;
     dmaidec->metaTab            = NULL;
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 }
 
 
@@ -418,22 +418,22 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
     GstTIDmaidecData *decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_LOG("begin set_property\n");
+    GST_LOG_OBJECT(dmaidec,"begin set_property\n");
 
     switch (prop_id) {
     case PROP_NUM_OUTPUT_BUFS:
         dmaidec->numOutputBufs = g_value_get_int(value);
-        GST_LOG("setting \"numOutputBufs\" to \"%ld\"\n",
+        GST_LOG_OBJECT(dmaidec,"setting \"numOutputBufs\" to \"%ld\"\n",
             dmaidec->numOutputBufs);
         break;
     case PROP_NUM_INPUT_BUFS:
         dmaidec->numInputBufs = g_value_get_int(value);
-        GST_LOG("setting \"numInputBufs\" to \"%ld\"\n",
+        GST_LOG_OBJECT(dmaidec,"setting \"numInputBufs\" to \"%ld\"\n",
             dmaidec->numInputBufs);
         break;
     case PROP_QOS:
         dmaidec->qos = g_value_get_boolean(value);
-        GST_LOG("seeting \"qos\" to %s\n",
+        GST_LOG_OBJECT(dmaidec,"seeting \"qos\" to %s\n",
             dmaidec->qos?"TRUE":"FALSE");
         break;
     default:
@@ -449,7 +449,7 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
         break;
     }
 
-    GST_LOG("end set_property\n");
+    GST_LOG_OBJECT(dmaidec,"end set_property\n");
 }
 
 /******************************************************************************
@@ -465,7 +465,7 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
     GstTIDmaidecData *decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIDEC_PARAMS_QDATA);
     
-    GST_LOG("begin get_property\n");
+    GST_LOG_OBJECT(dmaidec,"begin get_property\n");
 
     switch (prop_id) {
     case PROP_NUM_OUTPUT_BUFS:
@@ -490,7 +490,7 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
         break;
     }
 
-    GST_LOG("end get_property\n");
+    GST_LOG_OBJECT(dmaidec,"end get_property\n");
 }
 
 
@@ -508,13 +508,13 @@ static GstStateChangeReturn gst_tidmaidec_change_state(GstElement *element,
     GstStateChangeReturn  ret    = GST_STATE_CHANGE_SUCCESS;
     GstTIDmaidec          *dmaidec = (GstTIDmaidec *)element;
 
-    GST_DEBUG("begin change_state (%d)\n", transition);
+    GST_DEBUG_OBJECT(dmaidec,"begin change_state (%d)\n", transition);
 
     /* Handle ramp-up state changes */
     switch (transition) {
     case GST_STATE_CHANGE_NULL_TO_READY:
         /* Init decoder */
-        GST_DEBUG("GST_STATE_CHANGE_NULL_TO_READY");
+        GST_DEBUG_OBJECT(dmaidec,"GST_STATE_CHANGE_NULL_TO_READY");
         if (!gst_tidmaidec_init_decoder(dmaidec)) {
             return GST_STATE_CHANGE_FAILURE;
         }
@@ -550,7 +550,7 @@ static GstStateChangeReturn gst_tidmaidec_change_state(GstElement *element,
         break;
     }
 
-    GST_DEBUG("end change_state\n");
+    GST_DEBUG_OBJECT(dmaidec,"end change_state\n");
     return ret;
 }
 
@@ -569,7 +569,7 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     decoder = (GstTIDmaidecData *)
         g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_DEBUG("begin init_decoder\n");
+    GST_DEBUG_OBJECT(dmaidec,"begin init_decoder\n");
 
     /* Make sure we know what codec we're using */
     if (!dmaidec->engineName) {
@@ -585,7 +585,7 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     }
 
     /* Open the codec engine */
-    GST_DEBUG("opening codec engine \"%s\"\n", dmaidec->engineName);
+    GST_DEBUG_OBJECT(dmaidec,"opening codec engine \"%s\"\n", dmaidec->engineName);
     dmaidec->hEngine = Engine_open((Char *) dmaidec->engineName, NULL, NULL);
 
     if (dmaidec->hEngine == NULL) {
@@ -641,7 +641,7 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     pthread_mutex_init(&dmaidec->bufTabMutex, NULL);
     pthread_cond_init(&dmaidec->bufTabCond, NULL);
 
-    GST_DEBUG("end init_decoder\n");
+    GST_DEBUG_OBJECT(dmaidec,"end init_decoder\n");
     return TRUE;
 }
 
@@ -659,7 +659,7 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_DEBUG("begin exit_decoder\n");
+    GST_DEBUG_OBJECT(dmaidec,"begin exit_decoder\n");
 
     /* Discard data on the pipeline */
     gst_tidmaidec_start_flushing(dmaidec);
@@ -686,12 +686,12 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     }
 
     if (dmaidec->hEngine) {
-        GST_DEBUG("closing codec engine\n");
+        GST_DEBUG_OBJECT(dmaidec,"closing codec engine\n");
         Engine_close(dmaidec->hEngine);
         dmaidec->hEngine = NULL;
     }
 
-    GST_DEBUG("end exit_decoder\n");
+    GST_DEBUG_OBJECT(dmaidec,"end exit_decoder\n");
 
     return TRUE;
 }
@@ -711,7 +711,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     /* For video and image codecs we need to know the requested colorspace
      * ahead of creating the codec
@@ -844,7 +844,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
         } else {
             BufferGfx_Dimensions allocDim;
 
-            GST_INFO("Using downstream allocated buffers");
+            GST_INFO_OBJECT(dmaidec,"Using downstream allocated buffers");
             dmaidec->downstreamBuffers = TRUE;
             BufferGfx_getDimensions(
                 GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer),
@@ -878,8 +878,8 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             ("Unknown codec type, can't parse the caps"));
         return FALSE;
     }
-    GST_DEBUG("Codec input buffer size %d\n",dmaidec->inBufSize);
-    GST_DEBUG("Codec output buffer size %d\n",dmaidec->outBufSize);
+    GST_DEBUG_OBJECT(dmaidec,"Codec input buffer size %d\n",dmaidec->inBufSize);
+    GST_DEBUG_OBJECT(dmaidec,"Codec output buffer size %d\n",dmaidec->outBufSize);
 
     if (dmaidec->hOutBufTab == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -906,7 +906,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     }
     
     /* Create codec input circular buffer */
-    GST_DEBUG("creating input circular buffer\n");
+    GST_DEBUG_OBJECT(dmaidec,"creating input circular buffer\n");
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
     dmaidec->circBuf = Buffer_create(
@@ -924,7 +924,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->marker = 0;
     dmaidec->end = dmaidec->numInputBufs * dmaidec->inBufSize;
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 
     return TRUE;
 }
@@ -940,7 +940,7 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     GstTIDmaidecClass      *gclass;
     GstTIDmaidecData       *decoder;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -955,14 +955,14 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     }
 
     if (dmaidec->circBuf) {
-        GST_DEBUG("freeing input buffers\n");
+        GST_DEBUG_OBJECT(dmaidec,"freeing input buffers\n");
         Buffer_delete(dmaidec->circBuf);
         dmaidec->circBuf = NULL;
     }
 
     /* We only release the buffer tab if belong to us */
     if (dmaidec->hOutBufTab && !dmaidec->downstreamBuffers) {
-        GST_DEBUG("freeing output buffers\n");
+        GST_DEBUG_OBJECT(dmaidec,"freeing output buffers\n");
         BufTab_delete(dmaidec->hOutBufTab);
         dmaidec->hOutBufTab = NULL;
     }
@@ -974,7 +974,7 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     }
 
     if (dmaidec->hCodec) {
-        GST_LOG("closing decoder\n");
+        GST_LOG_OBJECT(dmaidec,"closing decoder\n");
         decoder->dops->codec_destroy(dmaidec);
         dmaidec->hCodec = NULL;
     }
@@ -983,7 +983,7 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->flushing = FALSE;
     dmaidec->current_timestamp  = 0;
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 
     return TRUE;
 }
@@ -998,7 +998,7 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
     char * str = NULL;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(G_OBJECT_GET_CLASS (dmaidec)),
@@ -1049,10 +1049,10 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
     gst_caps_unref(newcaps);
     dmaidec->src_pad_caps_fixed = TRUE;
 
-    GST_DEBUG("Setting source pad caps to: '%s'", (str = gst_caps_to_string(GST_PAD_CAPS(dmaidec->srcpad))));
+    GST_DEBUG_OBJECT(dmaidec,"Setting source pad caps to: '%s'", (str = gst_caps_to_string(GST_PAD_CAPS(dmaidec->srcpad))));
     g_free(str);
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return TRUE;
 }
 
@@ -1068,8 +1068,8 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
     char * str = NULL;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
     dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
+    GST_LOG_OBJECT(dmaidec,"Entry");
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(G_OBJECT_GET_CLASS (dmaidec)),
           GST_TIDMAIDEC_PARAMS_QDATA);
@@ -1124,7 +1124,7 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
         return FALSE;
     }
 
-    GST_DEBUG("Setting sink pad caps: '%s'", (str = gst_caps_to_string(caps)));
+    GST_DEBUG_OBJECT(dmaidec,"Setting sink pad caps: '%s'", (str = gst_caps_to_string(caps)));
     g_free(str);
 
     if (!gst_tidmaidec_deconfigure_codec(dmaidec)) {
@@ -1135,8 +1135,8 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
 
     gst_object_unref(dmaidec);
 
-    GST_LOG("Leave");
-    GST_DEBUG("sink caps negotiation successful\n");
+    GST_LOG_OBJECT(dmaidec,"Leave");
+    GST_DEBUG_OBJECT(dmaidec,"sink caps negotiation successful\n");
     return TRUE;
 }
 
@@ -1153,13 +1153,13 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
     dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
+    GST_LOG_OBJECT(dmaidec,"Entry");
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_DEBUG("pad \"%s\" received:  %s\n", GST_PAD_NAME(pad),
+    GST_DEBUG_OBJECT(dmaidec,"pad \"%s\" received:  %s\n", GST_PAD_NAME(pad),
         GST_EVENT_TYPE_NAME(event));
 
     switch (GST_EVENT_TYPE(event)) {
@@ -1177,7 +1177,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
         switch (fmt) {
         case GST_FORMAT_TIME:
 
-            GST_DEBUG("NEWSEGMENT start %" GST_TIME_FORMAT " -- stop %"
+            GST_DEBUG_OBJECT(dmaidec,"NEWSEGMENT start %" GST_TIME_FORMAT " -- stop %"
                 GST_TIME_FORMAT,
                 GST_TIME_ARGS (dmaidec->segment_start),
                 GST_TIME_ARGS (dmaidec->segment_stop));
@@ -1198,7 +1198,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
     }
     case GST_EVENT_EOS:
         /* end-of-stream: process any remaining encoded frame data */
-        GST_INFO("EOS: draining remaining encoded data\n");
+        GST_INFO_OBJECT(dmaidec,"EOS: draining remaining encoded data\n");
 
         /* We will generate a new EOS event upon exhausting the current
          * packets
@@ -1241,7 +1241,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
     }
 
 done:
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     gst_object_unref(dmaidec);
     return ret;
 }
@@ -1258,14 +1258,14 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
-
     dmaidec =(GstTIDmaidec *) gst_pad_get_parent(pad);
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_DEBUG("pad \"%s\" received:  %s\n", GST_PAD_NAME(pad),
+    GST_LOG_OBJECT(dmaidec,"Entry");
+
+    GST_DEBUG_OBJECT(dmaidec,"pad \"%s\" received:  %s\n", GST_PAD_NAME(pad),
         GST_EVENT_TYPE_NAME(event));
 
     switch (GST_EVENT_TYPE(event)) {
@@ -1278,7 +1278,7 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
         gst_event_parse_qos(event,&proportion,&diff,&timestamp);
 
         dmaidec->qos_value = (int)ceil(proportion);
-        GST_INFO("QOS event: QOSvalue %d, %E",dmaidec->qos_value,
+        GST_INFO_OBJECT(dmaidec,"QOS event: QOSvalue %d, %E",dmaidec->qos_value,
             proportion);
 
         ret = gst_pad_event_default(pad, event);
@@ -1292,7 +1292,7 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
     }
 
 done:
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     gst_object_unref(dmaidec);
     return ret;
 }
@@ -1307,9 +1307,8 @@ static gboolean gst_tidmaidec_query(GstPad * pad, GstQuery * query){
     GstPad      *peer   = NULL;
     GstTIDmaidec *dmaidec;
 
-    GST_LOG("Entry");
-
     dmaidec = (GstTIDmaidec *) gst_pad_get_parent(pad);
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     if ((peer = gst_pad_get_peer (dmaidec->sinkpad))) {
         /* just forward to peer */
@@ -1318,7 +1317,7 @@ static gboolean gst_tidmaidec_query(GstPad * pad, GstQuery * query){
     }
 
     gst_object_unref(dmaidec);
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return res;
 }
 
@@ -1339,10 +1338,10 @@ static void meta_free(gpointer data, gpointer user_data){
  * buffer and the metadata
  */
 static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     if (dmaidec->flushing){
-        GST_DEBUG("Flushing the circular buffer completely");
+        GST_DEBUG_OBJECT(dmaidec,"Flushing the circular buffer completely");
         dmaidec->head = dmaidec->tail = dmaidec->marker = 0;
         if (dmaidec->circMeta){
             g_list_foreach (dmaidec->circMeta, meta_free, NULL);
@@ -1359,10 +1358,10 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
         if (dmaidec->tail >= dmaidec->head){
             dmaidec->tail = dmaidec->head = 0;
         }
-        GST_DEBUG("Flushing %d bytes from the circular buffer, %d remains",bytes,
+        GST_DEBUG_OBJECT(dmaidec,"Flushing %d bytes from the circular buffer, %d remains",bytes,
             dmaidec->head - dmaidec->tail);
     }
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 }
 
 /* Helper function to correct metadata offsets */
@@ -1380,13 +1379,13 @@ static void meta_correct(gpointer data, gpointer user_data){
  */
 static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
     gint available = dmaidec->end - dmaidec->head;
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     if (available < space){
         if ((available + dmaidec->tail) < space) {
             GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                 ("Not enough free space on the input circular buffer"));
-            GST_LOG("Leave");
+            GST_LOG_OBJECT(dmaidec,"Leave");
             return FALSE;
         } else {
             /* Move data */
@@ -1404,7 +1403,7 @@ static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
         }
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return TRUE;
 }
 
@@ -1419,7 +1418,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     int bytes = 0;
     gboolean ret = TRUE;
     
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1431,7 +1430,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
         goto out;
     }
     
-    GST_DEBUG("Pushing a buffer of size %d, circbuf is currently %d",
+    GST_DEBUG_OBJECT(dmaidec,"Pushing a buffer of size %d, circbuf is currently %d",
         GST_BUFFER_SIZE(buf),dmaidec->head - dmaidec->tail);
     /* Store the metadata for the circular buffer metadata list */
     meta = gst_buffer_new();
@@ -1472,7 +1471,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
 
 out:
     gst_buffer_unref(buf);
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return ret;
 }
 
@@ -1488,7 +1487,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -1544,22 +1543,22 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
                  * metadata because we don't know if would be required later 
                  */
                 n = g_list_position(dmaidec->circMeta,element);
-                do {
+                while (n > 0) {
                     data = (GstBuffer *)g_list_first(dmaidec->circMeta)->data;
                     gst_buffer_unref(data);
                     dmaidec->circMeta = g_list_delete_link(dmaidec->circMeta,
                         g_list_first(dmaidec->circMeta));
                     n--;
-                } while (n >= 0);
+                }
                 break;
             }
             element = g_list_next(element);
         }
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 
-    GST_DEBUG("Returning a buffer %p",buf);
+    GST_DEBUG_OBJECT(dmaidec,"Returning a buffer %p",buf);
     return buf;
 }
 
@@ -1574,7 +1573,7 @@ static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
 static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
     GstBuffer *buf = NULL;
     
-    GST_DEBUG("Draining the circular buffer");
+    GST_DEBUG_OBJECT(dmaidec,"Draining the circular buffer");
     if (dmaidec->tail != dmaidec->head){
         buf = __gstti_dmaidec_circ_buffer_peek(dmaidec,dmaidec->head);
     } else if (dmaidec->circBuf){
@@ -1591,7 +1590,7 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
         buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
         GST_BUFFER_SIZE(buf) = 0;
     }
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 
     return buf;
 }
@@ -1601,7 +1600,7 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
  * if the frame should be displayed.
  ******************************************************************************/
 static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,gint64 timestamp){
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     if (GST_CLOCK_TIME_IS_VALID(dmaidec->segment_start) &&
         GST_CLOCK_TIME_IS_VALID(dmaidec->segment_stop) &&
@@ -1609,11 +1608,11 @@ static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,gint64 timestam
         timestamp > dmaidec->segment_stop)){
         GST_WARNING("Timestamp %llu is outside of segment boundaries [%llu %llu] , clipping",
             timestamp,dmaidec->segment_start,dmaidec->segment_stop);
-        GST_LOG("Leave");
+        GST_LOG_OBJECT(dmaidec,"Leave");
         return TRUE;
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return FALSE;
 }
 
@@ -1630,14 +1629,14 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     Buffer_Handle  hFreeBuf;
     GstBuffer     *outBuf;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
     if (GST_BUFFER_SIZE(encData) == 0){
-        GST_DEBUG("Decode is draining\n");
+        GST_DEBUG_OBJECT(dmaidec,"Decode is draining\n");
 
         /* When no input remains, we must flush any remaining display
          * frames out of the codec and push them to the sink.
@@ -1665,8 +1664,9 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
 
         if (hDstBuf == NULL) {
-            GST_INFO("Failed to get free buffer, waiting on bufTab\n");
+            GST_INFO_OBJECT(dmaidec,"Failed to get free buffer, waiting on bufTab\n");
             pthread_cond_wait(&dmaidec->bufTabCond, &dmaidec->bufTabMutex);
+            GST_INFO_OBJECT(dmaidec,"Awaked from waiting on bufTab\n");
 
             hDstBuf = BufTab_getFreeBuf(dmaidec->hOutBufTab);
 
@@ -1751,7 +1751,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     if (decoder->dops->codec_get_free_buffers){
         hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         while (hFreeBuf) {
-            GST_LOG("Freeing buffer %p",hFreeBuf);
+            GST_LOG_OBJECT(dmaidec,"Freeing buffer %p",hFreeBuf);
             Buffer_freeUseMask(hFreeBuf, decoder->dops->outputUseMask);
             hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         }
@@ -1760,7 +1760,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     if (skip_frame)
         return GST_FLOW_OK;
     
-    GST_LOG("Test point");
+    GST_LOG_OBJECT(dmaidec,"Test point");
     
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {
@@ -1814,7 +1814,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         }
 
         if (dmaidec->flushing || clip) {
-            GST_DEBUG("Flushing decoded frames\n");
+            GST_DEBUG_OBJECT(dmaidec,"Flushing decoded frames\n");
             Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
                 decoder->dops->outputUseMask);
             if (decoder->dops->codec_type == VIDEO) {
@@ -1847,16 +1847,16 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaidec->srcpad));
 
         if (TRUE) { /* Forward playback*/
-            GST_LOG("Pushing buffer downstream: %p",outBuf);
+            GST_LOG_OBJECT(dmaidec,"Pushing buffer downstream: %p",outBuf);
 
             /* In case of failure we lost our reference to the buffer
              * anyway, so we don't need to call unref
              */
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
-                    GST_DEBUG("push to source pad failed while in flushing state\n");
+                    GST_DEBUG_OBJECT(dmaidec,"push to source pad failed while in flushing state\n");
                 } else {
-                    GST_DEBUG("push to source pad failed\n");
+                    GST_DEBUG_OBJECT(dmaidec,"push to source pad failed\n");
                 }
             }
         } else { /* Reverse playback */
@@ -1873,13 +1873,13 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             outBuf = (GstBuffer *)element->data;
 
             /* Push the transport buffer to the source pad */
-            GST_LOG("pushing display buffer to source pad\n");
+            GST_LOG_OBJECT(dmaidec,"pushing display buffer to source pad\n");
 
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
-                    GST_DEBUG("push to source pad failed while in flushing state\n");
+                    GST_DEBUG_OBJECT(dmaidec,"push to source pad failed while in flushing state\n");
                 } else {
-                    GST_DEBUG("push to source pad failed\n");
+                    GST_DEBUG_OBJECT(dmaidec,"push to source pad failed\n");
                 }
             }
 #endif
@@ -1899,10 +1899,10 @@ codec_flushed:
      */
     if (codecFlushed){
         codecFlushed = FALSE;
-        GST_DEBUG("Codec is flushed\n");
+        GST_DEBUG_OBJECT(dmaidec,"Codec is flushed\n");
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 
     return GST_FLOW_OK;
 
@@ -1912,7 +1912,7 @@ failure:
         gst_buffer_unref(encData);
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
 
     return GST_FLOW_UNEXPECTED;
 }
@@ -1932,7 +1932,7 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -1947,13 +1947,13 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
     }
 
     if (dmaidec->flushing){
-        GST_DEBUG("Dropping buffer from chain function due flushing");
+        GST_DEBUG_OBJECT(dmaidec,"Dropping buffer from chain function due flushing");
         gst_buffer_unref(buf);
         return GST_FLOW_OK;
     }
 
     if (!gstti_dmaidec_circ_buffer_push(dmaidec,buf)){
-        GST_LOG("Leave");
+        GST_LOG_OBJECT(dmaidec,"Leave");
        return GST_FLOW_UNEXPECTED;
     }
 
@@ -1997,7 +1997,7 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
         }
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return GST_FLOW_OK;
 }
 
@@ -2016,7 +2016,7 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    GST_DEBUG("Flushing the pipeline");
+    GST_DEBUG_OBJECT(dmaidec,"Flushing the pipeline");
     dmaidec->flushing = TRUE;
 
     /*
@@ -2040,7 +2040,7 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
     }
 
 
-    GST_DEBUG("Pipeline flushed");
+    GST_DEBUG_OBJECT(dmaidec,"Pipeline flushed");
 }
 
 
@@ -2052,7 +2052,7 @@ static void gst_tidmaidec_stop_flushing(GstTIDmaidec *dmaidec)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
-    GST_DEBUG("Stop flushing");
+    GST_DEBUG_OBJECT(dmaidec,"Stop flushing");
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -2072,7 +2072,7 @@ static GstClockTime gst_tidmaidec_frame_duration(GstTIDmaidec *dmaidec)
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
-    GST_LOG("Entry");
+    GST_LOG_OBJECT(dmaidec,"Entry");
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
@@ -2091,7 +2091,7 @@ static GstClockTime gst_tidmaidec_frame_duration(GstTIDmaidec *dmaidec)
             * GST_SECOND);
     }
 
-    GST_LOG("Leave");
+    GST_LOG_OBJECT(dmaidec,"Leave");
     return 0;
 }
 
