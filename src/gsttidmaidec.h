@@ -100,7 +100,9 @@ struct _GstTIDmaidec
 
     /* Buffer management */
     Buffer_Handle       circBuf;
+    GMutex              *circMutex;
     GList               *circMeta;
+    GMutex              *circMetaMutex;
     gint                head;
     gint                tail;
     gint                marker;

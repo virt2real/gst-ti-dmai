@@ -593,8 +593,9 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
             ("failed to open codec engine \"%s\"", dmaidec->engineName));
         return FALSE;
     }
-    
+
     dmaidec->circMeta = NULL;
+    dmaidec->circMetaMutex = g_mutex_new();
     dmaidec->allocated_buffer = NULL;
     dmaidec->downstreamBuffers = FALSE;
 
@@ -663,6 +664,11 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
 
     /* Discard data on the pipeline */
     gst_tidmaidec_start_flushing(dmaidec);
+
+    if (dmaidec->circMetaMutex) {
+        g_mutex_free(dmaidec->circMetaMutex);
+        dmaidec->circMetaMutex = NULL;
+    }
 
     /* Disable flushing */
     gst_tidmaidec_stop_flushing(dmaidec);
@@ -922,6 +928,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->head = 0;
     dmaidec->tail = 0;
     dmaidec->marker = 0;
+    dmaidec->circMutex = g_mutex_new();
     dmaidec->end = dmaidec->numInputBufs * dmaidec->inBufSize;
 
     GST_LOG_OBJECT(dmaidec,"Leave");
@@ -958,6 +965,11 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         GST_DEBUG_OBJECT(dmaidec,"freeing input buffers\n");
         Buffer_delete(dmaidec->circBuf);
         dmaidec->circBuf = NULL;
+    }
+
+    if (dmaidec->circMutex) {
+        g_mutex_free(dmaidec->circMutex);
+        dmaidec->circMutex = NULL;
     }
 
     /* We only release the buffer tab if belong to us */
@@ -1340,14 +1352,17 @@ static void meta_free(gpointer data, gpointer user_data){
 static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
     GST_LOG_OBJECT(dmaidec,"Entry");
 
+    g_mutex_lock(dmaidec->circMutex);
     if (dmaidec->flushing){
         GST_DEBUG_OBJECT(dmaidec,"Flushing the circular buffer completely");
         dmaidec->head = dmaidec->tail = dmaidec->marker = 0;
+        g_mutex_lock(dmaidec->circMetaMutex);
         if (dmaidec->circMeta){
             g_list_foreach (dmaidec->circMeta, meta_free, NULL);
             g_list_free(dmaidec->circMeta);
             dmaidec->circMeta = NULL;
         }
+        g_mutex_unlock(dmaidec->circMetaMutex);
     } else {
         dmaidec->tail += bytes;
         /* If we have a precise parser we can optimize
@@ -1361,6 +1376,7 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
         GST_DEBUG_OBJECT(dmaidec,"Flushing %d bytes from the circular buffer, %d remains",bytes,
             dmaidec->head - dmaidec->tail);
     }
+    g_mutex_unlock(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Leave");
 }
 
@@ -1376,10 +1392,16 @@ static void meta_correct(gpointer data, gpointer user_data){
 /*
  * Check if there is enough free space on the circular buffer, otherwise
  * move data around on the circular buffer to make free space
+ *
+ * WARNING: To be called with the circMutex locked 
  */
 static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
-    gint available = dmaidec->end - dmaidec->head;
+    gint available;
+
+    /* To be called with the circMutex locked */
     GST_LOG_OBJECT(dmaidec,"Entry");
+
+    available = dmaidec->end - dmaidec->head;
 
     if (available < space){
         if ((available + dmaidec->tail) < space) {
@@ -1398,7 +1420,9 @@ static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
             dmaidec->head -= dmaidec->tail;
             dmaidec->marker -= dmaidec->tail;
             /* Correct metadata */
+            g_mutex_lock(dmaidec->circMetaMutex);
             g_list_foreach (dmaidec->circMeta, meta_correct, &dmaidec->tail);
+            g_mutex_unlock(dmaidec->circMetaMutex);
             dmaidec->tail = 0;
         }
     }
@@ -1411,25 +1435,29 @@ static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
  * Inserts a GstBuffer into the circular buffer and stores the metadata
  */
 static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer *buf){
-    gchar *data = (gchar *)Buffer_getUserPtr(dmaidec->circBuf);
+    gchar *data;
     GstBuffer *meta;
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
     int bytes = 0;
     gboolean ret = TRUE;
-    
+
+    g_mutex_lock(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Entry");
+    data = (gchar *)Buffer_getUserPtr(dmaidec->circBuf);
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
-    
+
     /* If we are flushing, discard data and flush the circular buffer */
     if (dmaidec->flushing){
+        g_mutex_unlock(dmaidec->circMutex);
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
+        g_mutex_lock(dmaidec->circMutex);
         goto out;
     }
-    
+
     GST_DEBUG_OBJECT(dmaidec,"Pushing a buffer of size %d, circbuf is currently %d",
         GST_BUFFER_SIZE(buf),dmaidec->head - dmaidec->tail);
     /* Store the metadata for the circular buffer metadata list */
@@ -1464,13 +1492,16 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     }
 
     GST_BUFFER_SIZE(meta) = bytes;
+    g_mutex_lock(dmaidec->circMetaMutex);
     dmaidec->circMeta = g_list_append(dmaidec->circMeta,meta);
+    g_mutex_unlock(dmaidec->circMetaMutex);
 
     /* Increases the head */
     dmaidec->head += bytes;
 
 out:
     gst_buffer_unref(buf);
+    g_mutex_unlock(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Leave");
     return ret;
 }
@@ -1480,6 +1511,8 @@ out:
  * This functions query the parser to determinate how much data it needs
  * to return
  * If the element is on flushing state, flushes the circular buffer
+ *
+ * WARNING: To be called with the circMutex locked 
  */
 static GstBuffer *__gstti_dmaidec_circ_buffer_peek
     (GstTIDmaidec *dmaidec,gint framepos){
@@ -1487,14 +1520,18 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
     GstTIDmaidecClass *gclass;
     GstTIDmaidecData *decoder;
 
+    /* To be called with the circMutex locked */
+
     GST_LOG_OBJECT(dmaidec,"Entry");
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
-    
+
     if (dmaidec->flushing){
         /* Flush the circular buffer */
+        g_mutex_unlock(dmaidec->circMutex);
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
+        g_mutex_lock(dmaidec->circMutex);
         return NULL;
     }
 
@@ -1512,19 +1549,20 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         Buffer_Handle hBuf;
         GList *element;
         gint size = framepos - dmaidec->tail;
-        
+
         Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
         Attrs.reference = TRUE;
-        
+
         hBuf = Buffer_create(size,&Attrs);
         Buffer_setUserPtr(hBuf,
             Buffer_getUserPtr(dmaidec->circBuf) + dmaidec->tail);
         Buffer_setNumBytesUsed(hBuf,size);
         Buffer_setSize(hBuf,size);
-        
+
         buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
 
         /* We have to find the metadata for this buffer */
+        g_mutex_lock(dmaidec->circMetaMutex);
         element = g_list_first(dmaidec->circMeta);
         while (element) {
             GstBuffer *data = (GstBuffer *)element->data;
@@ -1534,7 +1572,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
                  > dmaidec->tail )
                 ){
                 gint n;
-                
+
                 gst_buffer_copy_metadata(buf,data,GST_BUFFER_COPY_ALL);
 
                 /* Now we delete all metadata up to this element 
@@ -1554,6 +1592,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
             }
             element = g_list_next(element);
         }
+        g_mutex_unlock(dmaidec->circMetaMutex);
     }
 
     GST_LOG_OBJECT(dmaidec,"Leave");
@@ -1563,7 +1602,11 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
 }
 
 static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
-    return __gstti_dmaidec_circ_buffer_peek(dmaidec,0);
+    GstBuffer *ret;
+    g_mutex_lock(dmaidec->circMutex);
+    ret = __gstti_dmaidec_circ_buffer_peek(dmaidec,0);
+    g_mutex_unlock(dmaidec->circMutex);
+    return ret;
 }
 
 /* 
@@ -1572,17 +1615,19 @@ static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
  */
 static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
     GstBuffer *buf = NULL;
-    
+
+    g_mutex_lock(dmaidec->circMutex);
+
     GST_DEBUG_OBJECT(dmaidec,"Draining the circular buffer");
     if (dmaidec->tail != dmaidec->head){
         buf = __gstti_dmaidec_circ_buffer_peek(dmaidec,dmaidec->head);
     } else if (dmaidec->circBuf){
         Buffer_Attrs Attrs = Buffer_Attrs_DEFAULT;
         Buffer_Handle hBuf;
-        
+
         Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
         Attrs.reference = TRUE;
-        
+
         hBuf = Buffer_create(1,&Attrs);
         Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaidec->circBuf));
         Buffer_setNumBytesUsed(hBuf,1);
@@ -1590,6 +1635,8 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
         buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
         GST_BUFFER_SIZE(buf) = 0;
     }
+
+    g_mutex_unlock(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Leave");
 
     return buf;
@@ -2025,6 +2072,10 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
     if (dmaidec->parser_started)
         decoder->parser->flush_start(dmaidec->parser_private);
 
+    if (dmaidec->circBuf) {
+        gstti_dmaidec_circ_buffer_flush(dmaidec,0);
+    }
+
 /*
  * TODO
     if (dmaidec->outList){
@@ -2038,7 +2089,6 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
             GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
         }
     }
-
 
     GST_DEBUG_OBJECT(dmaidec,"Pipeline flushed");
 }
