@@ -176,7 +176,12 @@ static gboolean gstti_auddec1_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
 }
 
 static gint gstti_auddec1_get_in_buffer_size(GstTIDmaidec *dmaidec){
+#if PLATFORM == dm365
+    /* DM365 Audio codecs may be a bit conservative */
+    return Adec1_getInBufSize(dmaidec->hCodec) << 1;
+#else
     return Adec1_getInBufSize(dmaidec->hCodec);
+#endif
 }
 
 static gint gstti_auddec1_get_out_buffer_size(GstTIDmaidec *dmaidec){
