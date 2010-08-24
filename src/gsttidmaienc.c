@@ -511,7 +511,7 @@ static GstStateChangeReturn gst_tidmaienc_change_state(GstElement *element,
 
     /* Handle ramp-down state changes */
     switch (transition) {
-    case GST_STATE_CHANGE_READY_TO_NULL:
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
         GST_DEBUG("GST_STATE_CHANGE_READY_TO_NULL");
         /* Deconfigure the encoder */
         if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
@@ -519,7 +519,9 @@ static GstStateChangeReturn gst_tidmaienc_change_state(GstElement *element,
                 ("Failed to deconfigure codec"));
             return GST_STATE_CHANGE_FAILURE;
         }
-        
+        break;
+    case GST_STATE_CHANGE_READY_TO_NULL:
+        GST_DEBUG("GST_STATE_CHANGE_READY_TO_NULL");
         /* Shut down encoder */
         if (!gst_tidmaienc_exit_encoder(dmaienc)) {
             GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
