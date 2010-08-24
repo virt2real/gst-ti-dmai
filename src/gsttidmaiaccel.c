@@ -94,7 +94,6 @@ GType gst_tidmaiaccel_get_type(void)
 {
     static GType object_type = 0;
 
-    GST_LOG("Begin\n");
     if (G_UNLIKELY(object_type == 0)) {
         static const GTypeInfo object_info = {
             sizeof(GstTIDmaiaccelClass),
@@ -116,10 +115,8 @@ GType gst_tidmaiaccel_get_type(void)
             "TI Dmai buffer accelerator");
 
         GST_LOG("initialized get_type\n");
-
     }
 
-    GST_LOG("Finish\n");
     return object_type;
 };
 
@@ -180,17 +177,13 @@ static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans)
 {
     GstTIDmaiaccel *dmaiaccel = GST_TIDMAIACCEL(trans);
 
+    GST_LOG("Begin\n");
+
     if (dmaiaccel->hOutBufTab){
         BufTab_delete(dmaiaccel->hOutBufTab);
     }
-
-    if (&dmaiaccel->bufTabMutex) {
-        pthread_mutex_destroy(&dmaiaccel->bufTabMutex);
-    }
-
-    if (&dmaiaccel->bufTabCond) {
-        pthread_cond_destroy(&dmaiaccel->bufTabCond);
-    }
+        
+    GST_LOG("Finish\n");
 
     return TRUE;
 }
