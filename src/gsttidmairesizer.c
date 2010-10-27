@@ -537,6 +537,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
           GST_FLOW_OK){
       dmairesizer->allocated_buffer = NULL;
   }
+  GST_LOG("Pad allocated buffer %p\n",dmairesizer->allocated_buffer);
   if (dmairesizer->allocated_buffer && 
       GST_IS_TIDMAIBUFFERTRANSPORT(dmairesizer->allocated_buffer)){
 
@@ -779,13 +780,15 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
                   GST_FLOW_OK){
               dmairesizer->allocated_buffer = NULL;
           }
+          GST_LOG("Pad allocated buffer %p\n",dmairesizer->allocated_buffer);
           if (dmairesizer->allocated_buffer && 
               !GST_IS_TIDMAIBUFFERTRANSPORT(dmairesizer->allocated_buffer)){
+              gst_buffer_unref(dmairesizer->allocated_buffer);
               dmairesizer->allocated_buffer = NULL;
           }
 
           if (!dmairesizer->allocated_buffer){
-              GST_ELEMENT_ERROR(dmairesizer,RESOURCE,NO_SPACE_LEFT,(NULL),
+              GST_ELEMENT_WARNING(dmairesizer,RESOURCE,NO_SPACE_LEFT,(NULL),
                   ("failed to get a dmai transport downstream buffer"));
               return NULL;
           }
@@ -793,7 +796,6 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
       DstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmairesizer->allocated_buffer);
       BufferGfx_getDimensions(DstBuf, &allocDim);
       BufferGfx_getDimensions(inBuf,&srcDim);
-      dmairesizer->allocated_buffer = NULL;
   }
 
   if(dmairesizer->clean_bufTab){
@@ -966,7 +968,13 @@ resize_buffer (GstTIDmaiResizer * dmairesizer, Buffer_Handle inBuf)
   }
 
   /* Execute resizer */
-  GST_DEBUG ("executing resizer\n");
+  if (dmairesizer->downstreamBuffers){  
+      GST_DEBUG ("executing resizer: %d,%d@%d,%d --> %d,%d@%d,%d\n",
+        (int)srcDim.width,(int)srcDim.height,(int)srcDim.x,(int)srcDim.y,
+        (int)allocDim.width,(int)allocDim.height,(int)allocDim.x,(int)allocDim.y);
+  } else {
+      GST_DEBUG ("executing resizer");
+  }
   if (Resize_execute (dmairesizer->Resizer, inBuf, DstBuf) < 0) {
     GST_ELEMENT_ERROR (dmairesizer, STREAM, ENCODE, (NULL),
         ("Failed executing the resizer"));
@@ -1127,6 +1135,17 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   /*Send to resize */
   outBuffer = resize_buffer (dmairesizer, inBuffer);
 
+  /* We must release the buffer structure if we aren't
+     going to release it later.
+   */
+  if (!((GST_IS_TIDMAIBUFFERTRANSPORT (buf) &&
+         GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf) == inBuffer) 
+        ||
+        (inBuffer == dmairesizer->inBuf)
+       )){
+    Buffer_delete(inBuffer);
+  }
+
   if(outBuffer == NULL){
     gst_buffer_unref (buf);
     /*GST_ELEMENT_ERROR called before */
@@ -1136,33 +1155,41 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   }
 
   /*Push buffer */
-  pushBuffer =
+  if (dmairesizer->allocated_buffer) {
+    pushBuffer = dmairesizer->allocated_buffer;
+    dmairesizer->allocated_buffer = NULL;
+  } else {
+    pushBuffer =
       gst_tidmaibuffertransport_new (outBuffer, &dmairesizer->bufTabMutex,
           &dmairesizer->bufTabCond);
-  if (!pushBuffer) {
-    GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
-        ("Failed to create dmai buffer"));
-    gst_caps_unref(caps);
-    g_mutex_unlock (dmairesizer->mutex);
-    return GST_FLOW_UNEXPECTED;
+    if (!pushBuffer) {
+      GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
+          ("Failed to create dmai buffer"));
+      gst_caps_unref(caps);
+      g_mutex_unlock (dmairesizer->mutex);
+      return GST_FLOW_UNEXPECTED;
+    }
+    gst_buffer_set_caps (pushBuffer, caps);
   }
   gst_buffer_copy_metadata (pushBuffer, buf, GST_BUFFER_COPY_FLAGS |
       GST_BUFFER_COPY_TIMESTAMPS);
   gst_buffer_unref (buf);
-  gst_buffer_set_caps (pushBuffer, caps);
   gst_caps_unref(caps);
 
   g_mutex_unlock (dmairesizer->mutex);
 
+  GST_WARNING("Pushing buffer %p\n",pushBuffer);
+
   if (gst_pad_push (dmairesizer->srcpad, pushBuffer) != GST_FLOW_OK) {
     if(!dmairesizer->flushing){
-      GST_ELEMENT_ERROR (dmairesizer, STREAM, ENCODE, (NULL),
+      GST_ELEMENT_WARNING (dmairesizer, STREAM, ENCODE, (NULL),
         ("Failed to push buffer"));
     }else{
       GST_DEBUG ("Failed to push buffer but element is in flusing process");
     }
     return GST_FLOW_UNEXPECTED;
   }
+  GST_LOG("Leave");
   return GST_FLOW_OK;
 }
 
@@ -1175,7 +1202,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
 void
 free_buffers (GstTIDmaiResizer * dmairesizer)
 {
-
+  GST_DEBUG("Entry");
   dmairesizer->setup_outBufTab = TRUE;
   if (dmairesizer->dim) {
     free (dmairesizer->dim);
@@ -1186,7 +1213,7 @@ free_buffers (GstTIDmaiResizer * dmairesizer)
   if (dmairesizer->inBuf) {
     Buffer_delete (dmairesizer->inBuf);
   }
-  if (dmairesizer->outBufTab) {
+  if (dmairesizer->outBufTab && !dmairesizer->downstreamBuffers) {
     BufTab_delete (dmairesizer->outBufTab);
     dmairesizer->outBufTab = NULL;
   }
@@ -1201,6 +1228,7 @@ free_buffers (GstTIDmaiResizer * dmairesizer)
       dmairesizer->allocated_buffer = NULL;
   }
 
+  GST_DEBUG("Leave");
   return;
 }
 
