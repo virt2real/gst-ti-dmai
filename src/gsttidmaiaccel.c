@@ -270,8 +270,8 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     if (isContiguous && dmaiaccel->width){
         GST_DEBUG("Is contiguous video buffer");
 
-        Memory_registerContigBuf((UInt32)GST_BUFFER_DATA(inBuf),phys,
-            GST_BUFFER_SIZE(inBuf));
+        Memory_registerContigBuf((UInt32)GST_BUFFER_DATA(inBuf),
+            GST_BUFFER_SIZE(inBuf),phys);
         /* This is a contiguous buffer, create a dmai buffer transport */
         BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
 
@@ -289,7 +289,7 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
             Buffer_getSize(hOutBuf));
         gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
         gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));
-        
+
         /* We need to grab a reference to the input buffer since we have 
          * a pointer to his buffer */
         gst_buffer_ref(inBuf);
