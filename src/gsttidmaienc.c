@@ -1324,6 +1324,17 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 			* dmaienc->asampleTime;
 	}
 
+    /* We must release the buffer structure if we aren't
+       going to release it later
+     */
+    if (!((GST_IS_TIDMAIBUFFERTRANSPORT (rawData) &&
+           GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(rawData) == hSrcBuf) 
+          ||
+          (hSrcBuf == dmaienc->inBuf)
+         )){
+        Buffer_delete(hSrcBuf);
+        hSrcBuf = NULL;
+    }
     gst_buffer_unref(rawData);
     rawData = NULL;
 
