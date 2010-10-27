@@ -233,6 +233,20 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
     return TRUE;
 }
 
+void dmaiaccel_release_cb(gpointer data,
+    GstTIDmaiBufferTransport *buf){
+    Buffer_Handle hBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
+    GstBuffer *inBuf = (GstBuffer *)data;
+
+    GST_DEBUG("Release callback for dmaiaccel allocated buffer");
+
+    Memory_unregisterContigBuf((UInt32)Buffer_getUserPtr(hBuf),
+        Buffer_getSize(hBuf));
+
+    /* Now we can release our input buffer */
+    gst_buffer_unref(inBuf);
+}
+
 
 /*****************************************************************************
  * gst_tidmaiaccel_prepare_output_buffer
@@ -244,9 +258,10 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     GstTIDmaiaccel *dmaiaccel = GST_TIDMAIACCEL(trans);
     Buffer_Handle   hOutBuf;
     Bool isContiguous = FALSE;
+    UInt32 phys = 0;
 
     if (!dmaiaccel->disabled){
-        Memory_getBufferPhysicalAddress(
+        phys = Memory_getBufferPhysicalAddress(
                     GST_BUFFER_DATA(inBuf),
                     GST_BUFFER_SIZE(inBuf),
                     &isContiguous);
@@ -255,6 +270,8 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     if (isContiguous && dmaiaccel->width){
         GST_DEBUG("Is contiguous video buffer");
 
+        Memory_registerContigBuf((UInt32)GST_BUFFER_DATA(inBuf),phys,
+            GST_BUFFER_SIZE(inBuf));
         /* This is a contiguous buffer, create a dmai buffer transport */
         BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
 
@@ -272,6 +289,15 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
             Buffer_getSize(hOutBuf));
         gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
         gst_buffer_set_caps(*outBuf, GST_PAD_CAPS(trans->srcpad));
+        
+        /* We need to grab a reference to the input buffer since we have 
+         * a pointer to his buffer */
+        gst_buffer_ref(inBuf);
+
+        gst_tidmaibuffertransport_set_release_callback(
+            (GstTIDmaiBufferTransport *)*outBuf,
+            dmaiaccel_release_cb,inBuf);
+
         return GST_FLOW_OK;
     } else {
         GST_DEBUG("Copying into contiguous video buffer");
