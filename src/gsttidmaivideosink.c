@@ -1079,8 +1079,8 @@ static gboolean gst_tidmaivideosink_stop(GstBaseSink *sink)
  * Function used to obtain a display buffer with the right properties
 *******************************************************************************/
 static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
-    GstTIDmaiVideoSink *sink,Buffer_Handle inBuf,
-    BufferGfx_Dimensions *inDimSave){
+    GstTIDmaiVideoSink *sink,Buffer_Handle inBuf){
+   
     Buffer_Handle hDispBuf = NULL;
     BufferGfx_Dimensions dim, inDim;
     int i;
@@ -1094,6 +1094,8 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
                 sink->allocatedBuffers[i] = NULL;
                 sink->numUnusedBuffers--;
                 sink->numAllocatedBuffers--;
+                GST_DEBUG("Re-using dropped buffer");
+                break;
             }
         }
     } else {
@@ -1105,18 +1107,28 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
         }
     }
 
+    if (!hDispBuf) {
+       GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
+       	("Failed to get display buffer"));
+       	return NULL;
+    }
+
+    GST_LOG("Cleaning Display buffers: buffer %d cleaned",
+            (int)Buffer_getId(hDispBuf));
+
     /*Removing garbage on display buffer*/
-    if (sink->cleanBufCtrl[Buffer_getId (hDispBuf)] == DIRTY ){
+    if (sink->cleanBufCtrl[Buffer_getId(hDispBuf)] == DIRTY ){
         if (!gst_ti_blackFill(hDispBuf)){
             GST_ELEMENT_WARNING(sink, RESOURCE, SETTINGS, (NULL), 
             ("Unsupported color space, buffers not painted\n"));
         }
         sink->cleanBufCtrl[Buffer_getId (hDispBuf)] = CLEAN;
-        GST_LOG("Cleaning Display buffers: buffer %d cleaned",
-            (int)Buffer_getId (hDispBuf));
+        GST_DEBUG("Cleaning Display buffers: buffer %d cleaned",
+            (int)Buffer_getId(hDispBuf));
     }
 
     /* Retrieve the dimensions of the display buffer */
+    BufferGfx_resetDimensions(hDispBuf);
     BufferGfx_getDimensions(hDispBuf, &dim);
     GST_LOG("Display size %dx%d pitch %d\n",
             (Int) dim.width, (Int) dim.height, (Int) dim.lineLength);
@@ -1128,7 +1140,6 @@ static Buffer_Handle gst_tidmaivideosink_get_display_buffer(
     /*WIDTH*/
     if (inBuf) {
         BufferGfx_getDimensions(inBuf, &inDim);
-        BufferGfx_getDimensions(inBuf, inDimSave);
     }
 
     if(!sink->xCentering){
@@ -1194,14 +1205,17 @@ void allocated_buffer_release_cb(gpointer data,GstTIDmaiBufferTransport *buf){
     GstTIDmaiVideoSink *sink = GST_TIDMAIVIDEOSINK_CAST(data);
     Buffer_Handle hBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf);
 
-    if (sink->allocatedBuffers[Buffer_getId(hBuf)]){
+    if (sink->allocatedBuffers &&
+        sink->allocatedBuffers[Buffer_getId(hBuf)] &&
+        sink->unusedBuffers[Buffer_getId(hBuf)] == NULL){
         /* The pointer is not null, this buffer is being released
          * without having being pushed back into the sink, likely
          * because the frame was late and is dropped
          */
         sink->unusedBuffers[Buffer_getId(hBuf)] = hBuf;
         sink->numUnusedBuffers++;
-        GST_DEBUG("Pad allocated buffer being drop");
+        GST_DEBUG("Pad allocated buffer being drop, %p, id %d, unused %d",
+          hBuf,(int)Buffer_getId(hBuf),sink->numUnusedBuffers);
     }
 }
 
@@ -1229,13 +1243,8 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
         return GST_FLOW_OK;
     }
 
-    /* Do not allocate more buffers than available */
-    if ((sink->numAllocatedBuffers >= 
-         (BufTab_getNumBufs(Display_getBufTab(sink->hDisplay)) - 1)) &&
-        (sink->numUnusedBuffers == 0))
-        return GST_FLOW_OK;
+    hBuf = gst_tidmaivideosink_get_display_buffer(sink,NULL);
 
-    hBuf = gst_tidmaivideosink_get_display_buffer(sink,NULL,NULL);
     if (hBuf){
         *buf = gst_tidmaibuffertransport_new(hBuf,NULL, NULL);
         sink->allocatedBuffers[Buffer_getId(hBuf)] = *buf;
@@ -1244,13 +1253,15 @@ static GstFlowReturn gst_tidmaivideosink_buffer_alloc(GstBaseSink *bsink,
              allocated_buffer_release_cb,sink);
         gst_buffer_set_caps(*buf,caps);
         GST_BUFFER_SIZE(*buf) = gst_ti_calculate_bufSize(
-            sink->width,sink->height,sink->colorSpace);
+            sink->oattrs.width,sink->oattrs.height,sink->colorSpace);
         sink->numAllocatedBuffers++;
+        GST_LOG("Number of pad allocated buffers is %d, current %p",sink->numAllocatedBuffers,*buf);
         sink->lastAllocatedBuffer = *buf;
     } else {
         return GST_FLOW_UNEXPECTED;
     }
 
+    GST_DEBUG("Leave with buffer %p",*buf);
     return GST_FLOW_OK;
 }
 
@@ -1263,10 +1274,11 @@ static GstFlowReturn gst_tidmaivideosink_preroll(GstBaseSink * bsink,
     GstTIDmaiVideoSink   *sink      = GST_TIDMAIVIDEOSINK_CAST(bsink);
     GstFlowReturn ret;
 
+    GST_DEBUG("Begin, buffer %p",buf);
+
     ret = gst_tidmaivideosink_render(bsink,buf);
 
-    if (!sink->prerolledBuffer)
-        sink->prerolledBuffer = buf;
+    sink->prerolledBuffer = buf;
 
     return ret;
 }
@@ -1283,17 +1295,19 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
     BufferGfx_Dimensions  inDimSave;
     GstTIDmaiVideoSink   *sink      = GST_TIDMAIVIDEOSINK_CAST(bsink);
 
-    GST_DEBUG("Begin");
+    GST_DEBUG("Begin, buffer %p",buf);
 
     /* The base sink send us the first buffer twice, so we avoid processing 
      * it again, since the Display_put may fail on this case when using 
      * pad_allocation 
      */
     if (sink->prerolledBuffer == buf){
+        GST_DEBUG("Not displaying previously pre-rolled buffer");
         sink->prerolledBuffer = NULL;
         return GST_FLOW_OK;
     }
-    
+    sink->prerolledBuffer = NULL;
+
     /* If the input buffer is non dmai buffer, then allocate dmai buffer and
      *  copy input buffer in dmai buffer using memcpy routine.
      */
@@ -1323,12 +1337,12 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
         memcpy(Buffer_getUserPtr(inBuf), buf->data, buf->size);
     }
 
-    if (sink->numAllocatedBuffers &&
-        (Buffer_getBufTab(inBuf) == Display_getBufTab(sink->hDisplay))) {
+    if (Buffer_getBufTab(inBuf) == Display_getBufTab(sink->hDisplay)) {
         GST_DEBUG("Flipping pad allocated buffer");
         /* We got a buffer that is already on video memory, just flip it */
         hDispBuf = inBuf;
-        sink->numAllocatedBuffers--;
+        if (sink->numAllocatedBuffers)
+            sink->numAllocatedBuffers--;
         sink->allocatedBuffers[Buffer_getId(inBuf)] = NULL;
         if (buf == sink->lastAllocatedBuffer){
             sink->lastAllocatedBuffer = NULL;
@@ -1337,6 +1351,7 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
         /* Check if we can allocate a new buffer, otherwise we may need 
          * to drop the buffer
          */
+        BufferGfx_getDimensions(inBuf, &inDimSave);
         if ((sink->numAllocatedBuffers >= 
              (BufTab_getNumBufs(Display_getBufTab(sink->hDisplay)) - 1)) &&
              (sink->numUnusedBuffers == 0)){
@@ -1346,10 +1361,10 @@ static GstFlowReturn gst_tidmaivideosink_render(GstBaseSink * bsink,
             return GST_FLOW_OK;
         } else {
             GST_DEBUG("Obtaining display buffer");
-            hDispBuf = gst_tidmaivideosink_get_display_buffer(sink,inBuf,
-                &inDimSave);
-            if (!hDispBuf)
+            hDispBuf = gst_tidmaivideosink_get_display_buffer(sink,inBuf);
+            if (!hDispBuf){
                 return GST_FLOW_UNEXPECTED;
+            }
         }
 
         if (Framecopy_config(sink->hFc, inBuf, hDispBuf) < 0) {
