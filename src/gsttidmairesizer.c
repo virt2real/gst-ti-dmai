@@ -412,7 +412,6 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->clean_bufTab = FALSE;
   dmairesizer->par_n = 1;
   dmairesizer->par_d = 1;
-  dmairesizer->mutex = NULL;
   dmairesizer->mutex = g_mutex_new ();
   dmairesizer->allocated_buffer = NULL;
   dmairesizer->downstreamBuffers = FALSE;
@@ -585,14 +584,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
     return FALSE;
   }
 
-  if (&dmairesizer->bufTabMutex) {
-    pthread_mutex_destroy (&dmairesizer->bufTabMutex);
-  }
   pthread_mutex_init(&dmairesizer->bufTabMutex, NULL);
-
-  if (&dmairesizer->bufTabCond) {
-    pthread_cond_destroy (&dmairesizer->bufTabCond);
-  }
   pthread_cond_init(&dmairesizer->bufTabCond, NULL);
 
   return TRUE;
@@ -1203,7 +1195,6 @@ void
 free_buffers (GstTIDmaiResizer * dmairesizer)
 {
   GST_DEBUG("Entry");
-  dmairesizer->setup_outBufTab = TRUE;
   if (dmairesizer->dim) {
     free (dmairesizer->dim);
   }
