@@ -1217,12 +1217,10 @@ free_buffers (GstTIDmaiResizer * dmairesizer)
     BufTab_delete (dmairesizer->outBufTab);
     dmairesizer->outBufTab = NULL;
   }
-  if (&dmairesizer->bufTabMutex) {
-    pthread_mutex_destroy(&dmairesizer->bufTabMutex);
-  }
-  if (&dmairesizer->bufTabCond) {
-    pthread_cond_destroy(&dmairesizer->bufTabCond);
-  }
+
+  pthread_mutex_destroy(&dmairesizer->bufTabMutex);
+  pthread_cond_destroy(&dmairesizer->bufTabCond);
+
   if (dmairesizer->allocated_buffer){
       gst_buffer_unref(dmairesizer->allocated_buffer);
       dmairesizer->allocated_buffer = NULL;

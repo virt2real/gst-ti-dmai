@@ -678,13 +678,8 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
         dmaidec->outList = NULL;
     }
 
-    if (&dmaidec->bufTabMutex) {
-        pthread_mutex_destroy(&dmaidec->bufTabMutex);
-    }
-
-    if (&dmaidec->bufTabCond) {
-        pthread_cond_destroy(&dmaidec->bufTabCond);
-    }
+    pthread_mutex_destroy(&dmaidec->bufTabMutex);
+    pthread_cond_destroy(&dmaidec->bufTabCond);
 
     if (dmaidec->metaTab) {
         g_free(dmaidec->metaTab);
