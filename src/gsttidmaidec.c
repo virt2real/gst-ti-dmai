@@ -1536,7 +1536,9 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         if (dmaidec->flushing) {
             framepos = -1;
             /* Flush the circular buffer */
+            g_mutex_unlock(dmaidec->circMutex);
             gstti_dmaidec_circ_buffer_flush(dmaidec,0);
+            g_mutex_lock(dmaidec->circMutex);
         }
     }
     if (framepos >= 0){
