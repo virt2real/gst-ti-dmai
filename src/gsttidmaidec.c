@@ -1767,6 +1767,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     if (dmaidec->flushing){
         gst_buffer_unref(encData);
         gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
+        Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
+            decoder->dops->outputUseMask);
         return GST_FLOW_OK;
     }
 
