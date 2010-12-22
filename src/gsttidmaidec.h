@@ -113,6 +113,7 @@ struct _GstTIDmaidec
     gint                outBufSize;
     gint                inBufSize;
     GstBuffer           *metaTab;
+    GMutex              *metaTabMutex;
     GstBuffer           *allocated_buffer;
     gboolean            downstreamBuffers;
     gint                downstreamWidth;
