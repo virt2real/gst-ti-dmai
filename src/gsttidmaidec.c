@@ -1677,7 +1677,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     GstTIDmaidecData       *decoder;
     gboolean       codecFlushed   = FALSE;
     gboolean skip_frame = FALSE;
-    Buffer_Handle  hDstBuf;
+    Buffer_Handle  hDstBuf = NULL;
     Buffer_Handle  hFreeBuf;
     GstBuffer     *outBuf;
 
