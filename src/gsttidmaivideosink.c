@@ -260,6 +260,8 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
 static void gst_tidmaivideosink_init(GstTIDmaiVideoSink * dmaisink,
                 GstTIDmaiVideoSinkClass * g_class)
 {
+    GST_DEBUG("Initializing the class");
+
     /* Set the default values to NULL or -1.  If the user specifies a value
      * then the element will be non-null when the display is created.
      * Anything that has a NULL value will be initialized with DMAI defaults
@@ -916,7 +918,8 @@ static gboolean gst_tidmaivideosink_exit_display(GstTIDmaiVideoSink * sink)
     }
 
     if(sink->cleanBufCtrl){
-      g_free(sink->cleanBufCtrl);
+        g_free(sink->cleanBufCtrl);
+        sink->cleanBufCtrl = NULL;
     }
 
     if (sink->allocatedBuffers){
@@ -1041,6 +1044,8 @@ static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
     GstTIDmaiVideoSink *dmaisink;
     dmaisink = GST_TIDMAIVIDEOSINK(sink);
 
+    GST_DEBUG("Calling start function");
+
     if(dmaisink->xPosition == -1){
       dmaisink->xCentering = TRUE;
     } 
@@ -1049,7 +1054,14 @@ static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
     }
 
     dmaisink->prerolledBuffer = NULL;
-    
+
+    sink->tempDmaiBuf = NULL;
+    sink->hFc = NULL;
+    sink->hDisplay = NULL;
+    sink->cleanBufCtrl = NULL;
+    sink->allocatedBuffers = NULL;
+    sink->unusedBuffers = NULL;
+
     return TRUE;
 }
 
