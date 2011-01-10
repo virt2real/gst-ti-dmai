@@ -1055,12 +1055,12 @@ static gboolean gst_tidmaivideosink_start(GstBaseSink *sink)
 
     dmaisink->prerolledBuffer = NULL;
 
-    sink->tempDmaiBuf = NULL;
-    sink->hFc = NULL;
-    sink->hDisplay = NULL;
-    sink->cleanBufCtrl = NULL;
-    sink->allocatedBuffers = NULL;
-    sink->unusedBuffers = NULL;
+    dmaisink->tempDmaiBuf = NULL;
+    dmaisink->hFc = NULL;
+    dmaisink->hDisplay = NULL;
+    dmaisink->cleanBufCtrl = NULL;
+    dmaisink->allocatedBuffers = NULL;
+    dmaisink->unusedBuffers = NULL;
 
     return TRUE;
 }
