@@ -512,6 +512,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   /* Destroy any previous output buffer*/
   if (dmairesizer->outBufTab && !dmairesizer->downstreamBuffers) {
     BufTab_delete (dmairesizer->outBufTab);
+    dmairesizer->outBufTab = NULL;
   }
 
   gfxAttrs.colorSpace = dmairesizer->outColorSpace;
@@ -583,9 +584,6 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
         ("failed to create output buffers"));
     return FALSE;
   }
-
-  pthread_mutex_init(&dmairesizer->bufTabMutex, NULL);
-  pthread_cond_init(&dmairesizer->bufTabCond, NULL);
 
   return TRUE;
 }
@@ -1082,6 +1080,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
 
   BufferGfx_Dimensions srcDim;
 
+  GST_LOG("Enter");
   /*To prevent unwanted change of properties just before to resize*/
   g_mutex_lock (dmairesizer->mutex);
 
@@ -1174,12 +1173,10 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
 
   if (gst_pad_push (dmairesizer->srcpad, pushBuffer) != GST_FLOW_OK) {
     if(!dmairesizer->flushing){
-      GST_ELEMENT_WARNING (dmairesizer, STREAM, ENCODE, (NULL),
-        ("Failed to push buffer"));
-    }else{
+      GST_DEBUG ("Failed to push buffer");
+    } else{
       GST_DEBUG ("Failed to push buffer but element is in flusing process");
     }
-    return GST_FLOW_UNEXPECTED;
   }
   GST_LOG("Leave");
   return GST_FLOW_OK;
@@ -1197,16 +1194,20 @@ free_buffers (GstTIDmaiResizer * dmairesizer)
   GST_DEBUG("Entry");
   if (dmairesizer->dim) {
     free (dmairesizer->dim);
+    dmairesizer->dim = NULL;
   }
   if (dmairesizer->flagToClean) {
     free (dmairesizer->flagToClean);
+    dmairesizer->flagToClean = NULL;
   }
   if (dmairesizer->inBuf) {
     Buffer_delete (dmairesizer->inBuf);
+    dmairesizer->inBuf = NULL;
   }
   if (dmairesizer->outBufTab && !dmairesizer->downstreamBuffers) {
     BufTab_delete (dmairesizer->outBufTab);
     dmairesizer->outBufTab = NULL;
+    dmairesizer->setup_outBufTab = TRUE;
   }
 
   pthread_mutex_destroy(&dmairesizer->bufTabMutex);
@@ -1232,13 +1233,22 @@ gst_dmai_resizer_change_state (GstElement * element, GstStateChange transition)
     switch (transition) {
     case GST_STATE_CHANGE_NULL_TO_READY:
         /* Init decoder */
-        GST_DEBUG("GST_STATE_CHANGE_NULL_TO_READY");
+        GST_DEBUG("Goint to Ready state from NULL");
         Resize_Attrs rszAttrs = Resize_Attrs_DEFAULT;
         dmairesizer->Resizer = Resize_create (&rszAttrs);
         if (!dmairesizer->Resizer){
             GST_ELEMENT_ERROR (dmairesizer, STREAM, ENCODE, (NULL), ("Failed to create resizer"));
             return GST_STATE_CHANGE_FAILURE;
         }
+        dmairesizer->dim = NULL;
+        dmairesizer->flagToClean = NULL;
+        dmairesizer->inBuf = NULL;
+        dmairesizer->outBufTab = NULL;
+        dmairesizer->setup_outBufTab = TRUE;
+        dmairesizer->allocated_buffer = NULL;
+        pthread_mutex_init(&dmairesizer->bufTabMutex, NULL);
+        pthread_cond_init(&dmairesizer->bufTabCond, NULL);
+
         break;
     default:
         break;
@@ -1253,9 +1263,12 @@ gst_dmai_resizer_change_state (GstElement * element, GstStateChange transition)
     /* Handle ramp-down state changes */
     switch (transition) {
     case GST_STATE_CHANGE_READY_TO_NULL:
+        GST_DEBUG("Going to NULL state");
         free_buffers(dmairesizer);
-        if (dmairesizer->Resizer)
+        if (dmairesizer->Resizer) {
           Resize_delete(dmairesizer->Resizer);
+          dmairesizer->Resizer = NULL;
+        }
         break;
     default:
         break;
