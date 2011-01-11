@@ -1658,13 +1658,17 @@ static gboolean gst_tidmaidec_clip_buffer(GstTIDmaidec  *dmaidec,gint64 timestam
         GST_CLOCK_TIME_IS_VALID(dmaidec->segment_stop) &&
         (timestamp < dmaidec->segment_start ||
         timestamp > dmaidec->segment_stop)){
-        GST_WARNING("Timestamp %llu is outside of segment boundaries [%llu %llu] , clipping",
+        GST_DEBUG_OBJECT(dmaidec,"Timestamp %llu is outside of segment boundaries [%llu %llu] , clipping",
             timestamp,dmaidec->segment_start,dmaidec->segment_stop);
-        GST_LOG_OBJECT(dmaidec,"Leave");
         return TRUE;
     }
 
-    GST_LOG_OBJECT(dmaidec,"Leave");
+    if (dmaidec->flushing){
+        GST_DEBUG_OBJECT(dmaidec,"Clipping because we are in flush state");
+        return TRUE;
+    }
+
+    GST_LOG_OBJECT(dmaidec,"Leave without clipping");
     return FALSE;
 }
 
@@ -1769,7 +1773,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     g_mutex_lock(dmaidec->metaTabMutex);
     gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
-    
+
     /* Worth to try to flush before sleeping for a while on the decode
        operation
      */
@@ -1788,22 +1792,22 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
 
     if (decoder->parser->trustme){
-	/* In parser we trust */
+        /* In parser we trust */
         gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
     } else {
         gstti_dmaidec_circ_buffer_flush(dmaidec,
-	    Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encData)));
+            Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(encData)));
     }
     gst_buffer_unref(encData);
     encData = NULL;
-    
+
     if (decoder->dops->codec_type == VIDEO) {
         /* Obtain the display buffer returned by the codec (it may be a
          * different one than the one we passed it.
          */
         hDstBuf = decoder->dops->codec_get_data(dmaidec);
     }
-    
+
     /* Release buffers no longer in use by the codec */
     if (decoder->dops->codec_get_free_buffers){
         hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
@@ -1819,9 +1823,9 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         g_mutex_unlock(dmaidec->metaTabMutex);
         return GST_FLOW_OK;
     }
-    
+
     GST_LOG_OBJECT(dmaidec,"Test point");
-    
+
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {
         gboolean clip = FALSE;
@@ -1831,7 +1835,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             decoder->dops->codec_type == IMAGE) {
             /* Be sure our caps match what we just decode */
             BufferGfx_Dimensions dim;
-            
+
             BufferGfx_getDimensions(hDstBuf, &dim);
             if (dim.width != dmaidec->width ||
                 dim.height != dmaidec->height ||
@@ -1843,7 +1847,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                             (int)dim.width,(int)dim.height));
                     goto failure;
                 }
-                    
+
                 dmaidec->width = dim.width;
                 dmaidec->height = dim.height;
                 if (!gst_tidmaidec_fixate_src_pad_caps(dmaidec)){
