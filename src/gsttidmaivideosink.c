@@ -305,8 +305,10 @@ static void  gst_tidmaivideosink_clean_DisplayBuf(GstTIDmaiVideoSink *dmaisink)
 {
    int i;
 
-   for(i = 0; i < dmaisink->numBuffers; i++){
-      dmaisink->cleanBufCtrl[i] = DIRTY;
+   if (dmaisink->cleanBufCtrl) {
+       for(i = 0; i < dmaisink->numBuffers; i++){
+          dmaisink->cleanBufCtrl[i] = DIRTY;
+      }
    }
 }
 
