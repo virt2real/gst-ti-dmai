@@ -1812,13 +1812,15 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     if (decoder->dops->codec_get_free_buffers){
         hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         while (hFreeBuf) {
-            GST_LOG_OBJECT(dmaidec,"Freeing buffer %p",hFreeBuf);
+            GST_DEBUG_OBJECT(dmaidec,"Freeing buffer %p",hFreeBuf);
             Buffer_freeUseMask(hFreeBuf, decoder->dops->outputUseMask);
             hFreeBuf = decoder->dops->codec_get_free_buffers(dmaidec);
         }
     }
 
     if (skip_frame){
+        Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
+           decoder->dops->outputUseMask);
         GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
         g_mutex_unlock(dmaidec->metaTabMutex);
         return GST_FLOW_OK;
