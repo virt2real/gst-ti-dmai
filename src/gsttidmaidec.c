@@ -1819,9 +1819,11 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
 
     if (skip_frame){
-        Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
-           decoder->dops->outputUseMask);
-        GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
+        if (hDstBuf) {
+            Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
+               decoder->dops->outputUseMask);
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
+        }
         g_mutex_unlock(dmaidec->metaTabMutex);
         return GST_FLOW_OK;
     }
