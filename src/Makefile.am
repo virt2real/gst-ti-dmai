@@ -32,7 +32,7 @@ gsttidmaienc.h gsttidmaiaccel.h gsttipriority.h ittiam_encoders.h ittiam_caps.h
 # XDC Configuration
 CONFIGURO     = $(XDC_INSTALL_DIR)/xs xdc.tools.configuro
 BUILT_SOURCES = @XDC_CONFIG_BASENAME@/compiler.opt @XDC_CONFIG_BASENAME@/linker.cmd
-XDC_PATH      = .;$(XDC_INSTALL_DIR)/packages;$(LINK_INSTALL_DIR)/packages;$(FC_INSTALL_DIR)/packages;$(CE_INSTALL_DIR)/packages;$(XDAIS_INSTALL_DIR)/packages;$(CODEC_INSTALL_DIR)/packages;$(CMEM_INSTALL_DIR)/packages;$(DMAI_INSTALL_DIR)/packages;$(LPM_INSTALL_DIR)/packages;$(XDC_USER_PATH);
+XDC_PATH      = .;$(XDC_INSTALL_DIR)/packages;$(LINK_INSTALL_DIR);$(FC_INSTALL_DIR)/packages;$(CE_INSTALL_DIR)/packages;$(XDAIS_INSTALL_DIR)/packages;$(CODEC_INSTALL_DIR)/packages;$(CMEM_INSTALL_DIR)/packages;$(DMAI_INSTALL_DIR)/packages;$(LPM_INSTALL_DIR)/packages;$(C6ACCEL_INSTALL_DIR)/soc/packages;$(XDC_USER_PATH)
 
 %/compiler.opt %/linker.cmd : %.cfg
 	XDCPATH="$(XDC_PATH)" $(CONFIGURO) -c $(MVTOOL_DIR) -o  @XDC_CONFIG_BASENAME@ -t $(XDC_TARGET) -p $(XDC_PLATFORM) -b $(DMAI_INSTALL_DIR)/packages/config.bld $<
