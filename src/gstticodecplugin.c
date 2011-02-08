@@ -45,6 +45,7 @@
 #include "gsttisupport_generic.h"
 #include "gsttisupport_h264.h"
 #include "gsttisupport_mpeg4.h"
+#include "gsttisupport_mpeg2.h"
 #include "gsttisupport_aac.h"
 #include "gsttisupport_mp3.h"
 #include "gsttisupport_wma.h"
@@ -111,15 +112,6 @@ static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
     "   height=(int)[ 1, MAX ] "
 );
 #endif
-
-GstStaticCaps gstti_mpeg2_caps = GST_STATIC_CAPS(
-    "video/mpeg, "
-    "   mpegversion=(int) 2, "
-    "   systemstream=(boolean)false, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ] ;"
-);
 
 extern struct gstti_decoder_ops gstti_viddec_ops;
 extern struct gstti_decoder_ops gstti_viddec2_ops;
@@ -215,7 +207,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             mediaType = VIDEO;
             decoder->streamtype = "mpeg2";
             decoder->sinkCaps = &gstti_mpeg2_caps;
-            decoder->parser = &gstti_generic_parser;
+            decoder->parser = &gstti_mpeg2_parser;
         } else if (!strcmp (decoder->codecName, "aachedec") ||
                 !strcmp (decoder->codecName, "aaclcdec")) {
             mediaType = AUDIO;

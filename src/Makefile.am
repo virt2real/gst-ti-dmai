@@ -6,6 +6,7 @@ libgstticodecplugin_la_SOURCES = gstticodecplugin.c gsttidmaibuffertransport.c \
 gsttidmaivideosink.c gsttidmaidec.c gsttidmaienc.c gsttidmaiaccel.c gsttipriority.c \
 gsttividdec2.c gsttividdec.c gsttividenc1.c gsttividenc.c gsttidmairesizer.c \
 gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c gsttisupport_jpeg.c \
+gsttisupport_mpeg2.c \
 gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c gsttiimgenc1.c gsttiimgenc.c \
 gsttiimgdec.c gsttiimgdec1.c \
 gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c gsttidmaiperf.c\
@@ -24,7 +25,7 @@ libgstticodecplugin_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) \
 
 # headers we need but don't want installed
 noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h \
-gsttiparsers.h gsttisupport_generic.h gsttisupport_h264.h \
+gsttiparsers.h gsttisupport_generic.h gsttisupport_h264.h gsttisupport_mpeg2.h \
 gsttisupport_mpeg4.h gsttisupport_aac.h gsttisupport_mp3.h \
 gsttisupport_wma.h gsttisupport_jpeg.h ti_encoders.h caps.h gsttidmaidec.h \
 gsttidmaienc.h gsttidmaiaccel.h gsttipriority.h ittiam_encoders.h ittiam_caps.h
