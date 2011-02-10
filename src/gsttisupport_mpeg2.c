@@ -54,6 +54,7 @@ static gboolean mpeg2_init(GstTIDmaidec *dmaidec){
 
     priv->firstPicture = FALSE;
     priv->flushing = FALSE;
+    priv->firstIFrame = FALSE;
 
     if (dmaidec->parser_private){
         g_free(dmaidec->parser_private);
@@ -91,14 +92,27 @@ static gint mpeg2_parse(GstTIDmaidec *dmaidec){
     for (i = dmaidec->marker; i <= dmaidec->head - 4; i++) {
         if (data[i + 0] == 0 && data[i + 3] == 0 && data[i + 2] == 1
             && data[i + 1] == 0) {
+            if (!priv->firstIFrame &&
+                ((data[i + 5] & 0x38) >> 3) == 1) {
+                priv->firstIFrame = TRUE;
+            }
+
             if (!priv->firstPicture){
                 GST_DEBUG("Found first marker at %d",i);
                 priv->firstPicture = TRUE;
                 continue;
             }
 
+            /* Wait until we have at least one I-Frame
+               this is very helpful when decoding a network
+               stream
+             */
+            if (!priv->firstIFrame) {
+                GST_DEBUG("Found second marker, but not I-Frame yet");
+                continue;
+            }
+
             GST_DEBUG("Found second marker");
-            dmaidec->marker = i;
             priv->firstPicture = FALSE;
             return i;
         }
@@ -116,6 +130,7 @@ static void mpeg2_flush_start(void *private){
 
     priv->flushing = TRUE;
     priv->firstPicture = FALSE;
+    priv->firstIFrame = FALSE;
     GST_DEBUG("Parser flushed");
     return;
 }

@@ -26,6 +26,7 @@ extern GstStaticCaps gstti_mpeg2_caps;
 /* MPEG2 Parser */
 struct gstti_mpeg2_parser_private {
     gboolean firstPicture;
+    gboolean firstIFrame;
     gboolean flushing;
 };
 
