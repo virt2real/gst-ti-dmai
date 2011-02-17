@@ -385,11 +385,12 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->par_d = 1;
     dmaidec->allocatedWidth     = 0;
     dmaidec->colorSpace         = ColorSpace_NOTSET;
-    
+
     /* Audio values */
     dmaidec->channels           = 0;
     dmaidec->rate               = 0;
-    
+    dmaidec->depth              = 0;
+
     dmaidec->segment_start      = GST_CLOCK_TIME_NONE;
     dmaidec->segment_stop       = GST_CLOCK_TIME_NONE;
     dmaidec->current_timestamp  = 0;
@@ -1045,7 +1046,7 @@ static gboolean gst_tidmaidec_fixate_src_pad_caps(GstTIDmaidec *dmaidec){
                                     "endianness", G_TYPE_INT, G_BYTE_ORDER,
                                     "signed", G_TYPE_BOOLEAN, TRUE,
                                     "width", G_TYPE_INT, 16,
-                                    "depth", G_TYPE_INT, 16,
+                                    "depth", G_TYPE_INT, dmaidec->depth,
                                     (char *)NULL);
         break;
     default:
@@ -1129,6 +1130,10 @@ static gboolean gst_tidmaidec_set_sink_caps(GstPad *pad, GstCaps *caps)
 
             if (!gst_structure_get_int(capStruct, "rate", &dmaidec->rate)){
                 dmaidec->rate = 0;
+            }
+
+            if (!gst_structure_get_int(capStruct, "depth", &dmaidec->rate)){
+                dmaidec->depth = 16;
             }
         }
         break;

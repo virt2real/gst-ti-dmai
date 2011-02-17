@@ -89,6 +89,7 @@ struct _GstTIDmaidec
     /* Audio Information */
     gint                channels;
     gint                rate;
+    gint                depth;
 
     /* Event information */
     gint64              segment_start;
