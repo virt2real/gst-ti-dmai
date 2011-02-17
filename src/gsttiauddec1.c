@@ -137,6 +137,80 @@ static void gstti_auddec1_destroy (GstTIDmaidec *dmaidec)
     Adec1_delete(dmaidec->hCodec);
 }
 
+/* 
+  DMAI Adec1 process doesn't return us the channel information
+ */
+/* Number of channels for each IAUDIO_ChannelMode */
+static int numChans[11] = { 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7 };
+
+typedef struct Adec1_Object {
+    AUDDEC1_Handle          hDecode;
+    Int                     sampleRate;
+    Int32                   minNumInBufs;
+    Int32                   minInBufSize[XDM_MAX_IO_BUFFERS];
+    Int32                   minNumOutBufs;
+    Int32                   minOutBufSize[XDM_MAX_IO_BUFFERS];
+} Adec1_Object;
+
+static int myAdec1_process(Adec1_Handle hAd1, Buffer_Handle hInBuf, Buffer_Handle hOutBuf,
+    GstTIDmaidec *dmaidec)
+{
+    XDM1_BufDesc            inBufDesc;
+    XDM1_BufDesc            outBufDesc;
+    XDAS_Int32              status;
+    AUDDEC1_InArgs          inArgs;
+    AUDDEC1_OutArgs         outArgs;
+
+    assert(hAd1);
+    assert(hInBuf);
+    assert(hOutBuf);
+    assert(Buffer_getUserPtr(hInBuf));
+    assert(Buffer_getUserPtr(hOutBuf));
+    assert(Buffer_getNumBytesUsed(hInBuf));
+    assert(Buffer_getSize(hOutBuf));
+    assert(Buffer_getSize(hInBuf));
+
+    inBufDesc.numBufs           = 1;
+    inBufDesc.descs[0].buf      = Buffer_getUserPtr(hInBuf);
+    inBufDesc.descs[0].bufSize  = Buffer_getSize(hInBuf);
+
+    outBufDesc.numBufs          = 1;
+    outBufDesc.descs[0].buf     = Buffer_getUserPtr(hOutBuf);
+    outBufDesc.descs[0].bufSize = Buffer_getSize(hOutBuf);
+
+    inArgs.size                 = sizeof(AUDDEC1_InArgs);
+    inArgs.numBytes             = Buffer_getNumBytesUsed(hInBuf);
+    inArgs.desiredChannelMode   = IAUDIO_2_0;
+    inArgs.lfeFlag              = XDAS_FALSE;
+
+    outArgs.size                = sizeof(AUDDEC1_OutArgs);
+
+    /* Decode the audio buffer */
+    status = AUDDEC1_process(hAd1->hDecode, &inBufDesc, &outBufDesc, &inArgs,
+                             &outArgs);
+
+    Buffer_setNumBytesUsed(hInBuf, outArgs.bytesConsumed);
+
+    if (status != AUDDEC1_EOK) {
+        if (XDM_ISFATALERROR(outArgs.extendedError)) {
+            return Dmai_EFAIL;
+        }
+        else {
+            return Dmai_EBITERROR;
+        }
+    }
+
+    dmaidec->channels = numChans[outArgs.channelMode];
+
+    Buffer_setNumBytesUsed(hOutBuf, 
+        outArgs.numSamples * (dmaidec->depth>>3) * dmaidec->channels);
+
+    dmaidec->rate = outArgs.sampleRate;
+
+    return Dmai_EOK;
+}
+
+
 static gboolean gstti_auddec1_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
                     Buffer_Handle hDstBuf, gboolean codecFlushed){
     Buffer_Handle   hEncData = NULL;
@@ -150,7 +224,7 @@ static gboolean gstti_auddec1_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
     GST_DEBUG("invoking the audio decoder, with %ld bytes (%p, %p)\n",
         Buffer_getNumBytesUsed(hEncData),
         Buffer_getUserPtr(hEncData),Buffer_getUserPtr(hDstBuf));
-    ret = Adec1_process(dmaidec->hCodec, hEncData, hDstBuf);
+    ret = myAdec1_process(dmaidec->hCodec, hEncData, hDstBuf,dmaidec);
     encDataConsumed = Buffer_getNumBytesUsed(hEncData);
 
     if (ret < 0) {
