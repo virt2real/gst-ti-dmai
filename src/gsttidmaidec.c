@@ -402,6 +402,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->segment_start      = GST_CLOCK_TIME_NONE;
     dmaidec->segment_stop       = GST_CLOCK_TIME_NONE;
     dmaidec->current_timestamp  = 0;
+    dmaidec->sample_duration    = 0;
     dmaidec->skip_frames        = 0;
     dmaidec->skip_done          = 0;
     dmaidec->qos                = FALSE;
@@ -1228,6 +1229,11 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
             goto done;
         }
 
+        /* If we are an audio codec, we need to recalculate 
+           our current timestamp when we start a new segment
+         */
+        dmaidec->sample_duration = 0;
+
         ret = gst_pad_event_default(pad, event);
         goto done;
     }
@@ -1884,11 +1890,19 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                     goto failure;
                 }
             }
-        } else if (decoder->dops->codec_type == AUDIO){
+        } else if (decoder->dops->codec_type == AUDIO) {
             if (!dmaidec->src_pad_caps_fixed){
                 if (!gst_tidmaidec_fixate_src_pad_caps(dmaidec)){
                     goto failure;
                 }
+            }
+            if (!dmaidec->sample_duration) {
+                dmaidec->sample_duration = ((Buffer_getNumBytesUsed(hDstBuf) / 
+                    (dmaidec->channels * (dmaidec->depth >> 3))) * GST_SECOND)
+                    / dmaidec->rate;
+                dmaidec->current_timestamp = 
+                    (GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) /
+                    dmaidec->sample_duration) * dmaidec->sample_duration;
             }
         }
 
@@ -1919,7 +1933,18 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
 
             continue;
         }
-  
+
+        /* Audio streams over network may not be very reliable, so we
+           really calculate the timestamps and duration
+         */
+        if (decoder->dops->codec_type == AUDIO) {
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) = 
+                dmaidec->current_timestamp;
+            GST_BUFFER_DURATION(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) = 
+                dmaidec->sample_duration;
+            dmaidec->current_timestamp += dmaidec->sample_duration;
+        }
+
         /* Create a DMAI transport buffer object to carry a DMAI buffer to
          * the source pad.  The transport buffer knows how to release the
          * buffer for re-use in this element when the source pad calls
@@ -2137,6 +2162,10 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
     }
 
+    /* If we are an audio codec, we need to recalculate 
+       our current timestamp after flushing
+     */
+    dmaidec->sample_duration = 0;
 /*
  * TODO
     if (dmaidec->outList){

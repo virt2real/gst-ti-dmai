@@ -95,6 +95,7 @@ struct _GstTIDmaidec
     gint64              segment_start;
     gint64              segment_stop;
     GstClockTime        current_timestamp;
+    GstClockTime        sample_duration;
     gboolean            qos;
     gint                qos_value;
     gint                skip_frames, skip_done; /* QOS skip to next I Frame */
