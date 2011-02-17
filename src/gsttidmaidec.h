@@ -127,6 +127,7 @@ struct _GstTIDmaidec
 
     /* Flags */
     gboolean            flushing;
+    gboolean            ts_from_duration;
 };
 
 /* _GstTIDmaidecClass object */

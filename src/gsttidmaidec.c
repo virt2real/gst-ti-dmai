@@ -58,7 +58,8 @@ enum
     PROP_0,
     PROP_NUM_INPUT_BUFS,  /* numInputBufs  (int)     */
     PROP_NUM_OUTPUT_BUFS, /* numOutputBufs  (int)     */
-    PROP_QOS,             /* qos (boolean */
+    PROP_QOS,             /* qos (boolean) */
+    PROP_TS_FROM_DURATION,/* tsFromDuration (boolean) */
 };
 
 /* Declare a global pointer to our element base class */
@@ -291,6 +292,12 @@ static void gst_tidmaidec_class_init(GstTIDmaidecClass *klass)
             "Enable quality of service",
             TRUE, G_PARAM_READWRITE));
 
+    g_object_class_install_property(gobject_class, PROP_TS_FROM_DURATION,
+        g_param_spec_boolean("tsFromDuration",
+            "Timestamp from duration",
+            "Some buggy streams may have wrong timestamps, generate the timestamp from the duration field instead of trusting the original stream timestamp",
+            FALSE, G_PARAM_READWRITE));
+
     /* Install custom properties for this codec type */
     if (decoder->dops->install_properties){
         decoder->dops->install_properties(gobject_class);
@@ -365,6 +372,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->hEngine            = NULL;
     dmaidec->hCodec             = NULL;
     dmaidec->flushing           = FALSE;
+    dmaidec->ts_from_duration   = FALSE;
     dmaidec->parser_started     = FALSE;
 
     dmaidec->outBufSize         = 0;
@@ -437,6 +445,11 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
         GST_LOG_OBJECT(dmaidec,"seeting \"qos\" to %s\n",
             dmaidec->qos?"TRUE":"FALSE");
         break;
+    case PROP_TS_FROM_DURATION:
+        dmaidec->ts_from_duration = g_value_get_boolean(value);
+        GST_LOG_OBJECT(dmaidec,"seeting \"ts_from_duration\" to %s\n",
+            dmaidec->ts_from_duration?"TRUE":"FALSE");
+        break;
     default:
         /* If this codec provide custom properties...
          * We allow custom codecs to overwrite the generic properties
@@ -477,6 +490,9 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
         break;
     case PROP_QOS:
         g_value_set_boolean(value,dmaidec->qos);
+        break;
+    case PROP_TS_FROM_DURATION:
+        g_value_set_boolean(value,dmaidec->ts_from_duration);
         break;
     default:
         /* If this codec provide custom properties...
@@ -1760,6 +1776,11 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         }
         hDstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer);
         dmaidec->allocated_buffer = NULL;
+    }
+
+    if (dmaidec->ts_from_duration) {
+        GST_BUFFER_TIMESTAMP(encData) = dmaidec->current_timestamp;
+        dmaidec->current_timestamp += GST_BUFFER_DURATION(encData);
     }
 
     /* If we don't have a valid time stamp, give one to the buffer
