@@ -205,27 +205,27 @@ if test "x$PLATFORM" = "xomap35x" ; then
 fi
 if test "x$PLATFORM" = "xdm6446" ; then
   with_xdcplatform=ti.platforms.evmDM6446;
-  with_xdctarget=gnu.targets.MVArm9;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
 fi
 if test "x$PLATFORM" = "xdm355" ; then
   with_xdcplatform=ti.platforms.evmDM355;
-  with_xdctarget=gnu.targets.MVArm9;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
 fi
 if test "x$PLATFORM" = "xdm365" ; then
   with_xdcplatform=ti.platforms.evmDM365;
-  with_xdctarget=gnu.targets.MVArm9;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
 fi
 if test "x$PLATFORM" = "xdm6467" ; then
   with_xdcplatform=ti.platforms.evmDM6467;
-  with_xdctarget=gnu.targets.MVArm9;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
 fi
 if test "x$PLATFORM" = "xdm357" ; then
   with_xdcplatform=ti.platforms.evmDM357;
-  with_xdctarget=gnu.targets.MVArm9;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
 fi
 if test "x$PLATFORM" = "xomapl138" ; then
   with_xdcplatform=ti.platforms.evmOMAPL138;
-  with_xdctarget=gnu.targets.MVArm9;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
 fi
 
 dnl Define the xdcplatform
