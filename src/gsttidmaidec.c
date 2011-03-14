@@ -59,7 +59,7 @@ enum
     PROP_NUM_INPUT_BUFS,  /* numInputBufs  (int)     */
     PROP_NUM_OUTPUT_BUFS, /* numOutputBufs  (int)     */
     PROP_QOS,             /* qos (boolean) */
-    PROP_TS_FROM_DURATION,/* tsFromDuration (boolean) */
+    PROP_GENERATE_TIMESTAMPS,/* generateTimestamps (boolean) */
 };
 
 /* Declare a global pointer to our element base class */
@@ -292,10 +292,10 @@ static void gst_tidmaidec_class_init(GstTIDmaidecClass *klass)
             "Enable quality of service",
             TRUE, G_PARAM_READWRITE));
 
-    g_object_class_install_property(gobject_class, PROP_TS_FROM_DURATION,
-        g_param_spec_boolean("tsFromDuration",
-            "Timestamp from duration",
-            "Some buggy streams may have wrong timestamps, generate the timestamp from the duration field instead of trusting the original stream timestamp",
+    g_object_class_install_property(gobject_class, PROP_GENERATE_TIMESTAMPS,
+        g_param_spec_boolean("generateTimestamps",
+            "Generate the stream timestamps and durations",
+            "Some buggy streams may have wrong timestamps or durations, generate them instead using as base time the first valid timestamp that we receive",
             FALSE, G_PARAM_READWRITE));
 
     /* Install custom properties for this codec type */
@@ -372,7 +372,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->hEngine            = NULL;
     dmaidec->hCodec             = NULL;
     dmaidec->flushing           = FALSE;
-    dmaidec->ts_from_duration   = FALSE;
+    dmaidec->generate_timestamps= FALSE;
     dmaidec->parser_started     = FALSE;
 
     dmaidec->outBufSize         = 0;
@@ -401,7 +401,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->segment_start      = GST_CLOCK_TIME_NONE;
     dmaidec->segment_stop       = GST_CLOCK_TIME_NONE;
-    dmaidec->current_timestamp  = 0;
+    dmaidec->current_timestamp  = GST_CLOCK_TIME_NONE;
     dmaidec->sample_duration    = 0;
     dmaidec->skip_frames        = 0;
     dmaidec->skip_done          = 0;
@@ -446,10 +446,10 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
         GST_LOG_OBJECT(dmaidec,"seeting \"qos\" to %s\n",
             dmaidec->qos?"TRUE":"FALSE");
         break;
-    case PROP_TS_FROM_DURATION:
-        dmaidec->ts_from_duration = g_value_get_boolean(value);
-        GST_LOG_OBJECT(dmaidec,"seeting \"ts_from_duration\" to %s\n",
-            dmaidec->ts_from_duration?"TRUE":"FALSE");
+    case PROP_GENERATE_TIMESTAMPS:
+        dmaidec->generate_timestamps = g_value_get_boolean(value);
+        GST_LOG_OBJECT(dmaidec,"seeting \"generate_timestamps\" to %s\n",
+            dmaidec->generate_timestamps?"TRUE":"FALSE");
         break;
     default:
         /* If this codec provide custom properties...
@@ -492,8 +492,8 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
     case PROP_QOS:
         g_value_set_boolean(value,dmaidec->qos);
         break;
-    case PROP_TS_FROM_DURATION:
-        g_value_set_boolean(value,dmaidec->ts_from_duration);
+    case PROP_GENERATE_TIMESTAMPS:
+        g_value_set_boolean(value,dmaidec->generate_timestamps);
         break;
     default:
         /* If this codec provide custom properties...
@@ -1013,7 +1013,7 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
 
     /* Status variables */
     dmaidec->flushing = FALSE;
-    dmaidec->current_timestamp  = 0;
+    dmaidec->current_timestamp  = GST_CLOCK_TIME_NONE;
 
     GST_LOG_OBJECT(dmaidec,"Leave");
 
@@ -1740,6 +1740,47 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             goto codec_flushed;
     }
 
+    /* If we don't have a valid time stamp, give one to the buffer
+     * We use timestamps as a way to identify stale buffers later,
+     * so we need everybody to have a timestamp, even a fake one
+     */
+    if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData)) ||
+        dmaidec->generate_timestamps) {
+        gboolean abort = FALSE;
+
+        if (dmaidec->generate_timestamps && 
+            !GST_CLOCK_TIME_IS_VALID(dmaidec->current_timestamp)){
+            if (GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData))) {
+                /* Sync our basetime against the first valid timestamp */
+                dmaidec->current_timestamp = GST_BUFFER_TIMESTAMP(encData);
+            } else {
+                /* We don't have a valid basetime yet, discard buffers once we prerolled */
+                if (dmaidec->src_pad_caps_fixed) {
+                    gst_buffer_unref(encData);
+                    GST_WARNING_OBJECT(dmaidec,"Discarting buffer since we don't have a valid timestamp to obtain base time and generate timestamps");
+                    GST_DEBUG_OBJECT(dmaidec,"Leave");
+                    return GST_FLOW_OK;
+                } else {
+                    abort = TRUE;
+                    GST_BUFFER_TIMESTAMP(encData) = 0;
+                }
+            }
+        }
+        if (!abort) {
+            if (!GST_CLOCK_TIME_IS_VALID(dmaidec->current_timestamp)){
+                /* Ok, then we will start our base time from 0 */
+                dmaidec->current_timestamp = 0;
+            }
+
+            GST_BUFFER_TIMESTAMP(encData) = dmaidec->current_timestamp;
+            if (!GST_CLOCK_TIME_IS_VALID(dmaidec->frameDuration)){
+                dmaidec->frameDuration = gst_tidmaidec_frame_duration(dmaidec);
+            }
+            GST_BUFFER_DURATION(encData)  = dmaidec->frameDuration;
+            dmaidec->current_timestamp += GST_BUFFER_DURATION(encData);
+        }
+    }
+
     if (!dmaidec->downstreamBuffers) {
         /* Obtain a free output buffer for the decoded data */
 
@@ -1782,24 +1823,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         }
         hDstBuf = GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer);
         dmaidec->allocated_buffer = NULL;
-    }
-
-    if (dmaidec->ts_from_duration) {
-        GST_BUFFER_TIMESTAMP(encData) = dmaidec->current_timestamp;
-        dmaidec->current_timestamp += GST_BUFFER_DURATION(encData);
-    }
-
-    /* If we don't have a valid time stamp, give one to the buffer
-     * We use timestamps as a way to identify stale buffers later,
-     * so we need everybody to have a timestamp, even a fake one
-     */
-    if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData))) {
-        GST_BUFFER_TIMESTAMP(encData) = dmaidec->current_timestamp;
-        if (!GST_CLOCK_TIME_IS_VALID(dmaidec->frameDuration)){
-            dmaidec->frameDuration = gst_tidmaidec_frame_duration(dmaidec);
-        }
-        GST_BUFFER_DURATION(encData)  = dmaidec->frameDuration;
-        dmaidec->current_timestamp += GST_BUFFER_DURATION(encData);
     }
 
     g_mutex_lock(dmaidec->metaTabMutex);
