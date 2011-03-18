@@ -238,8 +238,9 @@ gst_tipriority_set_property (GObject * object, guint prop_id,
   switch (prop_id) {
     case ARG_NICE:{
       gint a = g_value_get_int (value) + 20;
-      gint b = priority->nice + 20;
+      gint b = getpriority (PRIO_PROCESS, 0) + 20;
       priority->nice_changed = a - b;
+      GST_WARNING_OBJECT(priority,"Nice values: a %d, b %d, nice change %d",a,b,priority->nice_changed);
       break;
     }
     case ARG_SCHEDULER:{
@@ -279,7 +280,7 @@ gst_tipriority_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
     priority->nice_changed = 0;
     priority->nice = newnice;
   }
-  
+
   if (priority->rt_changed) {
     int policy;
     struct sched_param param;
