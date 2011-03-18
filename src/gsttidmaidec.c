@@ -2121,9 +2121,14 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
                 /* This is an I frame... */
                 dmaidec->skip_frames--;
             }
+
             if (dmaidec->skip_frames){
                 gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(pushBuffer));
                 gst_buffer_unref(pushBuffer);
+                if (dmaidec->generate_timestamps) {
+                    /* We need to make up for our lost time */
+                    dmaidec->current_timestamp += dmaidec->frameDuration;
+                }
                 continue;
             }
         }
@@ -2149,6 +2154,7 @@ static GstFlowReturn gst_tidmaidec_chain(GstPad * pad, GstBuffer * buf)
              * adjustments again, to give time for the sink to recover
              */
             dmaidec->skip_frames = dmaidec->qos_value - 1;
+            GST_WARNING_OBJECT(dmaidec,"Skipping %d frames for QoS",dmaidec->skip_frames);
             dmaidec->skip_done = 15;
         }
     }
