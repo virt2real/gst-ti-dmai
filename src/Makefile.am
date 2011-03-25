@@ -15,7 +15,7 @@ gstticommonutils.c ti_encoders.c ittiam_encoders.c ittiam_caps.c caps.c
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
 libgstticodecplugin_la_CFLAGS  = $(GST_CFLAGS) \
-$(shell cat @XDC_CONFIG_BASENAME@/compiler.opt) -DPLATFORM=$(PLATFORM)
+$(shell cat @XDC_CONFIG_BASENAME@/compiler.opt) -DPLATFORM=$(PLATFORM) -Dxdc__RESTRICT__
 
 libgstticodecplugin_la_LIBADD  = $(GST_LIBS) $(GST_BASE_LIBS) \
 $(GST_PLUGINS_BASE_LIBS) -lgstvideo-0.10 -lm
