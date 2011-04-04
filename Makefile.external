@@ -22,7 +22,7 @@ $(error You need to define the environment variable DMAI_INSTALL_DIR)
 endif
 
 default:
-	@echo "Please specify the target: dm6446, omap35x, dm355, dm6467, dm357"
+	@echo "Please specify the target: dm6446, omap35x, dm355, dm6467, dm357, dm37x"
 
 include $(DVSDK_PATH)/Rules.make
 export PLATFORM=$(MAKECMDGOALS)
@@ -53,6 +53,6 @@ configure:
 Makefile: configure
 	./configure --host=arm-none-linux-gnueabi $(PRESET)
 
-omap35x dm6446 dm6467 dm355 dm357: Makefile
+omap35x dm6446 dm6467 dm355 dm357 dm373x: Makefile
 	$(MAKE) -f Makefile
 

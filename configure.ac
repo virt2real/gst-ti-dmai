@@ -135,11 +135,11 @@ dnl Define presets
 AC_ARG_WITH(preset,
   [AS_HELP_STRING([--with-preset=<preset>],
 	[Select a preset (autoselects the platform and optimizations for 
-	  the default codec servers):                                       
+	  the default codec servers): 
 		dm355 (2.00), dm355s (dvsdk2.0 + DM355s codecs),
-		dm357 (dvsdk 2.00), dm365 (dvsdk 2.10)
-		dm6446 (dvsdk 2.00),                                       
-		dm6467 (dvsdk 1.40), omap35x (dvsdk 3.00), omapl138
+		dm365 (dvsdk 4), dm6446 (dvsdk 2.00), dm357 (dvsdk 2) 
+		dm6467 (dvsdk 3), omap35x (dvsdk 4), omapl138 (dvsdk 4),
+		dm37x (dvsdk 4)
 	])],
 	[preset=$withval]
 )
@@ -150,17 +150,15 @@ if test "x$preset" = "xomap35x" ; then
   	with_platform=omap35x;
 fi
 
+
+if test "x$preset" = "xdm37x" ; then
+	AC_MSG_NOTICE(The following preset has been selected: $preset);
+  	with_platform=dm37x;
+fi
+
 if test "x$preset" = "xdm355" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
   	with_platform=dm355;
-fi
-
-if test "x$preset" = "xdm355s" ; then
-	AC_MSG_NOTICE(The following preset has been selected: $preset);
-	AC_DEFINE([AACLC_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM AACLC Encoder])
-	AC_DEFINE([MP3_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM MP3 Encoder])
-  	with_platform=dm355;
-  	with_xdc_config_basename=dm355s;
 fi
 
 if test "x$preset" = "xdm365" ; then
@@ -194,11 +192,15 @@ fi
 dnl Define the platform
 AC_ARG_WITH(platform,
   [AS_HELP_STRING([--with-platform=<platform>],
-    [Select the platform to build: dm355, dm365, dm357, dm6446, dm6467, omap35x, omapl138])],
+    [Select the platform to build: dm355, dm365, dm357, dm6446, dm6467, omap35x, omapl138, dm37x])],
   [AC_MSG_NOTICE([Setting the platform to "$withval"])
    AC_SUBST([PLATFORM],[$withval])
   ]
 )
+if test "x$PLATFORM" = "xdm37x" ; then
+  with_xdcplatform=ti.platforms.evm3530;
+  with_xdctarget=gnu.targets.arm.GCArmv5T;
+fi
 if test "x$PLATFORM" = "xomap35x" ; then
   with_xdcplatform=ti.platforms.evm3530;
   with_xdctarget=gnu.targets.arm.GCArmv5T;
