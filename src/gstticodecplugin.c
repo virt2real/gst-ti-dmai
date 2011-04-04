@@ -130,12 +130,12 @@ extern struct gstti_encoder_ops gstti_imgenc1_ops;
 #if PLATFORM == dm357
 #  define DECODEENGINE "hmjcp"
 #  define ENCODEENGINE "hmjcp"
-#elif (PLATFORM == omap35x) || (PLATFORM == omapl138) || (PLATFORM == dm365)
-#  define DECODEENGINE "codecServer"
-#  define ENCODEENGINE "codecServer"
-#else
+#elif (PLATFORM == dm355) || (PLATFORM == dm6446) || (PLATFORM == dm6467)
 #  define DECODEENGINE "decode"
 #  define ENCODEENGINE "encode"
+#else
+#  define DECODEENGINE "codecServer"
+#  define ENCODEENGINE "codecServer"
 #endif
 
 #ifdef CUSTOM_CODEC_SERVER
