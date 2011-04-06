@@ -218,7 +218,12 @@ static void gstti_videnc1_set_codec_caps(GstTIDmaienc *dmaienc){
 
     params->maxWidth = dynParams->inputWidth = dmaienc->width;
     params->maxHeight = dynParams->inputHeight = dmaienc->height;
-    dynParams->refFrameRate = dynParams->targetFrameRate = (dmaienc->framerateNum * 1000) / dmaienc->framerateDen;
+#if PLATFORM != dm365
+    /* Looks like the some current codecs (i.e. DM365 h264) get mad about
+       setting this parameters */
+    dynParams->refFrameRate = dynParams->targetFrameRate = 
+        (dmaienc->framerateNum * 1000) / dmaienc->framerateDen;
+#endif
     if (dmaienc->pitch) {
         dynParams->captureWidth = dmaienc->pitch;
     }
