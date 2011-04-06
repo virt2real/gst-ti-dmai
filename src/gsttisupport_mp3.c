@@ -31,10 +31,18 @@
 #include "gsttisupport_mp3.h"
 #include "gsttidmaibuffertransport.h"
 
-GstStaticCaps gstti_mp3_caps = GST_STATIC_CAPS(
+GstStaticCaps gstti_mp3_sink_caps = GST_STATIC_CAPS(
     "audio/mpeg, "
 	"mpegversion= (int) 1, "
 	"layer= (int) [ 1, 3], "
+	"rate= (int) [ 8000, MAX], "
+	"channels= (int)[ 1, 2 ]; "
+);
+
+GstStaticCaps gstti_mp3_src_caps = GST_STATIC_CAPS(
+    "audio/mpeg, "
+	"mpegversion= (int) 1, "
+	"layer= (int) 3, "
 	"rate= (int) [ 8000, MAX], "
 	"channels= (int)[ 1, 2 ]; "
 );

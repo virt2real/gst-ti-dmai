@@ -218,7 +218,7 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
         } else if (!strcmp (decoder->codecName, "mp3dec")) {
             mediaType = AUDIO;
             decoder->streamtype = "mp3";
-            decoder->sinkCaps = &gstti_mp3_caps;
+            decoder->sinkCaps = &gstti_mp3_sink_caps;
             decoder->parser = &gstti_generic_parser;
         } else if (!strcmp (decoder->codecName, "wmadec")) {
             mediaType = AUDIO;
@@ -368,7 +368,7 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
         } else if (!strcmp (encoder->codecName, "mp3enc")) {
             mediaType = AUDIO;
             encoder->streamtype = "mp3";
-            encoder->srcCaps = &gstti_mp3_caps;
+            encoder->srcCaps = &gstti_mp3_src_caps;
         } else if (!strcmp (encoder->codecName, "wmaenc")) {
             mediaType = AUDIO;
             encoder->streamtype = "wma";
