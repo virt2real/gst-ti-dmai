@@ -150,6 +150,7 @@ extern struct gstti_encoder_ops gstti_imgenc1_ops;
  * The preset will define whenever a particular codec combo uses one of this
  */
 struct codec_custom_data_entry codec_custom_data[] = {                                                                  
+    TI_DM36x_H264_ENC_CUSTOM_DATA
     TI_C64X_MPEG4_ENC_CUSTOM_DATA
     TI_C64X_AACHE_ENC_CUSTOM_DATA
     TI_C64X_AACLC_ENC_CUSTOM_DATA

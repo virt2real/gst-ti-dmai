@@ -48,6 +48,32 @@ void ti_mpeg4enc_set_codec_caps(GstElement *);
 #define TI_C64X_MPEG4_ENC_CUSTOM_DATA
 #endif
 
+#ifdef H264_DM36x_TI_ENCODER
+#include "caps.h"
+#include "gsttisupport_h264.h"
+gboolean ti_dm36x_h264enc_params(GstElement *);
+void ti_dm36x_h264enc_install_properties(GObjectClass *);
+void ti_dm36x_h264enc_set_property(GObject *, guint, const GValue *, GParamSpec *);
+void ti_dm36x_h264enc_get_property(GObject *, guint, GValue *, GParamSpec *);
+void ti_dm36x_h264enc_set_codec_caps(GstElement *);
+
+#define TI_DM36x_H264_ENC_CUSTOM_DATA \
+    { .codec_name = "h264enc", \
+      .data = { \
+        .sinkCaps = &gstti_4kx4k_nv12_caps, \
+        .srcCaps = &gstti_h264_caps, \
+        .setup_params = ti_dm36x_h264enc_params, \
+        .set_codec_caps = ti_dm36x_h264enc_set_codec_caps, \
+        .install_properties = ti_dm36x_h264enc_install_properties, \
+        .set_property = ti_dm36x_h264enc_set_property, \
+        .get_property = ti_dm36x_h264enc_get_property, \
+      }, \
+    },
+#else
+#define TI_DM36x_H264_ENC_CUSTOM_DATA
+#endif
+
+
 #if defined(AACLC_C64X_TI_ENCODER) || defined(AACHE_C64X_TI_ENCODER)
 #include "gsttisupport_aac.h"
 

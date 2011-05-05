@@ -26,6 +26,9 @@
 
 #include "gstticommonutils.h"
 #include "gsttidmaienc.h"
+#ifdef H264_DM36x_TI_ENCODER
+#include <ti/sdo/codecs/h264enc/ih264venc.h>
+#endif
 #ifdef MPEG4_C64X_TI_ENCODER
 #include <ti/sdo/dmai/ce/Venc1.h>
 #include <ti/sdo/codecs/mpeg4enc/imp4venc.h>
@@ -337,6 +340,254 @@ void ti_mpeg4enc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_USEUMV:
         g_value_set_boolean(value,dynParams->useUMV ? TRUE : FALSE);
+        break;
+    default:
+        break;
+    }
+}
+#endif
+
+#ifdef H264_DM36x_TI_ENCODER
+enum
+{
+    PROP_H264ENC_START = 200,
+    PROP_PROFILE,
+    PROP_LEVEL,
+    PROP_ENTROPYMODE,
+    PROP_T8X8INTRA,
+    PROP_T8X8INTER,
+    PROP_DDRBUF,
+    PROP_NTEMPLAYERS,
+    PROP_QPINTRA,
+    PROP_QPINTER,
+    PROP_RCALGO,
+    PROP_AIRRATE,
+    PROP_IDRINTERVAL,
+};
+
+gboolean ti_dm36x_h264enc_params(GstElement *element){
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
+    IVIDENC1_Params *params;
+    IVIDENC1_DynamicParams *dynParams;
+
+    if (!dmaienc->params){
+        dmaienc->params = g_malloc0(sizeof (IH264VENC_Params));
+    }
+    if (!dmaienc->dynParams){
+        dmaienc->dynParams = g_malloc0(sizeof (IH264VENC_DynamicParams));
+    }
+    *(IH264VENC_Params *)dmaienc->params     = IH264VENC_PARAMS;
+    *(IH264VENC_DynamicParams *)dmaienc->dynParams  = H264VENC_TI_IH264VENC_DYNAMICPARAMS;
+    params = (IVIDENC1_Params *)dmaienc->params;
+    dynParams = (IVIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    GST_INFO("Configuring the codec with the TI DM36x Premium Video encoder settings");
+
+    params->size = sizeof (IH264VENC_Params);
+    dynParams->size = sizeof (IH264VENC_DynamicParams);
+
+    return TRUE;
+}
+
+void ti_dm36x_h264enc_set_codec_caps(GstElement *element){
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)element;
+    IVIDENC1_Params *params = (IVIDENC1_Params *)dmaienc->params;
+    IVIDENC1_DynamicParams *dynParams = (IVIDENC1_DynamicParams *)dmaienc->dynParams;;
+
+    params->maxWidth = dynParams->inputWidth = dmaienc->width;
+    params->maxHeight = dynParams->inputHeight = dmaienc->height;
+}
+
+void ti_dm36x_h264enc_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_PROFILE,
+        g_param_spec_int("profile",
+            "H264 Profile",
+            "H264 Profile to use:\n"
+            "\t\t\t 66  - Base Line\n"
+            "\t\t\t 77  - Main Line\n"
+            "\t\t\t 100 - High Line (Default)\n",
+            0, 100, 100, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_LEVEL,
+        g_param_spec_int("level",
+            "H264 Level",
+            "H264 Level to use:\n"
+            "\t\t\t  9 - For 1.b\n"
+            "\t\t\t 10 - For 1.0\n"
+            "\t\t\t .. Any valid level between\n"
+            "\t\t\t 51 - For 5.1\n",
+            9, 51, 40, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_ENTROPYMODE,
+        g_param_spec_int("entropy",
+            "Entropy mode",
+            "Entropy mode:\n"
+            "\t\t\t 0 - CAVLC\n"
+            "\t\t\t 1 - CABAC\n",
+            0, 1, 1, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_T8X8INTRA,
+        g_param_spec_boolean("t8x8intra",
+            "Enable 8x8 Transform for I Frame",
+            "Enable 8x8 Transform for I Frame (only for High Profile)",
+            TRUE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_T8X8INTER,
+        g_param_spec_boolean("t8x8inter",
+            "Enable 8x8 Transform for P Frame",
+            "Enable 8x8 Transform for P Frame (only for High Profile)",
+            FALSE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_DDRBUF,
+        g_param_spec_boolean("ddrbuf",
+            "Use DDR buffers instead of IMCOP buffers",
+            "Use DDR buffers instead of IMCOP buffers",
+            FALSE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_NTEMPLAYERS,
+        g_param_spec_int("ntemplayers",
+            "Number of temporal Layers for SVC",
+            "Number of temporal Layers for SVC:\n"
+            "\t\t\t 0   - one layer\n"
+            "\t\t\t 1   - two layers (F, F/2)\n"
+            "\t\t\t 2   - three layers (F, F/2, F/4)\n"
+            "\t\t\t 3   - four layers (F, F/2, F/4, F/8)\n"
+            "\t\t\t 255 - all P refer to previous I or IDR frame\n",
+            0, 255, 0, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_QPINTRA,
+        g_param_spec_int("qpintra",
+            "qpintra",
+            "Quantization Parameter (QP) for I frame (only valid when rate control is disabled or is fixed QP)",
+            1, 31, 28, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_QPINTER,
+        g_param_spec_int("qpinter",
+            "qpinter",
+            "Quantization Parameter (QP) for P frame (only valid when rate control is disabled or is fixed QP)",
+            1, 31, 28, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_RCALGO,
+        g_param_spec_int("rcalgo",
+            "Rate control Algorithm",
+            "Rate Control Algorithm (requires ratecontrol set to 5):\n"
+            "\t\t\t 0 - CBR\n"
+            "\t\t\t 1 - VBR (Default)\n"
+            "\t\t\t 2 - Fixed QP\n"
+            "\t\t\t 3 - CVBR\n"
+            "\t\t\t 4 - Custom RC1 - Fixed size frame\n"
+            "\t\t\t 5 - Custom CBR1\n"
+            "\t\t\t 6 - Custom VBR1\n",
+            0, 6, 1, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_AIRRATE,
+        g_param_spec_int("airrate",
+            "Adaptive intra refresh",
+            "Adaptive intra refresh. This indicates the maximum number of MBs"
+            "(per frame) that can be refreshed using AIR.",
+            0, G_MAXINT32, 0, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_IDRINTERVAL,
+        g_param_spec_int("idrinterval",
+            "Interval between two consecutive IDR frames",
+            "Interval between two consecutive IDR frames",
+            0, G_MAXINT32, 0, G_PARAM_READWRITE));
+}
+
+
+void ti_dm36x_h264enc_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    IH264VENC_Params *params = (IH264VENC_Params *)dmaienc->params;
+    IH264VENC_DynamicParams *dynParams = (IH264VENC_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_PROFILE:
+        params->profileIdc = g_value_get_int(value);
+        break;
+    case PROP_LEVEL:
+        params->levelIdc = g_value_get_int(value);
+        break;
+    case PROP_ENTROPYMODE:
+        params->entropyMode = g_value_get_int(value);
+        break;
+    case PROP_T8X8INTRA:
+        params->transform8x8FlagIntraFrame = g_value_get_boolean(value)?1:0;
+        break;
+    case PROP_T8X8INTER:
+        params->transform8x8FlagInterFrame = g_value_get_boolean(value)?1:0;
+        break;
+    case PROP_DDRBUF:
+        params->enableDDRbuff = g_value_get_boolean(value)?1:0;
+        break;
+    case PROP_NTEMPLAYERS:
+        params->numTemporalLayers = g_value_get_int(value);
+        break;
+    case PROP_QPINTRA:
+        dynParams->intraFrameQP = g_value_get_int(value);
+        break;
+    case PROP_QPINTER:
+        dynParams->interPFrameQP = g_value_get_int(value);
+        break;
+    case PROP_RCALGO:
+        dynParams->rcAlgo = g_value_get_int(value);
+        break;
+    case PROP_AIRRATE:
+        dynParams->airRate = g_value_get_int(value);
+        break;
+    case PROP_IDRINTERVAL:
+        dynParams->idrFrameInterval = g_value_get_int(value);
+        break;
+    default:
+        break;
+    }
+}
+
+
+void ti_dm36x_h264enc_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    IH264VENC_Params *params = (IH264VENC_Params *)dmaienc->params;
+    IH264VENC_DynamicParams *dynParams = (IH264VENC_DynamicParams *)dmaienc->dynParams;
+
+    switch (prop_id) {
+    case PROP_PROFILE:
+        g_value_set_int(value,params->profileIdc);
+        break;
+    case PROP_LEVEL:
+        g_value_set_int(value,params->levelIdc);
+        break;
+    case PROP_ENTROPYMODE:
+        g_value_set_int(value,params->entropyMode);
+        break;
+    case PROP_T8X8INTRA:
+        g_value_set_boolean(value,params->transform8x8FlagIntraFrame ? TRUE : FALSE);
+        break;
+    case PROP_T8X8INTER:
+        g_value_set_boolean(value,params->transform8x8FlagInterFrame ? TRUE : FALSE);
+        break;
+    case PROP_DDRBUF:
+        g_value_set_boolean(value,params->enableDDRbuff ? TRUE : FALSE);
+        break;
+    case PROP_NTEMPLAYERS:
+        g_value_set_int(value,params->numTemporalLayers);
+        break;
+    case PROP_QPINTRA:
+        g_value_set_int(value,dynParams->intraFrameQP);
+        break;
+    case PROP_QPINTER:
+        g_value_set_int(value,dynParams->interPFrameQP);
+        break;
+    case PROP_RCALGO:
+        g_value_set_int(value,dynParams->rcAlgo);
+        break;
+    case PROP_AIRRATE:
+        g_value_set_int(value,dynParams->airRate);
+        break;
+    case PROP_IDRINTERVAL:
+        g_value_set_int(value,dynParams->idrFrameInterval);
         break;
     default:
         break;

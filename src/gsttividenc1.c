@@ -70,7 +70,7 @@ static void gstti_videnc1_install_properties(GObjectClass *gobject_class){
         g_param_spec_int("encodingpreset",
             "Encoding Preset Algorithm",
             "Encoding Preset Algorithm to use:\n"
-            "\t\t\t 0 - Default (High Quality)\n"
+            "\t\t\t 0 - Default (check codec documentation)\n"
             "\t\t\t 1 - High Quality\n"
             "\t\t\t 2 - High Speed\n"
             "\t\t\t 3 - User defined on extended parameters"

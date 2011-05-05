@@ -34,6 +34,13 @@ GstStaticCaps gstti_D1_uyvy_caps = GST_STATIC_CAPS (
     "   height=(int)[ 1, 576 ] "
 );
 
+GstStaticCaps gstti_4kx4k_nv12_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "                        /* UYVY */
+    "   format=(fourcc)NV12, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 256, 4096 ], "
+    "   height=(int)[ 256, 4096 ] "
+);
 
 /* Encoded Video */
 /*
