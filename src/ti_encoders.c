@@ -358,6 +358,7 @@ enum
     PROP_T8X8INTER,
     PROP_DDRBUF,
     PROP_NTEMPLAYERS,
+    PROP_SEQSCALING,
     PROP_QPINTRA,
     PROP_QPINTER,
     PROP_RCALGO,
@@ -455,6 +456,17 @@ void ti_dm36x_h264enc_install_properties(GObjectClass *gobject_class){
             "\t\t\t 255 - all P refer to previous I or IDR frame\n",
             0, 255, 0, G_PARAM_READWRITE));
 
+    g_object_class_install_property(gobject_class, PROP_SEQSCALING,
+        g_param_spec_int("seqscaling",
+            "Sequence scaling matrix present",
+            "Sequence scaling matrix present:\n"
+            "\t\t\t 0 = Disable\n"
+            "\t\t\t 1 = Auto (Default)\n"
+            "\t\t\t 2 = Low\n"
+            "\t\t\t 3 = Moderate\n"
+            "\t\t\t 4 = Reserved\n",
+            0, 4, 1, G_PARAM_READWRITE));
+
     g_object_class_install_property(gobject_class, PROP_QPINTRA,
         g_param_spec_int("qpintra",
             "qpintra",
@@ -524,6 +536,9 @@ void ti_dm36x_h264enc_set_property(GObject *object, guint prop_id,
     case PROP_NTEMPLAYERS:
         params->numTemporalLayers = g_value_get_int(value);
         break;
+    case PROP_SEQSCALING:
+        params->seqScalingFlag = g_value_get_int(value);
+        break;
     case PROP_QPINTRA:
         dynParams->intraFrameQP = g_value_get_int(value);
         break;
@@ -573,6 +588,9 @@ void ti_dm36x_h264enc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_NTEMPLAYERS:
         g_value_set_int(value,params->numTemporalLayers);
+        break;
+    case PROP_SEQSCALING:
+        g_value_set_int(value,params->seqScalingFlag);
         break;
     case PROP_QPINTRA:
         g_value_set_int(value,dynParams->intraFrameQP);
