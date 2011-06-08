@@ -38,6 +38,8 @@
 #include "gsttiparsers.h"
 #include "gsttidmaibuffertransport.h"
 #include "gsttisupport_h264.h"
+#include <ti/xdais/dm/xdm.h>
+#include <ti/xdais/dm/ivideo.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_tisupport_h264_debug);
 #define GST_CAT_DEFAULT gst_tisupport_h264_debug
@@ -61,6 +63,91 @@ GstStaticCaps gstti_h264_caps = GST_STATIC_CAPS(
     "   height=(int)[ 1, MAX ]"
 );
 
+enum
+{
+    PROP_300 = 300,
+    PROP_BYTESTREAM,
+    PROP_AUD,
+};
+
+struct h264_stream_private {
+    gboolean bytestream;
+    gboolean aud;
+};
+
+static void h264_install_properties(GObjectClass *gobject_class){
+    g_object_class_install_property(gobject_class, PROP_BYTESTREAM,
+        g_param_spec_boolean("bytestream",
+            "Generate h264 NAL unit stream instead of packetized stream",
+            "Generate h264 NAL unit stream instead of 'packetized' stream (no codec_data is generated) ",
+            FALSE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_AUD,
+        g_param_spec_boolean("aud",
+            "Generate h264 Access Unit Delimiters format",
+            "Generate h264 Access Unit Delimiters format",
+            FALSE, G_PARAM_READWRITE));
+}
+
+static void h264_stream_setup(GstTIDmaienc *dmaienc){
+    if (dmaienc->stream_private != NULL) {
+        g_free(dmaienc->stream_private);
+    }
+    dmaienc->stream_private = g_malloc0(sizeof(struct h264_stream_private));
+    if (!dmaienc->stream_private) {
+        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+           ("Failed to allocate stream private data"));
+        return;
+    }
+}
+
+
+static void h264_set_property(GObject *object, guint prop_id,
+    const GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    struct h264_stream_private *priv;
+
+    priv = (struct h264_stream_private *)dmaienc->stream_private;
+
+    switch (prop_id) {
+    case PROP_BYTESTREAM:
+        priv->bytestream = g_value_get_boolean(value);
+        break;
+    case PROP_AUD:
+        priv->aud = g_value_get_boolean(value);
+        break;
+    default:
+        break;
+    }
+}
+
+static void h264_get_property(GObject *object, guint prop_id,
+    GValue *value, GParamSpec *pspec)
+{
+    GstTIDmaienc *dmaienc = (GstTIDmaienc *)object;
+    struct h264_stream_private *priv;
+
+    priv = (struct h264_stream_private *)dmaienc->stream_private;
+
+    switch (prop_id) {
+    case PROP_BYTESTREAM:
+        if (priv)
+            g_value_set_boolean(value,priv->bytestream);
+        else
+            g_value_set_boolean(value,FALSE);
+        break;
+    case PROP_AUD:
+        if (priv)
+            g_value_set_boolean(value,priv->aud);
+        else
+            g_value_set_boolean(value,FALSE);
+        break;
+    default:
+        break;
+    }
+}
+
 static GstBuffer *fetch_nal(GstBuffer *buffer, gint type)
 {
     gint i;
@@ -71,7 +158,7 @@ static GstBuffer *fetch_nal(GstBuffer *buffer, gint type)
     gint nal_type = 0;
     gint found = 0;
     gint done = 0;
-    
+
     GST_DEBUG("Fetching NAL, type %d", type);
     for (i = 0; i < GST_BUFFER_SIZE(buffer) - 5; i++) {
         if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0 
@@ -91,13 +178,13 @@ static GstBuffer *fetch_nal(GstBuffer *buffer, gint type)
             }
         }
     }
-    
+
     /* Check if the NAL stops at the end */
     if (found == 1 && done != 0 && i >= GST_BUFFER_SIZE(buffer) - 4) {
         nal_len = GST_BUFFER_SIZE(buffer) - nal_idx;
         done = 1;
     }
-    
+
     if (done == 1) {
         GST_DEBUG("Found NAL, bytes [%d-%d] len [%d]", nal_idx, nal_idx + nal_len - 1, nal_len);
         nal_buffer = gst_buffer_new_and_alloc(nal_len);
@@ -110,8 +197,7 @@ static GstBuffer *fetch_nal(GstBuffer *buffer, gint type)
 }
 
 #define NAL_LENGTH 4
-
-static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc, 
+static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc,
     GstBuffer *buffer){
     GstBuffer *avcc = NULL;
     guchar *avcc_data = NULL;
@@ -129,20 +215,27 @@ static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc,
     guchar compatibly;
     guchar level;
 
+    struct h264_stream_private *priv = (struct h264_stream_private *)dmaienc->stream_private;
+
     /* Initialize GST_LOG for this object */
     GST_DEBUG_CATEGORY_INIT(gst_tisupport_h264_debug, "TISupportH264", 0,
         "DMAI plugins H264 Support functions");
+
+    if (priv->bytestream){
+        /* We don't generate codec data for bytestream */
+        return NULL;
+    }
 
     sps = fetch_nal(buffer, 7); // 7 = SPS
     if (sps){
         num_sps = 1;
         avcc_len += GST_BUFFER_SIZE(sps) + 2;
         sps_data = GST_BUFFER_DATA(sps);
- 
+
         profile     = sps_data[1];
         compatibly  = sps_data[2];
         level       = sps_data[3]; 
-        
+
         GST_DEBUG("SPS: profile=%d, compatibly=%d, level=%d",
                     profile, compatibly, level);
     } else {
@@ -157,7 +250,7 @@ static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc,
         num_pps = 1;
         avcc_len += GST_BUFFER_SIZE(pps) + 2;
     }
-    
+
     avcc = gst_buffer_new_and_alloc(avcc_len);
     avcc_data = GST_BUFFER_DATA(avcc);
     avcc_data[0] = 1;             // [0] 1 byte - version
@@ -167,7 +260,7 @@ static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc,
     avcc_data[4] = 0xfc | (NAL_LENGTH-1);  // [4] 6 bits - reserved all ONES = 0xfc
                                   // [4] 2 bits - NAL length ( 0 - 1 byte; 1 - 2 bytes; 3 - 4 bytes)
     avcc_data[5] = 0xe0 | num_sps;// [5] 3 bits - reserved all ONES = 0xe0
-                                  // [5] 5 bits - number of SPS    
+                                  // [5] 5 bits - number of SPS
 
     i = 6;
     if (num_sps > 0){
@@ -183,60 +276,149 @@ static GstBuffer *h264_generate_codec_data (GstTIDmaienc *dmaienc,
         memcpy(&avcc_data[i],GST_BUFFER_DATA(pps),GST_BUFFER_SIZE(pps));
         i += GST_BUFFER_SIZE(sps);
     }
-    
+
     return avcc;
 }
 
-/* Transforms from bytestream into packetized stream.
+/* Inserts a packetized aud at the buffer */
+static void insert_packetized_aud(guchar *dest, guchar pic_type) {
+    int length = 2;
+    int k;
+    for (k = 3; k >= 0 ; k--){
+        dest[k] = length & 0xff;
+        length >>= 8;
+    }
+    dest[4] = 9; // NAL type (AUD)
+    dest[5] = pic_type << 5;
+}
+
+/* Transforms from bytestream into packetized stream if required
  * It removes any SPS and PPS NALU
+ * We use a NAL size of 4 byte to match the size of the NALU start code
+ * this allow us to do the transformation with zero-copy
  */
 static GstBuffer * h264_buffer_transform(GstTIDmaienc *dmaienc, GstBuffer *buffer){
-    guchar *data = GST_BUFFER_DATA(buffer);
-    gint i, mark = 0, nal_type = -1, j = 0;
+    gint i, mark = 0, nal_type = -1;
     gint size = GST_BUFFER_SIZE(buffer);
-    GstBuffer  *outBuf = gst_buffer_new_and_alloc(size);
-    guchar *dest = GST_BUFFER_DATA(outBuf);
+    GstBuffer  *outBuf;
+    guchar *dest;
+    guchar pic_type = 0;
+    guint8 startcode[4] = { 0x00, 0x00, 0x00, 0x01 };
+    struct h264_stream_private *priv;
 
+    priv = (struct h264_stream_private *)dmaienc->stream_private;
+
+    switch(dmaienc->lastFrameType){
+        case IVIDEO_I_FRAME:
+        case IVIDEO_IDR_FRAME:
+            pic_type = 0; // I Frames
+            break;
+        case IVIDEO_P_FRAME:
+            pic_type = 1; // I or P Frames
+            break;
+        case IVIDEO_B_FRAME:
+            pic_type = 2; // I or B or P Frames
+            break;
+        default:
+            break;
+    }
+
+    if (priv->bytestream) {
+        /* Does encoder generates bytestream by default? */
+        if (!dmaienc->codec_output_type){
+            if (priv->aud){
+                /* Inserting AUD NALU */
+                outBuf = gst_buffer_new_and_alloc(size + 6);
+                dest = GST_BUFFER_DATA(outBuf);
+                memcpy(dest,startcode,4);
+                dest[4] = 9; // NAL type (AUD)
+                dest[5] = pic_type << 5;
+                memcpy(&dest[6],GST_BUFFER_DATA(buffer),size);
+
+                gst_buffer_unref(buffer);
+                return outBuf;
+            }
+        } else {
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+               ("packetized to bytestream transformation not implemented"));
+        }
+
+        return buffer;
+    }
+
+    if (priv->aud) {
+        /* Add 4 bytes for NAL Length and 2 for NAL type and data */
+        outBuf = gst_buffer_new_and_alloc(size + 6);
+        dest = GST_BUFFER_DATA(outBuf);
+
+        insert_packetized_aud(dest,pic_type);
+
+        /* Copy over the rest of the buffer */
+        memcpy(&dest[6],GST_BUFFER_DATA(buffer),size);
+        size += 6;
+        gst_buffer_unref(buffer);
+
+        /* Is the rest of the buffer is packetized, we are done */
+        if (dmaienc->codec_output_type){
+            return outBuf;
+        }
+    } else {
+        /* Is the rest of the buffer is packetized? if so, we are done */
+        if (dmaienc->codec_output_type){
+            return buffer;
+        } else {
+            /* Let's do our transform in place */
+            outBuf = buffer;
+        }
+    }
+    dest = GST_BUFFER_DATA(outBuf);
+
+    /* bytestream to packetized convertion with zero-memcpy */
     for (i = 0; i < size - 4; i++) {
-        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
-            /* Do not copy if current NAL is nothing, PPS or SPS */
-            if (nal_type == -1 || nal_type == 7 || nal_type == 8){
-                /* Mark where next NALU starts */
-                mark = i + 3;
+        if (dest[i] == 0 && dest[i + 1] == 0 && 
+            dest[i+2] == 0 && dest[i + 3] == 1) {
+            /* Do not copy if current NAL is nothing (this is the first start code) */
+            if (nal_type == -1 ) {
+                /* Do nothing with this */
+            } else if (nal_type == 7 || nal_type == 8) {
+                /* Discard anything previous to the SPS and PPS */
+                if (priv->aud) {
+                    /* We need to re-insert our AUD */
+                    insert_packetized_aud(&dest[i-6],pic_type);
+                    GST_BUFFER_DATA(outBuf) = &dest[i - 6];
+                    GST_BUFFER_SIZE(outBuf) = size + 6 - i;
+                } else {
+                    GST_BUFFER_DATA(outBuf) = &dest[i];
+                    GST_BUFFER_SIZE(outBuf) = size - i;
+                }
             } else {
-                // Insert the lenght and the NAL data
+                /* Replace the NAL start code with the length */
                 gint length = i - mark ;
                 gint k;
-                for (k = (NAL_LENGTH - 1); k >= 0 ; k--){
-                    dest[j + k] = length & 0xff;
+                for (k = 1 ; k <= 4; k++){
+                    dest[mark - k] = length & 0xff;
                     length >>= 8;
                 }
-                memcpy(&dest[j+NAL_LENGTH],&data[mark], i-mark);
-                j += NAL_LENGTH + (i-mark);
-                mark = i + 3;
             }
-            
-            nal_type = (data[i + 3]) & 0x1f;
+            /* Mark where next NALU starts */
+            mark = i + 4;
+
+            nal_type = (dest[i + 4]) & 0x1f;
         }
     }
     if (i == (size - 4)){
         /* We reach the end of the buffer */
-        if (nal_type != -1 && nal_type != 7 && nal_type != 8){
-            // Insert the lenght and the NAL data
+        if (nal_type != -1){
+            /* Replace the NAL start code with the length */
             gint length = size - mark ;
             gint k;
-            for (k = (NAL_LENGTH - 1); k >= 0 ; k--){
-                dest[j + k] = length & 0xff;
+            for (k = 1 ; k <= 4; k++){
+                dest[mark - k] = length & 0xff;
                 length >>= 8;
             }
-            memcpy(&dest[j+NAL_LENGTH],&data[mark], size-mark);
-            j += NAL_LENGTH + (size-mark);
         }
     }
 
-    /* Release the input buffer */
-    gst_buffer_unref(buffer);
-    GST_BUFFER_SIZE(outBuf) = j;
     return outBuf;
 }
 
@@ -263,7 +445,7 @@ static gboolean h264_init(GstTIDmaidec *dmaidec){
     /* Try to find the codec_data */
     if (!caps)
         goto done;
-    
+
     capStruct = gst_caps_get_structure(caps,0);
 
     if (!capStruct)
@@ -271,7 +453,7 @@ static gboolean h264_init(GstTIDmaidec *dmaidec){
 
     /* Find we are parsed */
     gst_structure_get_boolean(capStruct, "parsed",&priv->parsed);
-    
+
     /* Read extra data passed via demuxer. */
     if (!(value = gst_structure_get_value(capStruct, "codec_data")))
         goto done;
@@ -681,6 +863,10 @@ struct gstti_stream_decoder_ops gstti_h264_stream_dec_ops = {
 struct gstti_stream_encoder_ops gstti_h264_stream_enc_ops = {
     .generate_codec_data = h264_generate_codec_data,
     .transform = h264_buffer_transform,
+    .setup = h264_stream_setup,
+    .install_properties = h264_install_properties,
+    .set_property = h264_set_property,
+    .get_property = h264_get_property,
 };
 
 

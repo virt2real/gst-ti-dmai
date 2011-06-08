@@ -250,6 +250,9 @@ static void gst_tidmaienc_finalize(GObject * object)
         g_free(dmaienc->dynParams);
         dmaienc->dynParams = NULL;
     }
+    if (dmaienc->stream_private){
+        g_free(dmaienc->stream_private);
+    }
 
     G_OBJECT_CLASS(g_type_class_peek_parent(G_OBJECT_GET_CLASS (object)))
         ->finalize (object);
@@ -299,6 +302,10 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
         encoder->eops->install_properties(gobject_class);
     }
 
+    /* Install custom properties for this stream type */
+    if (encoder->stream_ops && encoder->stream_ops->install_properties){
+        encoder->stream_ops->install_properties(gobject_class);
+    }
     /* If this codec provide custom properties... */
     if (klass->codec_data && klass->codec_data->install_properties) {
         GST_DEBUG("Installing custom properties for %s",encoder->codecName);
@@ -327,6 +334,11 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
         /* Otherwise just use the default encoder implementation */
         GST_DEBUG("Use default setup params");
         encoder->eops->default_setup_params(dmaienc);
+    }
+
+    /* Allow the streamer to allocate any private data it may require */
+    if (encoder->stream_ops && encoder->stream_ops->setup){
+        encoder->stream_ops->setup(dmaienc);
     }
 
     /* Instantiate raw sink pad.
@@ -430,6 +442,9 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
         if (encoder->eops->set_property){
             encoder->eops->set_property(object,prop_id,value,pspec);
         }
+        if (encoder->stream_ops && encoder->stream_ops->set_property){
+            encoder->stream_ops->set_property(object,prop_id,value,pspec);
+        }
         break;
     }
 
@@ -467,6 +482,9 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         }
         if (encoder->eops->get_property){
             encoder->eops->get_property(object,prop_id,value,pspec);
+        }
+        if (encoder->stream_ops && encoder->stream_ops->get_property){
+            encoder->stream_ops->get_property(object,prop_id,value,pspec);
         }
         break;
     }
@@ -1292,9 +1310,16 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
         }
     }
 
+    /* Pickup the frame type in a variable, the transform function below may need it */
+    dmaienc->lastFrameType = gstti_bufferGFX_getFrameType(hSrcBuf);
+    
     /* If this stream needs any kind of transformation, this is the right time */
     if (encoder->stream_ops && encoder->stream_ops->transform){
         outBuf = encoder->stream_ops->transform(dmaienc,outBuf);
+        if (!outBuf){
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+                ("Failed to perform buffer transform"));
+        }
     }
     
     gst_buffer_copy_metadata(outBuf,rawData,
@@ -1307,8 +1332,8 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 	    /* DMAI set the buffer type on the input buffer, since only this one
 	     * is a GFX buffer
 	     */
-	    if (gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_I_FRAME ||
-	        gstti_bufferGFX_getFrameType(hSrcBuf) == IVIDEO_IDR_FRAME){
+	    if (dmaienc->lastFrameType  == IVIDEO_I_FRAME ||
+	        dmaienc->lastFrameType == IVIDEO_IDR_FRAME){
 	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
 	    } else {
 	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
