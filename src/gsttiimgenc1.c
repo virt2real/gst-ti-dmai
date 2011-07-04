@@ -164,6 +164,9 @@ static void gstti_imgenc1_set_codec_caps(GstTIDmaienc *dmaienc)
         case ColorSpace_UYVY:
             dynParams->inputChromaFormat = XDM_YUV_422ILE;
             break;
+        case ColorSpace_YUV420PSEMI:
+            dynParams->inputChromaFormat = XDM_YUV_420SP;
+            break;
         default:
             GST_ELEMENT_ERROR(dmaienc,STREAM, NOT_IMPLEMENTED,
                 ("unsupported fourcc in video stream: %d\n",
