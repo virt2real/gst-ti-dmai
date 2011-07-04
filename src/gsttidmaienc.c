@@ -1374,8 +1374,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 
     gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaienc->srcpad));
     if (gst_pad_push(dmaienc->srcpad, outBuf) != GST_FLOW_OK) {
-        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-           	("Failed to push to pad buffer"));
+        GST_WARNING_OBJECT(dmaienc,"Failed to push to pad buffer");
     }
 
 failure:
