@@ -70,7 +70,6 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
 static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     *trans, GstBuffer *inBuf, gint size, GstCaps *caps, GstBuffer **outBuf);
 static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans);
-    
 
 /******************************************************************************
  * gst_tidmaiaccel_init
@@ -182,7 +181,7 @@ static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans)
     if (dmaiaccel->hOutBufTab){
         BufTab_delete(dmaiaccel->hOutBufTab);
     }
-        
+
     GST_LOG("Finish\n");
 
     return TRUE;
@@ -214,6 +213,11 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
         GST_ERROR("failed to get fourcc from cap\n");
     }
 
+    if (!gst_structure_get_int(structure, "pitch", &dmaiaccel->lineLength)) {
+        dmaiaccel->lineLength = BufferGfx_calcLineLength(dmaiaccel->width,
+                                    dmaiaccel->colorSpace);
+    }
+
     switch (fourcc) {
     case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
         dmaiaccel->colorSpace = ColorSpace_UYVY;
@@ -226,8 +230,6 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
         break;
     }
 
-    dmaiaccel->lineLength = BufferGfx_calcLineLength(dmaiaccel->width,
-                                dmaiaccel->colorSpace);
 
     GST_LOG("end set caps\n");
     return TRUE;
