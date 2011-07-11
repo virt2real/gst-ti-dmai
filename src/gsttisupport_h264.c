@@ -68,11 +68,13 @@ enum
     PROP_300 = 300,
     PROP_BYTESTREAM,
     PROP_AUD,
+    PROP_HEADERS,
 };
 
 struct h264_stream_private {
     gboolean bytestream;
     gboolean aud;
+    gboolean headers;
 };
 
 static void h264_install_properties(GObjectClass *gobject_class){
@@ -86,6 +88,12 @@ static void h264_install_properties(GObjectClass *gobject_class){
         g_param_spec_boolean("aud",
             "Generate h264 Access Unit Delimiters format",
             "Generate h264 Access Unit Delimiters format",
+            FALSE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_HEADERS,
+        g_param_spec_boolean("headers",
+            "Include on the stream the SPS/PPS headers",
+            "Include on the stream the SPS/PPS headers",
             FALSE, G_PARAM_READWRITE));
 }
 
@@ -117,6 +125,9 @@ static void h264_set_property(GObject *object, guint prop_id,
     case PROP_AUD:
         priv->aud = g_value_get_boolean(value);
         break;
+    case PROP_HEADERS:
+        priv->headers = g_value_get_boolean(value);
+        break;
     default:
         break;
     }
@@ -140,6 +151,12 @@ static void h264_get_property(GObject *object, guint prop_id,
     case PROP_AUD:
         if (priv)
             g_value_set_boolean(value,priv->aud);
+        else
+            g_value_set_boolean(value,FALSE);
+        break;
+    case PROP_HEADERS:
+        if (priv)
+            g_value_set_boolean(value,priv->headers);
         else
             g_value_set_boolean(value,FALSE);
         break;
@@ -380,7 +397,7 @@ static GstBuffer * h264_buffer_transform(GstTIDmaienc *dmaienc, GstBuffer *buffe
             /* Do not copy if current NAL is nothing (this is the first start code) */
             if (nal_type == -1 ) {
                 /* Do nothing with this */
-            } else if (nal_type == 7 || nal_type == 8) {
+            } else if ((nal_type == 7 || nal_type == 8) && !priv->headers) {
                 /* Discard anything previous to the SPS and PPS */
                 if (priv->aud) {
                     /* We need to re-insert our AUD */
