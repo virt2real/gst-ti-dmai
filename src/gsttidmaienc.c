@@ -341,6 +341,13 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
         encoder->stream_ops->setup(dmaienc);
     }
 
+    /* Identify our keyframe type based in our stream type */
+    if (!strcmp(encoder->streamtype,"h264")) {
+        dmaienc->keyFrameType = IVIDEO_IDR_FRAME;
+    } else {
+        dmaienc->keyFrameType = IVIDEO_I_FRAME;
+    }
+
     /* Instantiate raw sink pad.
      *
      * Fixate on our static template caps instead of writing a getcaps
@@ -1294,7 +1301,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     if (dmaienc->firstBuffer) {
         dmaienc->firstBuffer = FALSE;
         if (encoder->stream_ops && encoder->stream_ops->generate_codec_data){
-            GstBuffer *codec_data = 
+            GstBuffer *codec_data =
                 encoder->stream_ops->generate_codec_data(dmaienc,outBuf);
             if (codec_data){
                 GstCaps *caps = gst_caps_make_writable(
@@ -1312,7 +1319,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 
     /* Pickup the frame type in a variable, the transform function below may need it */
     dmaienc->lastFrameType = gstti_bufferGFX_getFrameType(hSrcBuf);
-    
+
     /* If this stream needs any kind of transformation, this is the right time */
     if (encoder->stream_ops && encoder->stream_ops->transform){
         outBuf = encoder->stream_ops->transform(dmaienc,outBuf);
@@ -1332,8 +1339,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
 	    /* DMAI set the buffer type on the input buffer, since only this one
 	     * is a GFX buffer
 	     */
-	    if (dmaienc->lastFrameType  == IVIDEO_I_FRAME ||
-	        dmaienc->lastFrameType == IVIDEO_IDR_FRAME){
+	    if (dmaienc->lastFrameType == dmaienc->keyFrameType){
 	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
 	    } else {
 	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
