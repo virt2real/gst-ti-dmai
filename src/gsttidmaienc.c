@@ -1276,14 +1276,11 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     outBuf = gst_tidmaibuffertransport_new(hDstBuf,NULL, NULL);
     GST_BUFFER_SIZE(outBuf) = Buffer_getNumBytesUsed(hDstBuf);
 
-#if (PLATFORM != dm355) && (PLATFORM != dm365)
     /* Do a 32 byte aligment on the circular buffer, otherwise
-       the DSP may corrupt data. On ARM only platforms this alignment
-       actually is corrupting the data, so we avoid it for DM3x5
+       the DSP may corrupt data.
      */
     Buffer_setNumBytesUsed(hDstBuf,(Buffer_getNumBytesUsed(hDstBuf) & ~0x1f)
                                     + 0x20);
-#endif
     g_mutex_lock(dmaienc->freeMutex);
     /* Return unused memory */
     unused = dmaienc->singleOutBufSize - Buffer_getNumBytesUsed(hDstBuf);
