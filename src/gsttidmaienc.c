@@ -982,13 +982,16 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
         /* TODO 
          * Empty the adapter
          */
-        
         ret = gst_pad_push_event(dmaienc->srcpad, event);
         break;
     case GST_EVENT_FLUSH_START:
         /* Flush the adapter */
         gst_adapter_clear(dmaienc->adapter);
-        
+        /* Flush the encoder */
+        if (encoder->eops->codec_flush) {
+            encoder->eops->codec_flush(dmaienc);
+        }
+
         ret = gst_pad_push_event(dmaienc->srcpad, event);
         break;
     default:

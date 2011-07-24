@@ -229,6 +229,20 @@ static void gstti_videnc1_set_codec_caps(GstTIDmaienc *dmaienc){
     }
 }
 
+static void gstti_videnc1_flush (GstTIDmaienc *dmaienc)
+{
+    Int ret;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    ret = Venc1_flush(dmaienc->hCodec);
+    if (ret < 0) {
+        GST_ELEMENT_ERROR(dmaienc,STREAM,DECODE,(NULL),
+            ("failed to flush video encoder"));
+    }
+
+    /* Force next frame to be key frame */
+    dynParams->forceFrame = dmaienc->keyFrameType;
+}
 
 /******************************************************************************
  * gst_tividenc1_create
@@ -280,11 +294,14 @@ static gint gstti_videnc1_get_outBufSize(GstTIDmaienc *dmaienc){
 static gboolean gstti_videnc1_process(GstTIDmaienc *dmaienc, Buffer_Handle hSrcBuf,
                     Buffer_Handle hDstBuf){
     Int             ret;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
 
     /* Invoke the video encoder */
     GST_DEBUG("invoking the video encoder,(%p, %p)\n",
         Buffer_getUserPtr(hSrcBuf),Buffer_getUserPtr(hDstBuf));
     ret = Venc1_process(dmaienc->hCodec, hSrcBuf, hDstBuf);
+    /* Remove any previously forced value */
+    dynParams->forceFrame = IVIDEO_NA_FRAME;
 
     if (ret < 0) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,DECODE,(NULL),
@@ -305,6 +322,7 @@ struct gstti_encoder_ops gstti_videnc1_ops = {
     .get_property = gstti_videnc1_get_property,
     .codec_get_outBufSize = gstti_videnc1_get_outBufSize,
     .codec_create = gstti_videnc1_create,
+    .codec_flush = gstti_videnc1_flush,
     .codec_destroy = gstti_videnc1_destroy,
     .codec_process = gstti_videnc1_process,
 };

@@ -143,6 +143,7 @@ struct gstti_encoder_ops {
     gint                    (* codec_get_outBufSize) (GstTIDmaienc *);
     gint                    (* codec_get_inBufSize) (GstTIDmaienc *);
     gboolean                (* codec_create) (GstTIDmaienc *);
+    void                    (* codec_flush) (GstTIDmaienc *);
     void                    (* codec_destroy) (GstTIDmaienc *);
     gboolean                (* codec_process)
                                 (GstTIDmaienc *, Buffer_Handle,
