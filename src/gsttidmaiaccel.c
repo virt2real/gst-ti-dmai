@@ -213,11 +213,6 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
         GST_ERROR("failed to get fourcc from cap\n");
     }
 
-    if (!gst_structure_get_int(structure, "pitch", &dmaiaccel->lineLength)) {
-        dmaiaccel->lineLength = BufferGfx_calcLineLength(dmaiaccel->width,
-                                    dmaiaccel->colorSpace);
-    }
-
     switch (fourcc) {
     case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
         dmaiaccel->colorSpace = ColorSpace_UYVY;
@@ -230,6 +225,10 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
         break;
     }
 
+    if (!gst_structure_get_int(structure, "pitch", &dmaiaccel->lineLength)) {
+        dmaiaccel->lineLength = BufferGfx_calcLineLength(dmaiaccel->width,
+                                    dmaiaccel->colorSpace);
+    }
 
     GST_LOG("end set caps\n");
     return TRUE;
