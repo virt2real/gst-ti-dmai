@@ -283,6 +283,8 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
         gfxAttrs.dim.lineLength     = dmaiaccel->lineLength;
 
         hOutBuf = Buffer_create(GST_BUFFER_SIZE(inBuf), &gfxAttrs.bAttrs);
+        BufferGfx_setDimensions(hOutBuf,&gfxAttrs.dim);
+        BufferGfx_setColorSpace(hOutBuf,gfxAttrs.colorSpace);
         Buffer_setUserPtr(hOutBuf, (Int8*)GST_BUFFER_DATA(inBuf));
         Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
         *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL);
