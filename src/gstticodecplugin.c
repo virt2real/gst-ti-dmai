@@ -56,6 +56,7 @@
 #include "gsttidmaiaccel.h"
 #include "gsttipriority.h"
 #include "ti_encoders.h"
+#include "ti_decoders.h"
 #include "ittiam_encoders.h"
 
 /* Audio caps */
@@ -151,6 +152,7 @@ extern struct gstti_encoder_ops gstti_imgenc1_ops;
  */
 struct codec_custom_data_entry codec_custom_data[] = {                                                                  
     TI_DM36x_H264_ENC_CUSTOM_DATA
+    TI_DM36x_H264_DEC_CUSTOM_DATA
     TI_C64X_MPEG4_ENC_CUSTOM_DATA
     TI_C64X_AACHE_ENC_CUSTOM_DATA
     TI_C64X_AACLC_ENC_CUSTOM_DATA

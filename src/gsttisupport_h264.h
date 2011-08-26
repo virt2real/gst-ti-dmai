@@ -36,8 +36,10 @@ struct gstti_h264_parser_private {
     guint               nal_length;
     gboolean            flushing;
     gboolean            access_unit_found;
+    gboolean            sps_found;
+    gboolean            pps_found;
     gboolean            au_delimiters;
-    gboolean            parsed;
+    gboolean            packetized;
     GstBuffer           *codecdata;
 };
 

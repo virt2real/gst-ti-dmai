@@ -49,7 +49,7 @@
 #include "gstticommonutils.h"
 
 /* Declare variable used to categorize GST_LOG output */
-GST_DEBUG_CATEGORY_STATIC (gst_tidmaidec_debug);
+GST_DEBUG_CATEGORY (gst_tidmaidec_debug);
 #define GST_CAT_DEFAULT gst_tidmaidec_debug
 
 /* Element property identifiers */
@@ -171,7 +171,7 @@ static void gst_tidmaidec_base_init(GstTIDmaidecClass *klass)
     GstCaps *srccaps, *sinkcaps;
     GstPadTemplate *sinktempl, *srctempl;
     gchar *codec_type, *codec_name;
-
+    struct codec_custom_data_entry *data_entry = codec_custom_data;
 
     decoder = (GstTIDmaidecData *)
      g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -208,6 +208,17 @@ static void gst_tidmaidec_base_init(GstTIDmaidecClass *klass)
 
     g_free(codec_type);
     g_free(codec_name);
+
+    /* Search for custom codec data */
+    klass->codec_data = NULL;
+    while (data_entry->codec_name != NULL){
+        if (!strcmp(data_entry->codec_name,decoder->codecName)){
+            klass->codec_data = &data_entry->data;
+            GST_INFO("Got custom codec data for instance of %s",decoder->codecName);
+            break;
+        }
+        data_entry++;
+    }
 
     /* pad templates */
     sinkcaps = gst_static_caps_get(decoder->sinkCaps);
@@ -303,6 +314,11 @@ static void gst_tidmaidec_class_init(GstTIDmaidecClass *klass)
         decoder->dops->install_properties(gobject_class);
     }
 
+    /* Install custom properties for this stream type */
+    if (decoder->stream_ops && decoder->stream_ops->install_properties){
+        decoder->stream_ops->install_properties(gobject_class);
+    }
+
     /* If this codec provide custom properties... */
     if (klass->codec_data && klass->codec_data->install_properties) {
         GST_DEBUG("Installing custom properties for %s",decoder->codecName);
@@ -335,6 +351,11 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
         decoder->dops->default_setup_params(dmaidec);
     }
 
+    /* Allow the streamer to allocate any private data it may require */
+    if (decoder->stream_ops && decoder->stream_ops->setup){
+        decoder->stream_ops->setup(dmaidec);
+    }
+
     /* Instantiate encoded sink pad.
      *
      * Fixate on our static template caps instead of writing a getcaps
@@ -348,7 +369,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
         dmaidec->sinkpad, GST_DEBUG_FUNCPTR(gst_tidmaidec_sink_event));
     gst_pad_set_chain_function(
         dmaidec->sinkpad, GST_DEBUG_FUNCPTR(gst_tidmaidec_chain));
-    
+
     /* Instantiate decoded source pad.
      *
      * Fixate on our static template caps instead of writing a getcaps
@@ -385,9 +406,9 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
     dmaidec->framerateNum       = 0;
     dmaidec->framerateDen       = 0;
     dmaidec->frameDuration      = GST_CLOCK_TIME_NONE;
-    dmaidec->height		        = 0;
+    dmaidec->height             = 0;
     dmaidec->allocatedHeight    = 0;
-    dmaidec->width		        = 0;
+    dmaidec->width              = 0;
     dmaidec->pitch = 0;
     dmaidec->par_n = 1;
     dmaidec->par_d = 1;
@@ -461,6 +482,9 @@ static void gst_tidmaidec_set_property(GObject *object, guint prop_id,
         if (decoder->dops->set_property){
             decoder->dops->set_property(object,prop_id,value,pspec);
         }
+        if (decoder->stream_ops && decoder->stream_ops->set_property){
+            decoder->stream_ops->set_property(object,prop_id,value,pspec);
+        }
         break;
     }
 
@@ -479,7 +503,7 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
         (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     GstTIDmaidecData *decoder = (GstTIDmaidecData *)
       g_type_get_qdata(G_OBJECT_CLASS_TYPE(klass),GST_TIDMAIDEC_PARAMS_QDATA);
-    
+
     GST_LOG_OBJECT(dmaidec,"begin get_property\n");
 
     switch (prop_id) {
@@ -504,6 +528,9 @@ static void gst_tidmaidec_get_property(GObject *object, guint prop_id,
         }
         if (decoder->dops->get_property){
             decoder->dops->get_property(object,prop_id,value,pspec);
+        }
+        if (decoder->stream_ops && decoder->stream_ops->get_property){
+            decoder->stream_ops->get_property(object,prop_id,value,pspec);
         }
         break;
     }
@@ -757,7 +784,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
         }
         gst_caps_unref(caps);
     }
-    
+
     /* Set the caps on the parameters of the decoder */
     decoder->dops->set_codec_caps(dmaidec);
     if (gclass->codec_data && gclass->codec_data->set_codec_caps) {
@@ -796,28 +823,28 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             dmaidec->width,dmaidec->height,dmaidec->colorSpace);
         dmaidec->inBufSize = dmaidec->outBufSize;
 #if PLATFORM == dm365
-        /* DM365 NV12 decoders inserts padding at the end of each line 
+        /* DM365 NV12 decoders inserts padding at the end of each line
          * For decoding proposes, the output buffers aren't 1.5 x time the with*height,
-         * but instead around 1.8 
+         * but instead around 1.8
          */
         if (dmaidec->colorSpace == ColorSpace_YUV420PSEMI) {
             dmaidec->outBufSize = (dmaidec->width * dmaidec->height * 9 / 5);
         }
 #endif
         /* Trying to get a downstream buffer (if we know our caps) */
-        if (GST_PAD_CAPS(dmaidec->srcpad) && 
-            gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize, 
+        if (GST_PAD_CAPS(dmaidec->srcpad) &&
+            gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize,
             GST_PAD_CAPS(dmaidec->srcpad), &dmaidec->allocated_buffer) !=
                 GST_FLOW_OK){
             dmaidec->allocated_buffer = NULL;
         }
-        if (dmaidec->allocated_buffer && 
+        if (dmaidec->allocated_buffer &&
             GST_IS_TIDMAIBUFFERTRANSPORT(dmaidec->allocated_buffer)){
 
             dmaidec->hOutBufTab = Buffer_getBufTab(
                 GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(dmaidec->allocated_buffer));
 
-            /* If the downstream buffer doesn't belong to a buffer tab, 
+            /* If the downstream buffer doesn't belong to a buffer tab,
              * doesn't work for us
              */
             if (!dmaidec->hOutBufTab){
@@ -828,7 +855,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
                     (NULL));
             }
         } else {
-            /* If we got a downstream allocated buffer, but is not a DMAI 
+            /* If we got a downstream allocated buffer, but is not a DMAI
              * transport, we need to release it since we wont use it
              */
             if (dmaidec->allocated_buffer){
@@ -889,7 +916,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             ("failed to create output buffers"));
         return FALSE;
     }
-    
+
     if (decoder->dops->set_outBufTab){
         /* Set the Output Buffer Tab on the codec */
         decoder->dops->set_outBufTab(dmaidec,dmaidec->hOutBufTab);
@@ -907,7 +934,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     if (dmaidec->numInputBufs == 0) {
         dmaidec->numInputBufs = decoder->parser->numInputBufs;
     }
-    
+
     /* Create codec input circular buffer */
     GST_DEBUG_OBJECT(dmaidec,"creating input circular buffer\n");
 
@@ -920,7 +947,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             ("failed to create input circular buffer"));
         return FALSE;
     }
-    
+
     /* Circular queue functionality */
     dmaidec->head = 0;
     dmaidec->tail = 0;
@@ -1229,7 +1256,7 @@ static gboolean gst_tidmaidec_sink_event(GstPad *pad, GstEvent *event)
             goto done;
         }
 
-        /* If we are an audio codec, we need to recalculate 
+        /* If we are an audio codec, we need to recalculate
            our current timestamp when we start a new segment
          */
         dmaidec->sample_duration = 0;
@@ -1319,9 +1346,8 @@ static gboolean gst_tidmaidec_src_event(GstPad *pad, GstEvent *event)
         gst_event_parse_qos(event,&proportion,&diff,&timestamp);
 
         dmaidec->qos_value = (int)ceil(proportion);
-        GST_INFO_OBJECT(dmaidec,"QOS event: QOSvalue %d, %E",dmaidec->qos_value,
+        GST_LOG_OBJECT(dmaidec,"QOS event: QOSvalue %d, %E",dmaidec->qos_value,
             proportion);
-
         ret = gst_pad_event_default(pad, event);
         goto done;
     }
@@ -1393,17 +1419,39 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
         }
         g_mutex_unlock(dmaidec->circMetaMutex);
     } else {
+        GList *element;
+        gint n;
         dmaidec->tail += bytes;
         /* If we have a precise parser we can optimize
-         * to avoid future extra memcpys on the circular buffer 
+         * to avoid future extra memcpys on the circular buffer
          * We have also see codecs that say they consume more than input,
          * so we cover our backs here.
          */
         if (dmaidec->tail >= dmaidec->head){
             dmaidec->tail = dmaidec->head = 0;
         }
-        GST_DEBUG_OBJECT(dmaidec,"Flushing %d bytes from the circular buffer, %d remains",bytes,
-            dmaidec->head - dmaidec->tail);
+        g_mutex_lock(dmaidec->circMetaMutex);
+        element = g_list_first(dmaidec->circMeta);
+        while (element) {
+            GstBuffer *data = (GstBuffer *)element->data;
+            if (GST_BUFFER_OFFSET(data) >= dmaidec->tail) {
+                GST_DEBUG("Element with offset %lli >= tail %d",
+                    GST_BUFFER_OFFSET(data),dmaidec->tail);
+                n = g_list_position(dmaidec->circMeta,element);
+                while (n >= 0) {
+                    gst_buffer_unref(
+                        (GstBuffer *)g_list_first(dmaidec->circMeta)->data);
+                    dmaidec->circMeta = g_list_delete_link(dmaidec->circMeta,
+                        g_list_first(dmaidec->circMeta));
+                    n--;
+                }
+                break;
+            }
+            element = g_list_next(element);
+        }
+        g_mutex_unlock(dmaidec->circMetaMutex);
+        GST_DEBUG_OBJECT(dmaidec,"Flushing %d bytes from the circular buffer, %d remains",
+            bytes,dmaidec->head - dmaidec->tail);
     }
     g_mutex_unlock(dmaidec->circMutex);
     GST_DEBUG_OBJECT(dmaidec,"Leave");
@@ -1414,7 +1462,9 @@ static void meta_correct(gpointer data, gpointer user_data){
     GST_LOG("Entry");
     GstBuffer *buf = (GstBuffer *) data;
     gint correction = *(gint *)user_data;
-    GST_BUFFER_OFFSET(buf) -= correction; 
+    GST_BUFFER_OFFSET(buf) -= correction;
+    GST_DEBUG("Corrected offset for metabuffer %p to position %lli",
+        data,GST_BUFFER_OFFSET(buf));
     GST_LOG("Leave");
 }
 
@@ -1422,8 +1472,9 @@ static void meta_correct(gpointer data, gpointer user_data){
  * Check if there is enough free space on the circular buffer, otherwise
  * move data around on the circular buffer to make free space
  *
- * WARNING: To be called with the circMutex locked 
+ * WARNING: To be called with the circMutex locked
  */
+
 static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
     gint available;
 
@@ -1460,7 +1511,7 @@ static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
     return TRUE;
 }
 
-/* 
+/*
  * Inserts a GstBuffer into the circular buffer and stores the metadata
  */
 static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer *buf){
@@ -1493,8 +1544,6 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     meta = gst_buffer_new();
     gst_buffer_copy_metadata(meta,buf,GST_BUFFER_COPY_ALL);
     GST_BUFFER_SIZE(meta) = 0;
-    GST_BUFFER_OFFSET(meta) = dmaidec->head;
-
     /* Check if we have enough free space on the circular buffer, otherwise
      * do a buffer shift on it.
      * Some parsers that provide custom memcpy functions may require more
@@ -1507,6 +1556,11 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
         goto out;
     }
 
+    /* The head may moved in case of data shift on the
+     * validate_circBuf_space function, so we wait to do this assignment
+     * until we know we have our head where we want it.
+     */
+    GST_BUFFER_OFFSET(meta) = dmaidec->head;
     if (decoder->stream_ops && decoder->stream_ops->custom_memcpy){
         bytes = decoder->stream_ops->custom_memcpy(dmaidec,&data[dmaidec->head],
             dmaidec->end - dmaidec->head,buf);
@@ -1524,7 +1578,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     g_mutex_lock(dmaidec->circMetaMutex);
     dmaidec->circMeta = g_list_append(dmaidec->circMeta,meta);
     g_mutex_unlock(dmaidec->circMetaMutex);
-
+    
     /* Increases the head */
     dmaidec->head += bytes;
 
@@ -1541,7 +1595,7 @@ out:
  * to return
  * If the element is on flushing state, flushes the circular buffer
  *
- * WARNING: To be called with the circMutex locked 
+ * WARNING: To be called with the circMutex locked
  */
 static GstBuffer *__gstti_dmaidec_circ_buffer_peek
     (GstTIDmaidec *dmaidec,gint framepos){
@@ -1551,7 +1605,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
 
     /* To be called with the circMutex locked */
 
-    GST_DEBUG_OBJECT(dmaidec,"Entry");
+    GST_DEBUG_OBJECT(dmaidec,"Entry: %d, %d",dmaidec->head,dmaidec->tail);
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
@@ -1598,28 +1652,12 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         element = g_list_first(dmaidec->circMeta);
         while (element) {
             GstBuffer *data = (GstBuffer *)element->data;
-            if (GST_BUFFER_OFFSET(data) <= dmaidec->tail &&
-                (!g_list_next(element) ||
-                 GST_BUFFER_OFFSET((GstBuffer *)(g_list_next(element)->data))
-                 > dmaidec->tail )
-                ){
-                gint n;
-
+            if (GST_BUFFER_OFFSET(data) >= dmaidec->tail){
+                GST_DEBUG_OBJECT(dmaidec,
+                    "Picking metadata with offset %lli, index %d",
+                    GST_BUFFER_OFFSET(data),
+                    g_list_position(dmaidec->circMeta,element));
                 gst_buffer_copy_metadata(buf,data,GST_BUFFER_COPY_ALL);
-
-                /* Now we delete all metadata up to this element 
-                 * Since is possible we have in-exact parsers (like the 
-                 * generic parser), we can't afford to erase current
-                 * metadata because we don't know if would be required later 
-                 */
-                n = g_list_position(dmaidec->circMeta,element);
-                while (n > 0) {
-                    data = (GstBuffer *)g_list_first(dmaidec->circMeta)->data;
-                    gst_buffer_unref(data);
-                    dmaidec->circMeta = g_list_delete_link(dmaidec->circMeta,
-                        g_list_first(dmaidec->circMeta));
-                    n--;
-                }
                 break;
             }
             element = g_list_next(element);
@@ -1641,8 +1679,8 @@ static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
     return ret;
 }
 
-/* 
- * Returns all remaining data on the circular buffer, otherwise an empty 
+/*
+ * Returns all remaining data on the circular buffer, otherwise an empty
  * buffer
  */
 static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
@@ -1747,8 +1785,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData)) ||
         dmaidec->generate_timestamps) {
         gboolean abort = FALSE;
-
-        if (dmaidec->generate_timestamps && 
+        if (dmaidec->generate_timestamps &&
             !GST_CLOCK_TIME_IS_VALID(dmaidec->current_timestamp)){
             if (GST_CLOCK_TIME_IS_VALID(GST_BUFFER_TIMESTAMP(encData))) {
                 /* Sync our basetime against the first valid timestamp */
@@ -1805,12 +1842,12 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         pthread_mutex_unlock(&dmaidec->bufTabMutex);
     } else {
         if (!dmaidec->allocated_buffer) {
-            if (gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize, 
+            if (gst_pad_alloc_buffer(dmaidec->srcpad, 0, dmaidec->outBufSize,
                 GST_PAD_CAPS(dmaidec->srcpad), &dmaidec->allocated_buffer) !=
                     GST_FLOW_OK){
                 dmaidec->allocated_buffer = NULL;
             }
-            if (dmaidec->allocated_buffer && 
+            if (dmaidec->allocated_buffer &&
                  !GST_IS_TIDMAIBUFFERTRANSPORT(dmaidec->allocated_buffer)){
                 dmaidec->allocated_buffer = NULL;
             }
@@ -1883,8 +1920,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         return GST_FLOW_OK;
     }
 
-    GST_LOG_OBJECT(dmaidec,"Test point");
-
     /* If we were given back decoded frame, push it to the source pad */
     while (hDstBuf) {
         gboolean clip = FALSE;
@@ -1920,10 +1955,10 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                 }
             }
             if (!dmaidec->sample_duration) {
-                dmaidec->sample_duration = ((Buffer_getNumBytesUsed(hDstBuf) / 
+                dmaidec->sample_duration = ((Buffer_getNumBytesUsed(hDstBuf) /
                     (dmaidec->channels * (dmaidec->depth >> 3))) * GST_SECOND)
                     / dmaidec->rate;
-                dmaidec->current_timestamp = 
+                dmaidec->current_timestamp =
                     (GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) /
                     dmaidec->sample_duration) * dmaidec->sample_duration;
             }
@@ -1961,9 +1996,9 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
            really calculate the timestamps and duration
          */
         if (decoder->dops->codec_type == AUDIO) {
-            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) = 
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
                 dmaidec->current_timestamp;
-            GST_BUFFER_DURATION(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) = 
+            GST_BUFFER_DURATION(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
                 dmaidec->sample_duration;
             dmaidec->current_timestamp += dmaidec->sample_duration;
         }
@@ -1989,7 +2024,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaidec->srcpad));
 
         if (TRUE) { /* Forward playback*/
-            GST_LOG_OBJECT(dmaidec,"Pushing buffer downstream: %p",outBuf);
+            GST_DEBUG_OBJECT(dmaidec,"Pushing buffer downstream: %p",outBuf);
 
             /* In case of failure we lost our reference to the buffer
              * anyway, so we don't need to call unref
@@ -2191,7 +2226,7 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
     }
 
-    /* If we are an audio codec, we need to recalculate 
+    /* If we are an audio codec, we need to recalculate
        our current timestamp after flushing
      */
     dmaidec->sample_duration = 0;

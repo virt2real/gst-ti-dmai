@@ -129,6 +129,9 @@ struct _GstTIDmaidec
     /* Flags */
     gboolean            flushing;
     gboolean            generate_timestamps;
+
+    /* Private Data */
+    void                *stream_private;
 };
 
 /* _GstTIDmaidecClass object */
@@ -174,6 +177,12 @@ struct gstti_stream_decoder_ops {
      * may be used to interleave data (like on h264) 
      */
     int             (* custom_memcpy)(GstTIDmaidec *, void *, int, GstBuffer *);
+    /* Functions to provide custom properties */
+    void (*setup)(GstTIDmaidec *dmaidec);
+    void (*install_properties)(GObjectClass *);
+    void (*set_property)
+             (GObject *,guint,const GValue *,GParamSpec *);
+    void (*get_property)(GObject *,guint,GValue *, GParamSpec *);
 };
 
 /* Data definition for each instance of decoder */

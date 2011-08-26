@@ -358,6 +358,7 @@ enum
     PROP_T8X8INTER,
     PROP_DDRBUF,
     PROP_NTEMPLAYERS,
+    PROP_SVCSYNTAXEN,
     PROP_SEQSCALING,
     PROP_QPINTRA,
     PROP_QPINTER,
@@ -455,7 +456,15 @@ void ti_dm36x_h264enc_install_properties(GObjectClass *gobject_class){
             "\t\t\t 3   - four layers (F, F/2, F/4, F/8)\n"
             "\t\t\t 255 - all P refer to previous I or IDR frame\n",
             0, 255, 0, G_PARAM_READWRITE));
-
+	g_object_class_install_property(gobject_class, PROP_SVCSYNTAXEN,
+        g_param_spec_int("svcsyntaxen",
+            "Control for SVC syntax and DPB management",
+            "Control for SVC syntax and DPB management:\n"
+            "\t\t\t 0   - SVC disabled sliding window enabled\n"
+            "\t\t\t 1   - SVC enabled sliding window enabled\n"
+            "\t\t\t 2   - SVC disabled MMCO enabled\n"
+            "\t\t\t 3   - SVC enabled MMCO enabled\n",
+            0, 3, 0, G_PARAM_READWRITE));
     g_object_class_install_property(gobject_class, PROP_SEQSCALING,
         g_param_spec_int("seqscaling",
             "Sequence scaling matrix present",
@@ -536,6 +545,9 @@ void ti_dm36x_h264enc_set_property(GObject *object, guint prop_id,
     case PROP_NTEMPLAYERS:
         params->numTemporalLayers = g_value_get_int(value);
         break;
+    case PROP_SVCSYNTAXEN:
+        params->svcSyntaxEnable = g_value_get_int(value);
+        break;
     case PROP_SEQSCALING:
         params->seqScalingFlag = g_value_get_int(value);
         break;
@@ -588,6 +600,9 @@ void ti_dm36x_h264enc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_NTEMPLAYERS:
         g_value_set_int(value,params->numTemporalLayers);
+        break;
+    case PROP_SVCSYNTAXEN:
+        g_value_set_int(value,params->svcSyntaxEnable);
         break;
     case PROP_SEQSCALING:
         g_value_set_int(value,params->seqScalingFlag);

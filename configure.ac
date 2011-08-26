@@ -165,6 +165,7 @@ if test "x$preset" = "xdm365" ; then
 	AC_MSG_NOTICE(The following preset has been selected: $preset);
 	AC_DEFINE([AACLC_ARM_ITTIAM_ENCODER],[1],[Ittiam ARM AACLC Encoder])
 	AC_DEFINE([H264_DM36x_TI_ENCODER],[1],[TI DM36x Platinum Encoder])
+	AC_DEFINE([H264_DM36x_TI_DECODER],[1],[TI DM36x Platinum Decoder])
   	with_platform=dm365;
   	with_xdc_config_basename=dm365;
 fi
