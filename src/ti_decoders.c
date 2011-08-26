@@ -27,6 +27,7 @@
 #include "gstticommonutils.h"
 #include "gsttidmaidec.h"
 #ifdef H264_DM36x_TI_DECODER
+#include <ti/xdais/dm/ividdec2.h>
 #include <ti/sdo/codecs/h264dec/ih264vdec.h>
 #endif
 
