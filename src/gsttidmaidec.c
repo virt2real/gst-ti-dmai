@@ -827,8 +827,9 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
          * For decoding proposes, the output buffers aren't 1.5 x time the with*height,
          * but instead around 1.8
          */
-        if (dmaidec->colorSpace == ColorSpace_YUV420PSEMI) {
-            dmaidec->outBufSize = (dmaidec->width * dmaidec->height * 9 / 5);
+        if (dmaidec->colorSpace == ColorSpace_YUV420PSEMI &&
+            decoder->dops->codec_type == VIDEO) {
+             dmaidec->outBufSize = (dmaidec->width * dmaidec->height * 9 / 5);
         }
 #endif
         /* Trying to get a downstream buffer (if we know our caps) */

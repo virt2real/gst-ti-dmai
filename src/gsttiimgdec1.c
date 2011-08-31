@@ -153,7 +153,7 @@ static void gstti_imgdec1_set_codec_caps(GstTIDmaidec *dmaidec){
         dmaidec->framerateDen = 1;
     params->maxWidth = dmaidec->width;
     params->maxHeight = dmaidec->height;
-    
+
     /* Set up codec parameters */
     switch (dmaidec->colorSpace){
         case ColorSpace_UYVY:
@@ -213,10 +213,20 @@ static gboolean gstti_imgdec1_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
     BufferGfx_resetDimensions(hDstBuf);
  
     /* Invoke the Image decoder */
-    originalBufferSize = Buffer_getNumBytesUsed(hEncData);
+    originalBufferSize = Buffer_getSize(hEncData);
+#if PLATFORM == dm365
+    /* There is a bug on DM365 jpeg decoder that may cause it to fail with error
+       0x8800 even if the image is perfectly fine. We need to add some padding to
+       the input buffer.
+     */
+    Buffer_setSize(hEncData,originalBufferSize + 1024);
+#endif
     GST_DEBUG("invoking the Image decoder, with %ld bytes (%p, %p)\n",originalBufferSize,
         Buffer_getUserPtr(hEncData),Buffer_getUserPtr(hDstBuf));
     ret = Idec1_process(dmaidec->hCodec, hEncData, hDstBuf);
+#if PLATFORM == dm365
+    Buffer_setSize(hEncData,originalBufferSize);
+#endif
     encDataConsumed = (codecFlushed) ? 0 :
         Buffer_getNumBytesUsed(hEncData);
 
@@ -227,7 +237,7 @@ static gboolean gstti_imgdec1_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
             ("failed to decode Image buffer"));
          return FALSE;
      }
-    
+
     if (ret == Dmai_EBITERROR){
         GST_ELEMENT_WARNING(dmaidec,STREAM,DECODE,(NULL),
             ("Unable to decode frame with timestamp %"GST_TIME_FORMAT,

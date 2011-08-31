@@ -97,10 +97,10 @@ static gint jpeg_parse(GstTIDmaidec *dmaidec){
             return i;
         }
     }
-    
+
     GST_DEBUG("Failed to find a full frame");
     dmaidec->marker = i;
-    
+
     return -1;
 }
 
