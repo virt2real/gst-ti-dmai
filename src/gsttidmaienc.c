@@ -1258,7 +1258,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
-    /* Obtain a free output buffer for the decoded data */
+    /* Obtain a free output buffer for the raw data */
     hSrcBuf = get_raw_buffer(dmaienc,rawData);
     hDstBuf = encode_buffer_get_free(dmaienc,&element);
 

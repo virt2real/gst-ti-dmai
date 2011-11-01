@@ -52,6 +52,7 @@ enum
     PROP_MAXBITRATE,
     PROP_TARGETBITRATE,
     PROP_INTRAFRAMEINTERVAL,
+    PROP_FORCEINTRA,
 };
 
 static void gstti_videnc1_install_properties(GObjectClass *gobject_class){
@@ -96,8 +97,29 @@ static void gstti_videnc1_install_properties(GObjectClass *gobject_class){
             "\t\t\t N - (n-1) P sequences between I frames\n"
             ,
             0, G_MAXINT32, 30, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_FORCEINTRA,
+        g_param_spec_boolean("forceintra",
+            "Force next frame to be an intracodec frame",
+            "Force next frame to be an intracodec frame",
+            FALSE, G_PARAM_READWRITE));
 }
 
+static void gstti_videnc1_set_dynamic_params(GstTIDmaienc *dmaienc) {
+    XDAS_Int32 status;
+    VIDENC1_Status encStatus;
+    VIDENC1_DynamicParams *dynParams = (VIDENC1_DynamicParams *)dmaienc->dynParams;
+
+    /* Set video encoder dynamic parameters */
+    encStatus.size = sizeof(VIDENC1_Status);
+    encStatus.data.buf = NULL;
+
+    status = VIDENC1_control(Venc1_getVisaHandle(dmaienc->hCodec), 
+        XDM_SETPARAMS, dynParams, &encStatus);
+
+    if (status != VIDENC1_EOK) {
+        GST_WARNING("Failed to set dynamic params");
+    }
+}
 
 static void gstti_videnc1_set_property(GObject *object, guint prop_id,
     const GValue *value, GParamSpec *pspec)
@@ -111,22 +133,27 @@ static void gstti_videnc1_set_property(GObject *object, guint prop_id,
         params->rateControlPreset = g_value_get_int(value);
         break;
     case PROP_ENCODINGPRESET:
-    	params->encodingPreset = g_value_get_int(value);
+        params->encodingPreset = g_value_get_int(value);
         break;
     case PROP_MAXBITRATE:
         params->maxBitRate = g_value_get_int(value);
         break;
     case PROP_TARGETBITRATE:
         dynParams->targetBitRate = g_value_get_int(value);
+        gstti_videnc1_set_dynamic_params(dmaienc);
         break;
     case PROP_INTRAFRAMEINTERVAL:
         dynParams->intraFrameInterval = g_value_get_int(value);
+        gstti_videnc1_set_dynamic_params(dmaienc);
+        break;
+    case PROP_FORCEINTRA:
+        dynParams->forceFrame = dmaienc->keyFrameType;
+        gstti_videnc1_set_dynamic_params(dmaienc);
         break;
     default:
         break;
     }
 }
-
 
 static void gstti_videnc1_get_property(GObject *object, guint prop_id,
     GValue *value, GParamSpec *pspec)
@@ -150,6 +177,10 @@ static void gstti_videnc1_get_property(GObject *object, guint prop_id,
         break;
     case PROP_INTRAFRAMEINTERVAL:
         g_value_set_int(value,dynParams->intraFrameInterval);
+        break;
+    case PROP_FORCEINTRA:
+        g_value_set_boolean(value,dynParams->forceFrame == dmaienc->keyFrameType?
+            TRUE:FALSE);
         break;
     default:
         break;
@@ -236,12 +267,13 @@ static void gstti_videnc1_flush (GstTIDmaienc *dmaienc)
 
     ret = Venc1_flush(dmaienc->hCodec);
     if (ret < 0) {
-        GST_ELEMENT_ERROR(dmaienc,STREAM,DECODE,(NULL),
-            ("failed to flush video encoder"));
+        /* Some codecs doesn't support flushing, so we don't panic about it */
+        GST_WARNING("failed to flush video encoder, check if your codec supports it...");
     }
 
     /* Force next frame to be key frame */
     dynParams->forceFrame = dmaienc->keyFrameType;
+    gstti_videnc1_set_dynamic_params(dmaienc);
 }
 
 /******************************************************************************
