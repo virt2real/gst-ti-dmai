@@ -1099,9 +1099,10 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
 }
 
 GList *sliceAvailable(GstTIDmaienc *dmaienc, gint size){
-    GList *e;
-    struct cmemSlice *slice;
-    
+    GList *e,*a;
+    struct cmemSlice *slice, *maxSliceAvailable;
+    int maxSize = 0;
+
     /* Find free memory */
     GST_DEBUG("Finding free memory");
     g_mutex_lock(dmaienc->freeMutex);
@@ -1120,13 +1121,23 @@ GList *sliceAvailable(GstTIDmaienc *dmaienc, gint size){
             g_mutex_unlock(dmaienc->freeMutex);
             return e;
         }
+        if (slice->size > maxSize) {
+            maxSliceAvailable = slice;
+            maxSize = slice->size;
+            a = e;
+        }
 
         e = g_list_next(e);
-    }    
+    }
+    GST_WARNING(
+      "Free memory not found, using our best available free block of size %d...",
+      size);
+
+    maxSliceAvailable->start += maxSliceAvailable->size;
+    maxSliceAvailable->size = 0;
+
     g_mutex_unlock(dmaienc->freeMutex);
-    GST_DEBUG("Free memory not found...");
-    
-    return NULL;
+    return a;
 }
 
 Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc, GList **e){
