@@ -1835,7 +1835,6 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             if (hDstBuf == NULL) {
                 GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
                     ("failed to get a free contiguous buffer from BufTab"));
-                    printf("failed to get a free contiguous buffer from BufTab\n");
                 pthread_mutex_unlock(&dmaidec->bufTabMutex);
                 goto failure;
             }
