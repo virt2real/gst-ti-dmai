@@ -113,8 +113,11 @@ static void gstti_videnc1_set_dynamic_params(GstTIDmaienc *dmaienc) {
     encStatus.size = sizeof(VIDENC1_Status);
     encStatus.data.buf = NULL;
 
-    status = VIDENC1_control(Venc1_getVisaHandle(dmaienc->hCodec), 
-        XDM_SETPARAMS, dynParams, &encStatus);
+    if(dmaienc->hCodec != NULL) {
+        status = VIDENC1_control(Venc1_getVisaHandle(dmaienc->hCodec), 
+            XDM_SETPARAMS, dynParams, &encStatus);
+    } else
+        return;
 
     if (status != VIDENC1_EOK) {
         GST_WARNING("Failed to set dynamic params");
