@@ -524,7 +524,7 @@ setup_outputBuf (GstTIDmaiResizer * dmairesizer)
   /* DM365 IPIPE requires 32 byte alignment */
   gfxAttrs.dim.lineLength =  (gfxAttrs.dim.lineLength + 0x1F) & ~0x1F;
 #endif
-  
+  dmairesizer->lineLength = gfxAttrs.dim.lineLength;
   /* Both the codec and the GStreamer pipeline can own a buffer */
   gfxAttrs.bAttrs.useMask = gst_tidmaibuffertransport_GST_FREE;
 
@@ -693,6 +693,12 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       }
   }
 
+  /* Setting output buffers */
+  if(dmairesizer->setup_outBufTab){
+    setup_outputBuf (dmairesizer);
+    dmairesizer->setup_outBufTab = FALSE;
+  }
+
   gst_structure_set(capStruct,
       "height",G_TYPE_INT,
       dmairesizer->target_height?dmairesizer->target_height:dmairesizer->height,
@@ -703,6 +709,7 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
       "pixel-aspect-ratio", GST_TYPE_FRACTION,
       dmairesizer->par_n,dmairesizer->par_d,
       "dmaioutput", G_TYPE_BOOLEAN, TRUE,
+      "pitch", G_TYPE_INT, dmairesizer->lineLength,
       (char *)NULL);
 
   gst_pad_fixate_caps (dmairesizer->srcpad, newcaps);
@@ -716,11 +723,6 @@ gst_dmai_resizer_setcaps (GstPad * pad, GstCaps * caps)
   }
   gst_caps_unref(newcaps);
 
-  /* Setting output buffers */
-  if(dmairesizer->setup_outBufTab){
-    setup_outputBuf (dmairesizer);
-    dmairesizer->setup_outBufTab = FALSE;
-  }
 
   dmairesizer->clean_bufTab = TRUE;
   dmairesizer->configured = FALSE;

@@ -60,6 +60,7 @@ struct _GstTIDmaiResizer
   gint height;
   gint fps_n;
   gint fps_d;
+  gint lineLength;
   ColorSpace_Type colorSpace;
   ColorSpace_Type outColorSpace;
   gboolean setup_outBufTab;
