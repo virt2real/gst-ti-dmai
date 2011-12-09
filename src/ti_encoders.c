@@ -356,6 +356,8 @@ enum
     PROP_ENTROPYMODE,
     PROP_T8X8INTRA,
     PROP_T8X8INTER,
+    PROP_ENCQUALITY,
+    PROP_ENABLETCM,
     PROP_DDRBUF,
     PROP_NTEMPLAYERS,
     PROP_SVCSYNTAXEN,
@@ -438,6 +440,21 @@ void ti_dm36x_h264enc_install_properties(GObjectClass *gobject_class){
         g_param_spec_boolean("t8x8inter",
             "Enable 8x8 Transform for P Frame",
             "Enable 8x8 Transform for P Frame (only for High Profile)",
+            FALSE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_ENCQUALITY,
+        g_param_spec_int("encquality",
+            "Encoder quality",
+            "Encoder quality:\n"
+            "\t\t\t 0 - Version 1.1 backward compatible\n"
+            "\t\t\t 1 - High Quality (same as encodingpreset=1)\n"
+            "\t\t\t 2 - High Speed (same as encodingpreset=2)\n",
+            0, 2, 2, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_ENABLETCM,
+        g_param_spec_boolean("enabletcm",
+            "Enable ARM TCM memory usage when encquality is 0",
+            "When encquality is 0, this flag controls if TCM memory should be used (otherwise is ignored and default to yes)",
             FALSE, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_DDRBUF,
@@ -539,6 +556,12 @@ void ti_dm36x_h264enc_set_property(GObject *object, guint prop_id,
     case PROP_T8X8INTER:
         params->transform8x8FlagInterFrame = g_value_get_boolean(value)?1:0;
         break;
+    case PROP_ENCQUALITY:
+        params->encQuality = g_value_get_int(value);
+        break;
+    case PROP_ENABLETCM:
+        params->enableARM926Tcm = g_value_get_boolean(value)?1:0;
+        break;
     case PROP_DDRBUF:
         params->enableDDRbuff = g_value_get_boolean(value)?1:0;
         break;
@@ -594,6 +617,12 @@ void ti_dm36x_h264enc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_T8X8INTER:
         g_value_set_boolean(value,params->transform8x8FlagInterFrame ? TRUE : FALSE);
+        break;
+    case PROP_ENCQUALITY:
+        g_value_set_int(value,params->encQuality);
+        break;
+    case PROP_ENABLETCM:
+        g_value_set_boolean(value,params->enableARM926Tcm ? TRUE : FALSE);
         break;
     case PROP_DDRBUF:
         g_value_set_boolean(value,params->enableDDRbuff ? TRUE : FALSE);
