@@ -385,6 +385,7 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->adapter            = NULL;
 
     dmaienc->freeSlices         = NULL;
+    dmaienc->freeMutex          = NULL;
 
     dmaienc->outBuf             = NULL;
     dmaienc->inBuf              = NULL;
@@ -725,13 +726,15 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     /* Wait for free all downstream buffers */
+    if (dmaienc->freeMutex)
+        g_mutex_lock(dmaienc->freeMutex);
+
     if (dmaienc->freeSlices &&
         ((struct cmemSlice *)(dmaienc->freeSlices->data))->size != dmaienc->outBufSize){
         GST_ELEMENT_WARNING(dmaienc,RESOURCE,NO_SPACE_LEFT,(NULL),
             ("Not all downstream buffers are free... forcing release, this may cause a segfault\n"));
     }
     if (dmaienc->freeSlices){
-        g_mutex_lock(dmaienc->freeMutex);
         GList *e = dmaienc->freeSlices;
 
         /* Merge free memory */
@@ -740,16 +743,20 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
             e = g_list_next(e);
         }
         g_list_free(dmaienc->freeSlices);
-        
+
         dmaienc->freeSlices = NULL;
-        g_mutex_unlock(dmaienc->freeMutex);
-        g_mutex_free(dmaienc->freeMutex);
     }
 
     if (dmaienc->outBuf) {
         GST_DEBUG("freeing output buffer, %p\n",dmaienc->outBuf);
         Buffer_delete(dmaienc->outBuf);
         dmaienc->outBuf = NULL;
+    }
+
+    if (dmaienc->freeMutex) {
+        g_mutex_unlock(dmaienc->freeMutex);
+        g_mutex_free(dmaienc->freeMutex);
+        dmaienc->freeMutex = NULL;
     }
 
     if (dmaienc->inBuf){
@@ -919,27 +926,27 @@ static gboolean gst_tidmaienc_set_sink_caps(GstPad *pad, GstCaps *caps)
         gst_object_unref(dmaienc);
         return FALSE;
     }
-    
+
     GST_DEBUG("Setting source caps: '%s'", (str = gst_caps_to_string(newcaps)));
     g_free(str);
 
     if (!gst_pad_set_caps(dmaienc->srcpad, newcaps)) {
         GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-           	("Failed to set the srcpad caps"));
+            ("Failed to set the srcpad caps"));
     } else {
-	    /* Set the caps on the parameters of the encoder */
-	    encoder->eops->set_codec_caps(dmaienc);
+        /* Set the caps on the parameters of the encoder */
+        encoder->eops->set_codec_caps(dmaienc);
 
-	    if (gclass->codec_data && gclass->codec_data->set_codec_caps) {
-	    	gclass->codec_data->set_codec_caps((GstElement*)dmaienc);
-	    }
+        if (gclass->codec_data && gclass->codec_data->set_codec_caps) {
+            gclass->codec_data->set_codec_caps((GstElement*)dmaienc);
+        }
 
-	    if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
-	        gst_object_unref(dmaienc);
-	        GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-    	       	("Failed to deconfigure codec"));
-	        return FALSE;
-	    }
+        if (!gst_tidmaienc_deconfigure_codec(dmaienc)) {
+            gst_object_unref(dmaienc);
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+                ("Failed to deconfigure codec"));
+            return FALSE;
+        }
 
         if (!gst_tidmaienc_configure_codec(dmaienc)) {
             GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
@@ -1004,6 +1011,15 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
 
 void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
+
+    if (dmaienc->freeMutex)
+        g_mutex_lock(dmaienc->freeMutex);
+
+    if (dmaienc->outBuf == NULL || dmaienc->freeSlices == NULL) {
+        GST_DEBUG("Releasing memory after memory structures were freed");
+        /* No need for unlock, since it wasn't taked */
+        return;
+    }
     gint spos = Buffer_getUserPtr(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf)) -
         Buffer_getUserPtr(dmaienc->outBuf);
     gint buffer_size = Buffer_getNumBytesUsed(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf));
@@ -1018,13 +1034,12 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     }
 
     GST_DEBUG("Releasing memory from %d to %d",spos,epos);
-    g_mutex_lock(dmaienc->freeMutex);
     e = dmaienc->freeSlices;
 
     /* Merge free memory */
     while (e){
         slice = (struct cmemSlice *)e->data;
-        
+
         /* Are we contigous to this block? */
         if (slice->start == epos){
             GST_DEBUG("Merging free buffer at beggining free block (%d,%d)",
@@ -1081,7 +1096,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
             g_mutex_unlock(dmaienc->freeMutex);
             return;
         }
-        
+
         e = g_list_next(e);
     }
 
@@ -1339,32 +1354,32 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
                 ("Failed to perform buffer transform"));
         }
     }
-    
+
     gst_buffer_copy_metadata(outBuf,rawData,
         GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 
-	ret = (int)Buffer_getNumBytesUsed(hSrcBuf);
+    ret = (int)Buffer_getNumBytesUsed(hSrcBuf);
 
-	if (encoder->eops->codec_type == VIDEO
+    if (encoder->eops->codec_type == VIDEO
                 || encoder->eops->codec_type == IMAGE) {
-	    /* DMAI set the buffer type on the input buffer, since only this one
-	     * is a GFX buffer
-	     */
-	    if (dmaienc->lastFrameType == dmaienc->keyFrameType){
-	        GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
-	    } else {
-	        GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
-	    }
-	    /* Lets help the qtmuxer, since it doesn't like buffers with only 
-	     * timestamps
-	     */
-	    if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(outBuf))) {
-	        GST_BUFFER_DURATION(outBuf) = dmaienc->averageDuration;
-	    }
-	} else if (encoder->eops->codec_type == AUDIO) {
-		GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
-			* dmaienc->asampleTime;
-	}
+        /* DMAI set the buffer type on the input buffer, since only this one
+         * is a GFX buffer
+         */
+        if (dmaienc->lastFrameType == dmaienc->keyFrameType){
+            GST_BUFFER_FLAG_UNSET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+        } else {
+            GST_BUFFER_FLAG_SET(outBuf, GST_BUFFER_FLAG_DELTA_UNIT);
+        }
+        /* Lets help the qtmuxer, since it doesn't like buffers with only 
+         * timestamps
+         */
+        if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(outBuf))) {
+            GST_BUFFER_DURATION(outBuf) = dmaienc->averageDuration;
+        }
+    } else if (encoder->eops->codec_type == AUDIO) {
+        GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
+            * dmaienc->asampleTime;
+    }
 
     /* We must release the buffer structure if we aren't
        going to release it later
@@ -1380,9 +1395,9 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     gst_buffer_unref(rawData);
     rawData = NULL;
 
-	/* The transform function may have already created an non DMAI output 
-	 * buffer, so we have to check to avoid doing a memcpy twice.
-	 */
+    /* The transform function may have already created an non DMAI output 
+     * buffer, so we have to check to avoid doing a memcpy twice.
+     */
     if (dmaienc->copyOutput && GST_IS_TIDMAIBUFFERTRANSPORT(outBuf)) {
         GstBuffer *buf = gst_buffer_copy(outBuf);
         gst_buffer_unref(outBuf);
@@ -1401,24 +1416,24 @@ failure:
     return ret;
 }
 
-static GstBuffer *adapter_get_buffer(GstTIDmaienc *dmaienc,
-					GstTIDmaiencData *encoder){
-	GstBuffer *buf = NULL;
-	const guint8 *buffer = NULL;
+static GstBuffer *adapter_get_buffer(GstTIDmaienc *dmaienc, 
+    GstTIDmaiencData *encoder){
+    GstBuffer *buf = NULL;
+    const guint8 *buffer = NULL;
 
     if (encoder->eops->codec_type == AUDIO){
-    	buffer = gst_adapter_peek(dmaienc->adapter,dmaienc->inBufSize);
-		buf = gst_buffer_new();
-		GST_BUFFER_DATA(buf) = (guint8 *)buffer;
-		GST_BUFFER_SIZE(buf) = dmaienc->inBufSize;
-		GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
-		GST_BUFFER_DURATION(buf) = (dmaienc->inBufSize / dmaienc->asampleSize)
-			* dmaienc->asampleTime;
+        buffer = gst_adapter_peek(dmaienc->adapter,dmaienc->inBufSize);
+        buf = gst_buffer_new();
+        GST_BUFFER_DATA(buf) = (guint8 *)buffer;
+        GST_BUFFER_SIZE(buf) = dmaienc->inBufSize;
+        GST_BUFFER_TIMESTAMP(buf) = dmaienc->basets;
+        GST_BUFFER_DURATION(buf) = (dmaienc->inBufSize / dmaienc->asampleSize)
+            * dmaienc->asampleTime;
     } else {
-    	/* For Video processing we want to use gst_adapter_take_buffer
-    	 * because it keeps the timestamps
-    	 */
-      	buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->inBufSize);
+        /* For Video processing we want to use gst_adapter_take_buffer
+         * because it keeps the timestamps
+         */
+        buf = gst_adapter_take_buffer(dmaienc->adapter,dmaienc->inBufSize);
     }
 
     return buf;
@@ -1454,39 +1469,39 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
         gst_adapter_push(dmaienc->adapter,buf);
 
         if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
-			buf = adapter_get_buffer(dmaienc,encoder);
+            buf = adapter_get_buffer(dmaienc,encoder);
         } else {
-        	buf = NULL;
+            buf = NULL;
         }
     } else {
         GST_DEBUG("Using accelerated buffer\n");
     }
 
     while (buf){
-    	bytesConsumed = encode(dmaienc, buf);
-		buf = NULL;
+        bytesConsumed = encode(dmaienc, buf);
+        buf = NULL;
 
-       	if (bytesConsumed < 0) {
-        	GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
-            	("Failed to encode buffer"));
-           	gst_buffer_unref(buf);
-        	return GST_FLOW_UNEXPECTED;
+        if (bytesConsumed < 0) {
+            GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
+                ("Failed to encode buffer"));
+            gst_buffer_unref(buf);
+            return GST_FLOW_UNEXPECTED;
         }
 
-    	if (encoder->eops->codec_type == AUDIO) {
-       		/* Need to flush the adapter */
-       		gst_adapter_flush(dmaienc->adapter,bytesConsumed);
-			if (gst_adapter_available(dmaienc->adapter) == 0) {
-				dmaienc->basets = GST_CLOCK_TIME_NONE;
-			} else {
-	       		dmaienc->basets += (bytesConsumed / dmaienc->asampleSize)
-					* dmaienc->asampleTime;
-			}
+        if (encoder->eops->codec_type == AUDIO) {
+            /* Need to flush the adapter */
+            gst_adapter_flush(dmaienc->adapter,bytesConsumed);
+            if (gst_adapter_available(dmaienc->adapter) == 0) {
+                dmaienc->basets = GST_CLOCK_TIME_NONE;
+            } else {
+                dmaienc->basets += (bytesConsumed / dmaienc->asampleSize)
+                    * dmaienc->asampleTime;
+            }
 
-			if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
-				buf = adapter_get_buffer(dmaienc,encoder);
-			}
-       	}
+            if (gst_adapter_available(dmaienc->adapter) >= dmaienc->inBufSize){
+                buf = adapter_get_buffer(dmaienc,encoder);
+            }
+        }
     }
 
     return GST_FLOW_OK;
