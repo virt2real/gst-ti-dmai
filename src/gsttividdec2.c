@@ -233,11 +233,12 @@ static gboolean gstti_viddec2_process(GstTIDmaidec *dmaidec, GstBuffer *encData,
         return FALSE;
     }
 
-/* Disable this check until we verified a bit more the behavior of the
-   different codecs upon a BIT error. On OMAP3 we should not do anything
-   about it for mpeg4, but need more testing on other platforms
+/* Disable this check on all platforms until we verified a bit more the
+   behavior of the different codecs upon a BIT error. On OMAP3 we should
+   not do anything about it for mpeg4, but need more testing on other
+   platforms
  */
-# if 0
+#if PLATFORM == dm365
     if (ret == Dmai_EBITERROR){
         GST_ELEMENT_WARNING(dmaidec,STREAM,DECODE,(NULL),
             ("Unable to decode frame with timestamp %"GST_TIME_FORMAT,

@@ -25,9 +25,61 @@
 
 #include  "gstticommonutils.h"
 
+/* Audio caps */
+const GstStaticCaps gstti_pcm_caps = GST_STATIC_CAPS(
+    "audio/x-raw-int, "
+    "   width = (int) 16, "
+    "   depth = (int) 16, "
+    "   endianness = (int) BYTE_ORDER, "
+    "   channels = (int) [ 1, 8 ], "
+    "   rate = (int) [ 8000, 96000 ]"
+);
+
 /* Raw video */
+GstStaticCaps gstti_uyvy_yc8_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "
+    "   format=(fourcc)Y8C8, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ];"
+    "video/x-raw-yuv, "
+    "   format=(fourcc)UYVY, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] "
+);
+
+GstStaticCaps gstti_nv12_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "
+    "   format=(fourcc)NV12, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ]; "
+);
+
+GstStaticCaps gstti_uyvy_nv12_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "
+    "   format=(fourcc)NV12, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ]; "
+    "video/x-raw-yuv, "
+    "   format=(fourcc)UYVY, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] "
+);
+
+GstStaticCaps gstti_uyvy_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "
+    "   format=(fourcc)UYVY, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 1, MAX ], "
+    "   height=(int)[ 1, MAX ] "
+);
+
 GstStaticCaps gstti_D1_uyvy_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* UYVY */
+    "video/x-raw-yuv, "
     "   format=(fourcc)UYVY, "
     "   framerate=(fraction)[ 0, MAX ], "
     "   width=(int)[ 1, 720 ], "
@@ -35,7 +87,15 @@ GstStaticCaps gstti_D1_uyvy_caps = GST_STATIC_CAPS (
 );
 
 GstStaticCaps gstti_4kx4k_nv12_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* UYVY */
+    "video/x-raw-yuv, "
+    "   format=(fourcc)NV12, "
+    "   framerate=(fraction)[ 0, MAX ], "
+    "   width=(int)[ 256, 4096 ], "
+    "   height=(int)[ 256, 4096 ] "
+);
+
+GstStaticCaps gstti_4kx4k_uyvy_caps = GST_STATIC_CAPS (
+    "video/x-raw-yuv, "
     "   format=(fourcc)NV12, "
     "   framerate=(fraction)[ 0, MAX ], "
     "   width=(int)[ 256, 4096 ], "

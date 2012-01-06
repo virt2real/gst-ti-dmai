@@ -59,60 +59,6 @@
 #include "ti_decoders.h"
 #include "ittiam_encoders.h"
 
-/* Audio caps */
-static GstStaticCaps gstti_pcm_caps = GST_STATIC_CAPS(
-    "audio/x-raw-int, "
-    "   width = (int) 16, "
-    "   depth = (int) 16, "
-    "   endianness = (int) BYTE_ORDER, "
-    "   channels = (int) [ 1, 8 ], "
-    "   rate = (int) [ 8000, 96000 ]"
-);
-
-/* The YUV caps are platform specific */
-#if PLATFORM == dm6467
-static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* Y8C8 - YUV422 semi planar */
-    "   format=(fourcc)Y8C8, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ];"
-    "video/x-raw-yuv, "                        /* UYVY */
-    "   format=(fourcc)UYVY, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ] "
-);
-#elif PLATFORM == dm365
-static GstStaticCaps gstti_nv12_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* NV12 */
-    "   format=(fourcc)NV12, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ]; "
-);
-
-static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* NV12 */
-    "   format=(fourcc)NV12, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ]; "
-    "video/x-raw-yuv, "                        /* UYVY */
-    "   format=(fourcc)UYVY, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ] "
-);
-#else
-static GstStaticCaps gstti_yuv_caps = GST_STATIC_CAPS (
-    "video/x-raw-yuv, "                        /* UYVY */
-    "   format=(fourcc)UYVY, "
-    "   framerate=(fraction)[ 0, MAX ], "
-    "   width=(int)[ 1, MAX ], "
-    "   height=(int)[ 1, MAX ] "
-);
-#endif
 
 extern struct gstti_decoder_ops gstti_viddec_ops;
 extern struct gstti_decoder_ops gstti_viddec2_ops;
@@ -243,7 +189,11 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             vdecoder->streamtype = "mjpeg";
             vdecoder->parser = &gstti_jpeg_parser;
             vdecoder->sinkCaps = &gstti_jpeg_caps;
-            vdecoder->srcCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            vdecoder->srcCaps = &gstti_uyvy_nv12_caps;
+#else
+            vdecoder->srcCaps = &gstti_uyvy_caps;
+#endif
             switch (xdm_ver) {
                 case 0: 
                     vdecoder->dops = &gstti_imgdec_ops;
@@ -274,7 +224,11 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
         /* Fill based on the xdm version */
         switch (mediaType){
         case VIDEO:
-            decoder->srcCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            decoder->srcCaps = &gstti_uyvy_nv12_caps;
+#else
+            decoder->srcCaps = &gstti_uyvy_caps;
+#endif
             switch (xdm_ver) {
                 case 0: 
                     decoder->dops = &gstti_viddec_ops;
@@ -294,7 +248,11 @@ probe_codec_server_decoders (GstPlugin *TICodecPlugin)
             }
             break;
         case IMAGE:
-            decoder->srcCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            decoder->srcCaps = &gstti_uyvy_nv12_caps;
+#else
+            decoder->srcCaps = &gstti_uyvy_caps;
+#endif
             switch (xdm_ver) {
                 case 0: 
                     decoder->dops = &gstti_imgdec_ops;
@@ -396,7 +354,11 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             vencoder->engineName = ENCODEENGINE;
             vencoder->streamtype = "mjpeg";
             vencoder->srcCaps = &gstti_jpeg_caps;
-            vencoder->sinkCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            vencoder->sinkCaps = &gstti_uyvy_nv12_caps;
+#else
+            vencoder->sinkCaps = &gstti_uyvy_caps;
+#endif
             switch (xdm_ver) {
                 case 0: 
                     vencoder->eops = &gstti_imgenc_ops;
@@ -419,7 +381,11 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
         /* Fill based on the xdm version */
         switch (mediaType){
         case VIDEO:
-            encoder->sinkCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            encoder->sinkCaps = &gstti_uyvy_nv12_caps;
+#else
+            encoder->sinkCaps = &gstti_uyvy_caps;
+#endif
 #if PLATFORM == dm365
             if (!strcmp (encoder->codecName, "h264enc") || !strcmp (encoder->codecName, "mpeg4enc")) {
                 encoder->sinkCaps = &gstti_nv12_caps;
@@ -434,7 +400,11 @@ probe_codec_server_encoders (GstPlugin *TICodecPlugin)
             }
             break;
         case IMAGE:
-            encoder->sinkCaps = &gstti_yuv_caps;
+#if PLATFORM == dm365
+            encoder->sinkCaps = &gstti_uyvy_nv12_caps;
+#else
+            encoder->sinkCaps = &gstti_uyvy_caps;
+#endif
             switch (xdm_ver) {
                 case 0: 
                     encoder->eops = &gstti_imgenc_ops;

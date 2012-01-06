@@ -22,6 +22,11 @@
 
 #include <gst/gst.h>
 
+extern GstStaticCaps gstti_pcm_caps;
+extern GstStaticCaps gstti_uyvy_yc8_caps;
+extern GstStaticCaps gstti_nv12_caps;
+extern GstStaticCaps gstti_uyvy_nv12_caps;
+extern GstStaticCaps gstti_uyvy_caps;
 extern GstStaticCaps gstti_D1_uyvy_caps;
 extern GstStaticCaps gstti_4kx4k_nv12_caps;
 extern GstStaticCaps gstti_D1_mpeg4_src_caps, gstti_D1_mpeg4_sink_caps;
