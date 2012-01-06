@@ -176,6 +176,12 @@ static void gstti_imgenc1_set_codec_caps(GstTIDmaienc *dmaienc)
 
     params->maxWidth = dynParams->inputWidth = dmaienc->width;
     params->maxHeight = dynParams->inputHeight = dmaienc->height;
+    
+    if (dmaienc->pitch) {
+        GST_INFO("Codec pitch %d, inputWidth %d", dmaienc->pitch, dmaienc->width);
+        dynParams->captureWidth = dmaienc->pitch;
+        params->maxWidth = dmaienc->pitch;
+    }
 }
 
 /******************************************************************************
