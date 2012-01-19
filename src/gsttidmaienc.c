@@ -1113,7 +1113,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     g_mutex_unlock(dmaienc->freeMutex);
 }
 
-GList *sliceAvailable(GstTIDmaienc *dmaienc, gint size){
+GList *sliceAvailable(GstTIDmaienc *dmaienc, gint *size){
     GList *e,*a;
     struct cmemSlice *slice, *maxSliceAvailable;
     int maxSize = 0;
@@ -1125,14 +1125,14 @@ GList *sliceAvailable(GstTIDmaienc *dmaienc, gint size){
     while (e){
         slice = (struct cmemSlice *)e->data;
         GST_DEBUG("Evaluating free slice from %d to %d",slice->start,slice->end);
-        if (slice->size >= size){
+        if (slice->size >= *size){
             /* We mark all the memory as buffer at this point
              * to avoid merges while we are using the area
              * Once we know how much memory we actually used, we 
              * update to the real memory size that was used
              */
-            slice->start += size;
-            slice->size -= size;
+            slice->start += *size;
+            slice->size -= *size;
             g_mutex_unlock(dmaienc->freeMutex);
             return e;
         }
@@ -1146,9 +1146,10 @@ GList *sliceAvailable(GstTIDmaienc *dmaienc, gint size){
     }
     GST_WARNING(
       "Free memory not found, using our best available free block of size %d...",
-      size);
+      *size);
 
     maxSliceAvailable->start += maxSliceAvailable->size;
+    *size = maxSliceAvailable->size;
     maxSliceAvailable->size = 0;
 
     g_mutex_unlock(dmaienc->freeMutex);
@@ -1160,10 +1161,11 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc, GList **e){
     Buffer_Handle hBuf;
     struct cmemSlice *slice;
     gint offset;
+    gint size = dmaienc->singleOutBufSize;
 
     Attrs.reference = TRUE;
     /* Find free buffer */
-    *e = sliceAvailable(dmaienc,dmaienc->singleOutBufSize);
+    *e = sliceAvailable(dmaienc,&size);
     if (!*e){
         GST_ELEMENT_ERROR(dmaienc,STREAM,FAILED,(NULL),
            	("Not enough space free on the output buffer"));
@@ -1171,13 +1173,13 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc, GList **e){
     }
     slice = (struct cmemSlice *)((*e)->data);
     /* The offset was already reserved, so we need to correct the start */
-    offset = slice->start - dmaienc->singleOutBufSize;
+    offset = slice->start - size;
 
-    hBuf = Buffer_create(dmaienc->inBufSize,&Attrs);
+    hBuf = Buffer_create(size,&Attrs);
     GST_DEBUG("Creating buffer at offset %d",offset);
     Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + offset);
-    Buffer_setNumBytesUsed(hBuf,dmaienc->singleOutBufSize);
-    Buffer_setSize(hBuf,dmaienc->singleOutBufSize);
+    Buffer_setNumBytesUsed(hBuf,size);
+    Buffer_setSize(hBuf,size);
 
     return hBuf;
 }
