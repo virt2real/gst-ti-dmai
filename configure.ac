@@ -50,6 +50,8 @@ if test "x$HAVE_PKGCONFIG" = "xno"; then
   AC_MSG_ERROR(you need to have pkgconfig installed !)
 fi
 
+PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.31], AC_DEFINE(GLIB_2_31_AND_UP,1,[Glib greater than 2.31]),AC_DEFINE(OLD_GLIB,1,[Glib lower than 2.31]))
+
 dnl Now we're ready to ask for gstreamer libs and cflags
 dnl And we can also ask for the right version of gstreamer
 

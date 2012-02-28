@@ -639,7 +639,11 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
     }
 
     dmaidec->circMeta = NULL;
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_init(dmaidec->circMetaMutex);
+#else
     dmaidec->circMetaMutex = g_mutex_new();
+#endif
     dmaidec->allocated_buffer = NULL;
     dmaidec->downstreamBuffers = FALSE;
 
@@ -699,7 +703,11 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     gst_tidmaidec_start_flushing(dmaidec);
 
     if (dmaidec->circMetaMutex) {
+#ifdef GLIB_2_31_AND_UP
+        g_mutex_clear(dmaidec->circMetaMutex);
+#else
         g_mutex_free(dmaidec->circMetaMutex);
+#endif
         dmaidec->circMetaMutex = NULL;
     }
 
@@ -953,11 +961,19 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->head = 0;
     dmaidec->tail = 0;
     dmaidec->marker = 0;
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_init(dmaidec->circMutex);
+#else
     dmaidec->circMutex = g_mutex_new();
+#endif
     dmaidec->end = dmaidec->numInputBufs * dmaidec->inBufSize;
 
     /* Create output metadata */
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_init(dmaidec->metaTabMutex);
+#else
     dmaidec->metaTabMutex = g_mutex_new();
+#endif
     /* Create array to keep information of incoming buffers */
     dmaidec->metaTab = g_malloc0(sizeof(GstBuffer) * dmaidec->numOutputBufs);
     if (dmaidec->metaTab == NULL) {
@@ -1006,7 +1022,11 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     }
 
     if (dmaidec->circMutex) {
+#ifdef GLIB_2_31_AND_UP
+        g_mutex_clear(dmaidec->circMutex);
+#else
         g_mutex_free(dmaidec->circMutex);
+#endif
         dmaidec->circMutex = NULL;
     }
 
@@ -1029,7 +1049,11 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     }
 
     if (dmaidec->metaTabMutex) {
+#ifdef GLIB_2_31_AND_UP
+        g_mutex_clear(dmaidec->metaTabMutex);
+#else
         g_mutex_free(dmaidec->metaTabMutex);
+#endif
         dmaidec->metaTabMutex = NULL;
     }
 

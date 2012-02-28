@@ -412,7 +412,11 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->clean_bufTab = FALSE;
   dmairesizer->par_n = 1;
   dmairesizer->par_d = 1;
+#ifdef GLIB_2_31_AND_UP
+  g_mutex_init (dmairesizer->mutex);
+#else
   dmairesizer->mutex = g_mutex_new ();
+#endif
   dmairesizer->allocated_buffer = NULL;
   dmairesizer->downstreamBuffers = FALSE;
   dmairesizer->colorSpace = ColorSpace_NOTSET;

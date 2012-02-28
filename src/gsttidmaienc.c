@@ -691,7 +691,12 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     slice->start = 0;
     slice->end = dmaienc->outBufSize;
     slice->size = dmaienc->outBufSize;
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_init(dmaienc->freeMutex);
+#else
     dmaienc->freeMutex = g_mutex_new();
+#endif
+
     dmaienc->freeSlices = g_list_append(dmaienc->freeSlices,slice);
 
     GST_DEBUG("Output bufer size %d, Input buffer size %d\n",dmaienc->outBufSize,dmaienc->inBufSize);
@@ -755,7 +760,11 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
 
     if (dmaienc->freeMutex) {
         g_mutex_unlock(dmaienc->freeMutex);
+#ifdef GLIB_2_31_AND_UP
+        g_mutex_clear(dmaienc->freeMutex);
+#else
         g_mutex_free(dmaienc->freeMutex);
+#endif
         dmaienc->freeMutex = NULL;
     }
 
