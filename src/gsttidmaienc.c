@@ -1478,7 +1478,6 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
-	tracepoint(gsttidmai_encoder, chain, "Entering encoder chain function\n");
     if (!GST_IS_TIDMAIBUFFERTRANSPORT(buf) ||
         Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
           != Buffer_Type_GRAPHICS){
@@ -1525,7 +1524,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
             }
         }
     }
-	tracepoint(gsttidmai_encoder, chain, "Leaving encoder chain function\n");
+
     return GST_FLOW_OK;
 }
 
