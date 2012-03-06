@@ -56,6 +56,17 @@
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY (gst_tidmaienc_debug);
 #define GST_CAT_DEFAULT gst_tidmaienc_debug
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_LOCK(mutex) g_mutex_lock(&mutex)
+#else
+    #define GMUTEX_LOCK(mutex) if (mutex) g_mutex_lock(mutex)
+#endif
+
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_UNLOCK(mutex) g_mutex_unlock(&mutex)
+#else
+    #define GMUTEX_UNLOCK(mutex) if (mutex) g_mutex_unlock(mutex)
+#endif
 
 /* Element property identifiers */
 enum
@@ -385,8 +396,9 @@ static void gst_tidmaienc_init(GstTIDmaienc *dmaienc, GstTIDmaiencClass *gclass)
     dmaienc->adapter            = NULL;
 
     dmaienc->freeSlices         = NULL;
+#ifndef GLIB_2_31_AND_UP
     dmaienc->freeMutex          = NULL;
-
+#endif
     dmaienc->outBuf             = NULL;
     dmaienc->inBuf              = NULL;
     dmaienc->inBufSize          = 0;
@@ -692,7 +704,7 @@ static gboolean gst_tidmaienc_configure_codec (GstTIDmaienc  *dmaienc)
     slice->end = dmaienc->outBufSize;
     slice->size = dmaienc->outBufSize;
 #ifdef GLIB_2_31_AND_UP
-    g_mutex_init(dmaienc->freeMutex);
+    g_mutex_init(&dmaienc->freeMutex);
 #else
     dmaienc->freeMutex = g_mutex_new();
 #endif
@@ -731,8 +743,7 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
     /* Wait for free all downstream buffers */
-    if (dmaienc->freeMutex)
-        g_mutex_lock(dmaienc->freeMutex);
+    GMUTEX_LOCK(dmaienc->freeMutex);
 
     if (dmaienc->freeSlices &&
         ((struct cmemSlice *)(dmaienc->freeSlices->data))->size != dmaienc->outBufSize){
@@ -758,15 +769,15 @@ static gboolean gst_tidmaienc_deconfigure_codec (GstTIDmaienc  *dmaienc)
         dmaienc->outBuf = NULL;
     }
 
-    if (dmaienc->freeMutex) {
-        g_mutex_unlock(dmaienc->freeMutex);
+    GMUTEX_UNLOCK(dmaienc->freeMutex);
 #ifdef GLIB_2_31_AND_UP
-        g_mutex_clear(dmaienc->freeMutex);
+    g_mutex_clear(&dmaienc->freeMutex);
 #else
+    if (dmaienc->freeMutex) {
         g_mutex_free(dmaienc->freeMutex);
-#endif
         dmaienc->freeMutex = NULL;
     }
+#endif
 
     if (dmaienc->inBuf){
         GST_DEBUG("freeing input buffer, %p\n",dmaienc->inBuf);
@@ -1021,8 +1032,7 @@ static gboolean gst_tidmaienc_sink_event(GstPad *pad, GstEvent *event)
 void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     GstTIDmaienc *dmaienc = (GstTIDmaienc *)data;
 
-    if (dmaienc->freeMutex)
-        g_mutex_lock(dmaienc->freeMutex);
+    GMUTEX_LOCK(dmaienc->freeMutex);
 
     if (dmaienc->outBuf == NULL || dmaienc->freeSlices == NULL) {
         GST_DEBUG("Releasing memory after memory structures were freed");
@@ -1068,7 +1078,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
                         g_list_delete_link(dmaienc->freeSlices,e);
                 }
             }
-            g_mutex_unlock(dmaienc->freeMutex);
+            GMUTEX_UNLOCK(dmaienc->freeMutex);
             return;
         }
         if (slice->end == spos){
@@ -1089,7 +1099,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
                         g_list_delete_link(dmaienc->freeSlices,g_list_next(e));
                 }
             }
-            g_mutex_unlock(dmaienc->freeMutex);
+            GMUTEX_UNLOCK(dmaienc->freeMutex);
             return;
         }
         /* Create a new free slice */
@@ -1102,7 +1112,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
             nslice->size = buffer_size;
             dmaienc->freeSlices = g_list_insert_before(dmaienc->freeSlices,e,
                 nslice);
-            g_mutex_unlock(dmaienc->freeMutex);
+            GMUTEX_UNLOCK(dmaienc->freeMutex);
             return;
         }
 
@@ -1119,7 +1129,7 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
     nslice->size = buffer_size;
     dmaienc->freeSlices = g_list_insert_before(dmaienc->freeSlices,NULL,
         nslice);
-    g_mutex_unlock(dmaienc->freeMutex);
+    GMUTEX_UNLOCK(dmaienc->freeMutex);
 }
 
 GList *sliceAvailable(GstTIDmaienc *dmaienc, gint *size){
@@ -1129,7 +1139,7 @@ GList *sliceAvailable(GstTIDmaienc *dmaienc, gint *size){
 
     /* Find free memory */
     GST_DEBUG("Finding free memory");
-    g_mutex_lock(dmaienc->freeMutex);
+    GMUTEX_LOCK(dmaienc->freeMutex);
     e = dmaienc->freeSlices;
     while (e){
         slice = (struct cmemSlice *)e->data;
@@ -1142,7 +1152,7 @@ GList *sliceAvailable(GstTIDmaienc *dmaienc, gint *size){
              */
             slice->start += *size;
             slice->size -= *size;
-            g_mutex_unlock(dmaienc->freeMutex);
+            GMUTEX_UNLOCK(dmaienc->freeMutex);
             return e;
         }
         if (slice->size > maxSize) {
@@ -1161,7 +1171,7 @@ GList *sliceAvailable(GstTIDmaienc *dmaienc, gint *size){
     *size = maxSliceAvailable->size;
     maxSliceAvailable->size = 0;
 
-    g_mutex_unlock(dmaienc->freeMutex);
+    GMUTEX_UNLOCK(dmaienc->freeMutex);
     return a;
 }
 
@@ -1321,7 +1331,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
      */
     Buffer_setNumBytesUsed(hDstBuf,(Buffer_getNumBytesUsed(hDstBuf) & ~0x1f)
                                     + 0x20);
-    g_mutex_lock(dmaienc->freeMutex);
+    GMUTEX_LOCK(dmaienc->freeMutex);
     /* Return unused memory */
     unused = dmaienc->singleOutBufSize - Buffer_getNumBytesUsed(hDstBuf);
     slice->start -= unused;
@@ -1330,7 +1340,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
         g_free(slice);
         dmaienc->freeSlices = g_list_delete_link (dmaienc->freeSlices,element);
     }
-    g_mutex_unlock(dmaienc->freeMutex);
+    GMUTEX_UNLOCK(dmaienc->freeMutex);
 
     gst_tidmaibuffertransport_set_release_callback(
         (GstTIDmaiBufferTransport *)outBuf,release_cb,dmaienc);
@@ -1468,6 +1478,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
     encoder = (GstTIDmaiencData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIENC_PARAMS_QDATA);
 
+	tracepoint(gsttidmai_encoder, chain, "Entering encoder chain function\n");
     if (!GST_IS_TIDMAIBUFFERTRANSPORT(buf) ||
         Buffer_getType(GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(buf))
           != Buffer_Type_GRAPHICS){
@@ -1514,7 +1525,7 @@ static GstFlowReturn gst_tidmaienc_chain(GstPad * pad, GstBuffer * buf)
             }
         }
     }
-
+	tracepoint(gsttidmai_encoder, chain, "Leaving encoder chain function\n");
     return GST_FLOW_OK;
 }
 

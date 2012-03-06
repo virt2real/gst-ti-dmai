@@ -25,6 +25,10 @@
 #ifndef __GST_TIDMAIENC_H__
 #define __GST_TIDMAIENC_H__
 
+#ifdef HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
 #include <pthread.h>
 
 #include <gst/gst.h>
@@ -87,8 +91,11 @@ struct _GstTIDmaienc
     Buffer_Handle       outBuf;
     Buffer_Handle       inBuf;
     GList               *freeSlices;
+#ifdef GLIB_2_31_AND_UP  
+    GMutex              freeMutex;
+#else
     GMutex              *freeMutex;
-
+#endif
     /* Audio Data */
     gint                channels;
     gint                depth;

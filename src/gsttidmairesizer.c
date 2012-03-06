@@ -33,6 +33,18 @@
 GST_DEBUG_CATEGORY_STATIC (gst_tidmairesizer_debug);
 #define GST_CAT_DEFAULT gst_tidmairesizer_debug
 
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_LOCK(mutex) g_mutex_lock(&mutex)
+#else
+    #define GMUTEX_LOCK(mutex) if (mutex) g_mutex_lock(mutex)
+#endif
+
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_UNLOCK(mutex) g_mutex_unlock(&mutex)
+#else
+    #define GMUTEX_UNLOCK(mutex) if (mutex) g_mutex_unlock(mutex)
+#endif
+
 static const GstElementDetails resizer_details =
 GST_ELEMENT_DETAILS ("TI Dmai Video Resizer",
     "Filter/Editor/Video",
@@ -248,7 +260,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
   GstStructure *capStruct;
 
   /*To prevent the changed unwanted of properties on chain function*/
-  g_mutex_lock (dmairesizer->mutex);
+  GMUTEX_LOCK (dmairesizer->mutex);
 
   switch (prop_id) {
     case ARG_SOURCE_X:{
@@ -362,7 +374,7 @@ gst_dmai_resizer_set_property (GObject * object, guint prop_id,
       break;
     }
   }
-  g_mutex_unlock (dmairesizer->mutex);
+  GMUTEX_UNLOCK (dmairesizer->mutex);
 }
 
 
@@ -413,7 +425,7 @@ gst_dmai_resizer_init (GstTIDmaiResizer * dmairesizer,
   dmairesizer->par_n = 1;
   dmairesizer->par_d = 1;
 #ifdef GLIB_2_31_AND_UP
-  g_mutex_init (dmairesizer->mutex);
+  g_mutex_init (&dmairesizer->mutex);
 #else
   dmairesizer->mutex = g_mutex_new ();
 #endif
@@ -1088,7 +1100,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
 
   GST_LOG("Enter");
   /*To prevent unwanted change of properties just before to resize*/
-  g_mutex_lock (dmairesizer->mutex);
+  GMUTEX_LOCK (dmairesizer->mutex);
 
   /*Check dimentions*/
   if(dmairesizer->source_width > dmairesizer->width){
@@ -1147,7 +1159,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
     gst_buffer_unref (buf);
     /*GST_ELEMENT_ERROR called before */
     gst_caps_unref(caps);
-    g_mutex_unlock (dmairesizer->mutex);
+    GMUTEX_UNLOCK (dmairesizer->mutex);
     return GST_FLOW_UNEXPECTED;
   }
 
@@ -1163,7 +1175,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
       GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
           ("Failed to create dmai buffer"));
       gst_caps_unref(caps);
-      g_mutex_unlock (dmairesizer->mutex);
+      GMUTEX_UNLOCK (dmairesizer->mutex);
       return GST_FLOW_UNEXPECTED;
     }
     gst_buffer_set_caps (pushBuffer, caps);
@@ -1173,7 +1185,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   gst_buffer_unref (buf);
   gst_caps_unref(caps);
 
-  g_mutex_unlock (dmairesizer->mutex);
+  GMUTEX_UNLOCK (dmairesizer->mutex);
 
   GST_WARNING("Pushing buffer %p\n",pushBuffer);
 

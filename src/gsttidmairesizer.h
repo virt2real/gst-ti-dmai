@@ -98,7 +98,11 @@ struct _GstTIDmaiResizer
   gint cropHStart;
   gint cropHEnd;
   gboolean configured;
+#ifdef GLIB_2_31_AND_UP  
+  GMutex mutex;
+#else
   GMutex *mutex;
+#endif
   gboolean keep_aspect_ratio;
   gboolean normalize_pixel_aspect_ratio;
   gint par_d;

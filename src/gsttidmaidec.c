@@ -51,7 +51,17 @@
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY (gst_tidmaidec_debug);
 #define GST_CAT_DEFAULT gst_tidmaidec_debug
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_LOCK(mutex) g_mutex_lock(&mutex)
+#else
+    #define GMUTEX_LOCK(mutex) if (mutex) g_mutex_lock(mutex)
+#endif
 
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_UNLOCK(mutex) g_mutex_unlock(&mutex)
+#else
+    #define GMUTEX_UNLOCK(mutex) if (mutex) g_mutex_unlock(mutex)
+#endif
 /* Element property identifiers */
 enum
 {
@@ -640,7 +650,7 @@ static gboolean gst_tidmaidec_init_decoder(GstTIDmaidec *dmaidec)
 
     dmaidec->circMeta = NULL;
 #ifdef GLIB_2_31_AND_UP
-    g_mutex_init(dmaidec->circMetaMutex);
+    g_mutex_init(&dmaidec->circMetaMutex);
 #else
     dmaidec->circMetaMutex = g_mutex_new();
 #endif
@@ -702,14 +712,13 @@ static gboolean gst_tidmaidec_exit_decoder(GstTIDmaidec *dmaidec)
     /* Discard data on the pipeline */
     gst_tidmaidec_start_flushing(dmaidec);
 
-    if (dmaidec->circMetaMutex) {
 #ifdef GLIB_2_31_AND_UP
-        g_mutex_clear(dmaidec->circMetaMutex);
+        g_mutex_clear(&dmaidec->circMetaMutex);
 #else
         g_mutex_free(dmaidec->circMetaMutex);
-#endif
         dmaidec->circMetaMutex = NULL;
-    }
+#endif
+
 
     /* Disable flushing */
     gst_tidmaidec_stop_flushing(dmaidec);
@@ -962,7 +971,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->tail = 0;
     dmaidec->marker = 0;
 #ifdef GLIB_2_31_AND_UP
-    g_mutex_init(dmaidec->circMutex);
+    g_mutex_init(&dmaidec->circMutex);
 #else
     dmaidec->circMutex = g_mutex_new();
 #endif
@@ -970,7 +979,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
 
     /* Create output metadata */
 #ifdef GLIB_2_31_AND_UP
-    g_mutex_init(dmaidec->metaTabMutex);
+    g_mutex_init(&dmaidec->metaTabMutex);
 #else
     dmaidec->metaTabMutex = g_mutex_new();
 #endif
@@ -1007,7 +1016,6 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    dmaidec->require_configure = TRUE;
     dmaidec->src_pad_caps_fixed = FALSE;
 
     if (dmaidec->parser_started){
@@ -1021,14 +1029,16 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         dmaidec->circBuf = NULL;
     }
 
-    if (dmaidec->circMutex) {
 #ifdef GLIB_2_31_AND_UP
-        g_mutex_clear(dmaidec->circMutex);
+	if (!dmaidec->require_configure) {
+        g_mutex_clear(&dmaidec->circMutex);
+    }
 #else
+	if (dmaidec->circMutex) {
         g_mutex_free(dmaidec->circMutex);
-#endif
         dmaidec->circMutex = NULL;
     }
+#endif
 
     /* We only release the buffer tab if belong to us */
     if (dmaidec->hOutBufTab && !dmaidec->downstreamBuffers) {
@@ -1048,14 +1058,16 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         dmaidec->metaTab = NULL;
     }
 
-    if (dmaidec->metaTabMutex) {
 #ifdef GLIB_2_31_AND_UP
-        g_mutex_clear(dmaidec->metaTabMutex);
+	if (!dmaidec->require_configure) {
+    	g_mutex_clear(&dmaidec->metaTabMutex);
+	}
 #else
+	if (dmaidec->metaTabMutex) {
         g_mutex_free(dmaidec->metaTabMutex);
-#endif
         dmaidec->metaTabMutex = NULL;
     }
+#endif
 
     if (dmaidec->hCodec) {
         GST_LOG_OBJECT(dmaidec,"closing decoder\n");
@@ -1066,6 +1078,7 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
     /* Status variables */
     dmaidec->flushing = FALSE;
     dmaidec->current_timestamp  = GST_CLOCK_TIME_NONE;
+    dmaidec->require_configure = TRUE;
 
     GST_LOG_OBJECT(dmaidec,"Leave");
 
@@ -1432,17 +1445,17 @@ static void meta_free(gpointer data, gpointer user_data){
 static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
     GST_DEBUG_OBJECT(dmaidec,"Entry");
 
-    g_mutex_lock(dmaidec->circMutex);
+    GMUTEX_LOCK(dmaidec->circMutex);
     if (dmaidec->flushing){
         GST_DEBUG_OBJECT(dmaidec,"Flushing the circular buffer completely");
         dmaidec->head = dmaidec->tail = dmaidec->marker = 0;
-        g_mutex_lock(dmaidec->circMetaMutex);
+        GMUTEX_LOCK(dmaidec->circMetaMutex);
         if (dmaidec->circMeta){
             g_list_foreach (dmaidec->circMeta, meta_free, NULL);
             g_list_free(dmaidec->circMeta);
             dmaidec->circMeta = NULL;
         }
-        g_mutex_unlock(dmaidec->circMetaMutex);
+        GMUTEX_UNLOCK(dmaidec->circMetaMutex);
     } else {
         GList *element;
         gint n;
@@ -1455,7 +1468,7 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
         if (dmaidec->tail >= dmaidec->head){
             dmaidec->tail = dmaidec->head = 0;
         }
-        g_mutex_lock(dmaidec->circMetaMutex);
+        GMUTEX_LOCK(dmaidec->circMetaMutex);
         element = g_list_first(dmaidec->circMeta);
         while (element) {
             GstBuffer *data = (GstBuffer *)element->data;
@@ -1474,11 +1487,11 @@ static void gstti_dmaidec_circ_buffer_flush(GstTIDmaidec *dmaidec, gint bytes){
             }
             element = g_list_next(element);
         }
-        g_mutex_unlock(dmaidec->circMetaMutex);
+        GMUTEX_UNLOCK(dmaidec->circMetaMutex);
         GST_DEBUG_OBJECT(dmaidec,"Flushing %d bytes from the circular buffer, %d remains",
             bytes,dmaidec->head - dmaidec->tail);
     }
-    g_mutex_unlock(dmaidec->circMutex);
+    GMUTEX_UNLOCK(dmaidec->circMutex);
     GST_DEBUG_OBJECT(dmaidec,"Leave");
 }
 
@@ -1525,9 +1538,9 @@ static gboolean validate_circBuf_space(GstTIDmaidec *dmaidec, gint space){
             dmaidec->head -= dmaidec->tail;
             dmaidec->marker -= dmaidec->tail;
             /* Correct metadata */
-            g_mutex_lock(dmaidec->circMetaMutex);
+            GMUTEX_LOCK(dmaidec->circMetaMutex);
             g_list_foreach (dmaidec->circMeta, meta_correct, &dmaidec->tail);
-            g_mutex_unlock(dmaidec->circMetaMutex);
+            GMUTEX_UNLOCK(dmaidec->circMetaMutex);
             dmaidec->tail = 0;
         }
     }
@@ -1547,7 +1560,7 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     int bytes = 0;
     gboolean ret = TRUE;
 
-    g_mutex_lock(dmaidec->circMutex);
+    GMUTEX_LOCK(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Entry");
     data = (gchar *)Buffer_getUserPtr(dmaidec->circBuf);
 
@@ -1557,9 +1570,9 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
 
     /* If we are flushing, discard data and flush the circular buffer */
     if (dmaidec->flushing){
-        g_mutex_unlock(dmaidec->circMutex);
+        GMUTEX_UNLOCK(dmaidec->circMutex);
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
-        g_mutex_lock(dmaidec->circMutex);
+        GMUTEX_LOCK(dmaidec->circMutex);
         goto out;
     }
 
@@ -1600,16 +1613,16 @@ static gboolean gstti_dmaidec_circ_buffer_push(GstTIDmaidec *dmaidec, GstBuffer 
     }
 
     GST_BUFFER_SIZE(meta) = bytes;
-    g_mutex_lock(dmaidec->circMetaMutex);
+    GMUTEX_LOCK(dmaidec->circMetaMutex);
     dmaidec->circMeta = g_list_append(dmaidec->circMeta,meta);
-    g_mutex_unlock(dmaidec->circMetaMutex);
+    GMUTEX_UNLOCK(dmaidec->circMetaMutex);
     
     /* Increases the head */
     dmaidec->head += bytes;
 
 out:
     gst_buffer_unref(buf);
-    g_mutex_unlock(dmaidec->circMutex);
+    GMUTEX_UNLOCK(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Leave");
     return ret;
 }
@@ -1637,9 +1650,9 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
 
     if (dmaidec->flushing){
         /* Flush the circular buffer */
-        g_mutex_unlock(dmaidec->circMutex);
+        GMUTEX_UNLOCK(dmaidec->circMutex);
         gstti_dmaidec_circ_buffer_flush(dmaidec,0);
-        g_mutex_lock(dmaidec->circMutex);
+        GMUTEX_LOCK(dmaidec->circMutex);
         GST_DEBUG_OBJECT(dmaidec,"Leaving due flushing");
         return NULL;
     }
@@ -1650,9 +1663,9 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         if (dmaidec->flushing) {
             framepos = -1;
             /* Flush the circular buffer */
-            g_mutex_unlock(dmaidec->circMutex);
+            GMUTEX_UNLOCK(dmaidec->circMutex);
             gstti_dmaidec_circ_buffer_flush(dmaidec,0);
-            g_mutex_lock(dmaidec->circMutex);
+            GMUTEX_LOCK(dmaidec->circMutex);
         }
     }
     if (framepos >= 0){
@@ -1673,7 +1686,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
 
         /* We have to find the metadata for this buffer */
-        g_mutex_lock(dmaidec->circMetaMutex);
+        GMUTEX_LOCK(dmaidec->circMetaMutex);
         element = g_list_first(dmaidec->circMeta);
         while (element) {
             GstBuffer *data = (GstBuffer *)element->data;
@@ -1687,7 +1700,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
             }
             element = g_list_next(element);
         }
-        g_mutex_unlock(dmaidec->circMetaMutex);
+        GMUTEX_UNLOCK(dmaidec->circMetaMutex);
     }
 
     GST_LOG_OBJECT(dmaidec,"Leave");
@@ -1698,9 +1711,9 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
 
 static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
     GstBuffer *ret;
-    g_mutex_lock(dmaidec->circMutex);
+    GMUTEX_LOCK(dmaidec->circMutex);
     ret = __gstti_dmaidec_circ_buffer_peek(dmaidec,0);
-    g_mutex_unlock(dmaidec->circMutex);
+    GMUTEX_UNLOCK(dmaidec->circMutex);
     return ret;
 }
 
@@ -1711,7 +1724,7 @@ static GstBuffer *gstti_dmaidec_circ_buffer_peek(GstTIDmaidec *dmaidec){
 static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
     GstBuffer *buf = NULL;
 
-    g_mutex_lock(dmaidec->circMutex);
+    GMUTEX_LOCK(dmaidec->circMutex);
 
     GST_DEBUG_OBJECT(dmaidec,"Draining the circular buffer");
     if (dmaidec->tail != dmaidec->head){
@@ -1731,7 +1744,7 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
         GST_BUFFER_SIZE(buf) = 0;
     }
 
-    g_mutex_unlock(dmaidec->circMutex);
+    GMUTEX_UNLOCK(dmaidec->circMutex);
     GST_LOG_OBJECT(dmaidec,"Leave");
 
     return buf;
@@ -1886,7 +1899,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         dmaidec->allocated_buffer = NULL;
     }
 
-    g_mutex_lock(dmaidec->metaTabMutex);
+    GMUTEX_LOCK(dmaidec->metaTabMutex);
     gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
 
@@ -1899,7 +1912,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
         Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
             decoder->dops->outputUseMask);
-        g_mutex_unlock(dmaidec->metaTabMutex);
+        GMUTEX_UNLOCK(dmaidec->metaTabMutex);
         return GST_FLOW_OK;
     }
 
@@ -1940,7 +1953,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                decoder->dops->outputUseMask);
             GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
         }
-        g_mutex_unlock(dmaidec->metaTabMutex);
+        GMUTEX_UNLOCK(dmaidec->metaTabMutex);
         return GST_FLOW_OK;
     }
 
@@ -2053,7 +2066,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             /* In case of failure we lost our reference to the buffer
              * anyway, so we don't need to call unref
              */
-            g_mutex_unlock(dmaidec->metaTabMutex);
+            GMUTEX_UNLOCK(dmaidec->metaTabMutex);
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
                     GST_DEBUG_OBJECT(dmaidec,"push to source pad failed while in flushing state\n");
@@ -2061,7 +2074,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                     GST_DEBUG_OBJECT(dmaidec,"push to source pad failed\n");
                 }
             }
-            g_mutex_lock(dmaidec->metaTabMutex);
+            GMUTEX_LOCK(dmaidec->metaTabMutex);
         } else { /* Reverse playback */
 #if 0
 //TODO
@@ -2078,7 +2091,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             /* Push the transport buffer to the source pad */
             GST_LOG_OBJECT(dmaidec,"pushing display buffer to source pad\n");
 
-            g_mutex_unlock(dmaidec->metaTabMutex);
+            GMUTEX_UNLOCK(dmaidec->metaTabMutex);
             if (gst_pad_push(dmaidec->srcpad, outBuf) != GST_FLOW_OK) {
                 if (dmaidec->flushing){
                     GST_DEBUG_OBJECT(dmaidec,"push to source pad failed while in flushing state\n");
@@ -2086,7 +2099,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                     GST_DEBUG_OBJECT(dmaidec,"push to source pad failed\n");
                 }
             }
-            g_mutex_lock(dmaidec->metaTabMutex);
+            GMUTEX_LOCK(dmaidec->metaTabMutex);
 #endif
         }
 
@@ -2096,7 +2109,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             hDstBuf = NULL;
         }
     }
-    g_mutex_unlock(dmaidec->metaTabMutex);
+    GMUTEX_UNLOCK(dmaidec->metaTabMutex);
 
 codec_flushed:
     /*
@@ -2119,7 +2132,7 @@ failure:
         GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
 
         /* We only have the lock if hDstBuf was set to something */
-        g_mutex_unlock(dmaidec->metaTabMutex);
+        GMUTEX_UNLOCK(dmaidec->metaTabMutex);
     }
 
     if (encData != NULL){
@@ -2263,11 +2276,11 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
     }
 */
     if (dmaidec->metaTab) {
-        g_mutex_lock(dmaidec->metaTabMutex);
+        GMUTEX_LOCK(dmaidec->metaTabMutex);
         for (i = 0; i  < dmaidec->numOutputBufs; i++) {
             GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
         }
-        g_mutex_unlock(dmaidec->metaTabMutex);
+        GMUTEX_UNLOCK(dmaidec->metaTabMutex);
     }
 
     GST_DEBUG_OBJECT(dmaidec,"Pipeline flushed");

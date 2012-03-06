@@ -23,6 +23,10 @@
 #ifndef __GST_TIDMAIDEC_H__
 #define __GST_TIDMAIDEC_H__
 
+#ifdef HAVE_CONFIG_H
+#  include <config.h>
+#endif
+
 #include <gst/gst.h>
 #include "gstticommonutils.h"
 
@@ -102,9 +106,16 @@ struct _GstTIDmaidec
 
     /* Buffer management */
     Buffer_Handle       circBuf;
+#ifdef GLIB_2_31_AND_UP     
+    GMutex              circMutex;
+    GMutex              circMetaMutex;
+#else
     GMutex              *circMutex;
-    GList               *circMeta;
     GMutex              *circMetaMutex;
+#endif
+
+    GList               *circMeta;
+
     gint                head;
     gint                tail;
     gint                marker;
@@ -115,7 +126,11 @@ struct _GstTIDmaidec
     gint                outBufSize;
     gint                inBufSize;
     GstBuffer           *metaTab;
+#ifdef GLIB_2_31_AND_UP
+    GMutex              metaTabMutex;
+#else
     GMutex              *metaTabMutex;
+#endif
     GstBuffer           *allocated_buffer;
     gboolean            downstreamBuffers;
     gint                downstreamWidth;
