@@ -5,7 +5,7 @@
  *
  * Original Author:
  *     Diego Dompe, RidgeRun
- * 
+ *
  * Contributors:
  * Parser code based on h624parse of gstreamer.
  * Packetized to byte stream code from gsttiquicktime_h264.c by:
@@ -69,12 +69,14 @@ enum
     PROP_BYTESTREAM,
     PROP_AUD,
     PROP_HEADERS,
+    PROP_SINGLE_NALU,
 };
 
 struct h264enc_stream_private {
     gboolean bytestream;
     gboolean aud;
     gboolean headers;
+    gboolean single_nalu;
 };
 
 static void h264enc_install_properties(GObjectClass *gobject_class){
@@ -94,6 +96,12 @@ static void h264enc_install_properties(GObjectClass *gobject_class){
         g_param_spec_boolean("headers",
             "Include on the stream the SPS/PPS headers",
             "Include on the stream the SPS/PPS headers",
+            FALSE, G_PARAM_READWRITE));
+
+    g_object_class_install_property(gobject_class, PROP_SINGLE_NALU,
+        g_param_spec_boolean("single-nalu",
+            "Buffers contains a single NALU",
+            "Buffers contains a single NALU",
             FALSE, G_PARAM_READWRITE));
 }
 
@@ -128,6 +136,9 @@ static void h264enc_set_property(GObject *object, guint prop_id,
     case PROP_HEADERS:
         priv->headers = g_value_get_boolean(value);
         break;
+    case PROP_SINGLE_NALU:
+        priv->single_nalu = g_value_get_boolean(value);
+        break;
     default:
         break;
     }
@@ -160,6 +171,12 @@ static void h264enc_get_property(GObject *object, guint prop_id,
         else
             g_value_set_boolean(value,FALSE);
         break;
+    case PROP_SINGLE_NALU:
+        if (priv)
+            g_value_set_boolean(value,priv->single_nalu);
+        else
+            g_value_set_boolean(value,FALSE);
+        break;
     default:
         break;
     }
@@ -178,7 +195,7 @@ static GstBuffer *fetch_nal(GstBuffer *buffer, gint type)
 
     GST_DEBUG("Fetching NAL, type %d", type);
     for (i = 0; i < GST_BUFFER_SIZE(buffer) - 5; i++) {
-        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0 
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0
             && data[i + 3] == 1) {
             if (found == 1) {
                 nal_len = i - nal_idx;
@@ -251,7 +268,7 @@ static GstBuffer *h264enc_generate_codec_data (GstTIDmaienc *dmaienc,
 
         profile     = sps_data[1];
         compatibly  = sps_data[2];
-        level       = sps_data[3]; 
+        level       = sps_data[3];
 
         GST_DEBUG("SPS: profile=%d, compatibly=%d, level=%d",
                     profile, compatibly, level);
@@ -392,11 +409,19 @@ static GstBuffer * h264enc_buffer_transform(GstTIDmaienc *dmaienc, GstBuffer *bu
 
     /* bytestream to packetized convertion with zero-memcpy */
     for (i = 0; i < size - 4; i++) {
-        if (dest[i] == 0 && dest[i + 1] == 0 && 
+        if (dest[i] == 0 && dest[i + 1] == 0 &&
             dest[i+2] == 0 && dest[i + 3] == 1) {
             /* Do not copy if current NAL is nothing (this is the first start code) */
-            if (nal_type == -1 ) {
-                /* Do nothing with this */
+            if (nal_type == -1) {
+                nal_type = (dest[i + 4]) & 0x1f;
+                if (priv->single_nalu &&
+                    nal_type != 7 && nal_type != 8) {
+                    GST_DEBUG("Done processing a single NALU");
+                    /* Setup the variables to fall into the last replacement */
+                    mark = i + 4;
+                    i = (size - 4);
+                    break;
+                }
             } else if ((nal_type == 7 || nal_type == 8) && !priv->headers) {
                 /* Discard anything previous to the SPS and PPS */
                 if (priv->aud) {
@@ -415,6 +440,16 @@ static GstBuffer * h264enc_buffer_transform(GstTIDmaienc *dmaienc, GstBuffer *bu
                 for (k = 1 ; k <= 4; k++){
                     dest[mark - k] = length & 0xff;
                     length >>= 8;
+                }
+
+                nal_type = (dest[i + 4]) & 0x1f;
+                if (priv->single_nalu &&
+                    nal_type != 7 && nal_type != 8) {
+                    GST_DEBUG("Done processing a single NALU");
+                    /* Setup the variables to fall into the last replacement */
+                    mark = i + 4;
+                    i = (size - 4);
+                    break;
                 }
             }
             /* Mark where next NALU starts */
@@ -488,7 +523,7 @@ static gboolean h264_init(GstTIDmaidec *dmaidec){
     priv->codecdata = gst_value_get_buffer(value);
 
     /* Check the codec data
-     * If the codec_data buffer size is greater than 7, then we have a valid 
+     * If the codec_data buffer size is greater than 7, then we have a valid
      * quicktime avcC atom header.
      *
      *      -: avcC atom header :-
@@ -530,7 +565,6 @@ static gboolean h264_init(GstTIDmaidec *dmaidec){
     priv->nal_length = AVCC_ATOM_GET_NAL_LENGTH(priv->codecdata, 4);
     priv->sps_pps_data = gst_h264_get_sps_pps_data(priv->codecdata);
     priv->nal_code_prefix = gst_h264_get_nal_prefix_code();
-
 done:
     GST_DEBUG("Parser initialized");
     return TRUE;
@@ -589,7 +623,7 @@ static gint h264_parse(GstTIDmaidec *dmaidec){
                 return -1;
             }
 
-            if (data[i + 0] == 0 && data[i + 1] == 0 && 
+            if (data[i + 0] == 0 && data[i + 1] == 0 &&
                 data[i + 2] == 0 && data[i + 3] == 1) { /* Find a NALU delimiter */
                 gint nal_type = data[i+4]&0x1f;
 
@@ -816,7 +850,7 @@ static int gst_h264_sps_pps_calBufSize (GstBuffer *codec_data)
     return sps_pps_size;
 }
 
-static int h264dec_custom_memcpy(GstTIDmaidec *dmaidec, void *target, 
+static int h264dec_custom_memcpy(GstTIDmaidec *dmaidec, void *target,
     int available, GstBuffer *buf){
     struct gstti_h264_parser_private *priv =
         (struct gstti_h264_parser_private *) dmaidec->parser_private;
