@@ -131,6 +131,38 @@ dnl set proper LDFLAGS for plugins
 GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*'
 AC_SUBST(GST_PLUGIN_LDFLAGS)
 
+dnl lttng-support is optional, used to get debug traces
+AC_ARG_ENABLE(lttng-support,
+AC_HELP_STRING([--enable-lttng-support],[use lttng if installed]),
+[case "${enableval}" in
+  yes) enable_lttng_support=yes ;;
+  no)  enable_lttng_support=no ;;
+  *) AC_MSG_ERROR(bad value ${enableval} for --enable-lttng-support) ;;
+esac
+],
+[enable_lttng_support=yes]) dnl Default value
+
+AC_MSG_CHECKING([whether to use lttng if it is available])
+if test "x$enable_lttng_support" = "xyes"; then
+  AC_MSG_RESULT([yes])
+  PKG_CHECK_MODULES(UST,
+                  lttng-ust >= 2.0.0,
+                  HAVE_UST=yes, HAVE_UST=no)
+
+  dnl Give a warning if we don't have userspace tracer libraries
+  dnl you can turn this into an error if you need them
+  if test "x$HAVE_UST" = "xyes"; then
+    AC_MSG_NOTICE(Found userspace tracer library, enabling lltng support)
+    AC_DEFINE([HAVE_UST],[1],[LTTng userspace tracer support])
+  fi
+
+   dnl make _CFLAGS and _LIBS available
+   AC_SUBST(UST_CFLAGS)
+   AC_SUBST(UST_LIBS)
+else
+  AC_MSG_RESULT([no (disabled via --disable-lttng-support)])
+fi
+
 dnl DMAI PLUGINS OPTIONS
 
 dnl Define presets
