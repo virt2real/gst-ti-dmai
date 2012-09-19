@@ -344,6 +344,7 @@ gst_dmaiperf_stop (GstBaseTransform * trans)
 static GstFlowReturn
 gst_dmaiperf_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
 {
+  guint fps_int, fps_frac;
   GstDmaiperf *dmaiperf = GST_DMAIPERF (trans);
   GST_LOG ("Transform function\n");
 
@@ -357,11 +358,13 @@ gst_dmaiperf_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
       
       GstClockTime factor_n = GST_TIME_AS_MSECONDS(GST_CLOCK_DIFF (dmaiperf->lastLoadstamp, time));
       GstClockTime factor_d = GST_TIME_AS_MSECONDS(GST_SECOND);
+      fps_int = dmaiperf->fps * factor_d / factor_n;
+      fps_frac = 100 * dmaiperf->fps * factor_d / factor_n - 100 *fps_int;
       
       idx = g_snprintf (info, GST_TIME_FORMAT_MAX_SIZE, "Timestamp: %" GST_TIME_FORMAT"; "
           "bps: %llu; "
-          "fps: %llu; ",
-          GST_TIME_ARGS (time), (dmaiperf->bps * factor_d / factor_n), (dmaiperf->fps * factor_d / factor_n));
+          "fps: %d.%d",
+          GST_TIME_ARGS (time), (dmaiperf->bps * factor_d / factor_n), fps_int, fps_frac);
 
       dmaiperf->fps = 0;
       dmaiperf->bps = 0;
