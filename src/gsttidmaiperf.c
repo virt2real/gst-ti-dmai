@@ -47,7 +47,7 @@
  * The data format is EXPERIMENTAL and will be changed without regard
  * to backwards compatibility.
  * |[
- * Timestamp: 0:32:55.208388628; bps: 76032000; fps: 110; CPU: 46; DSP: 73; 
+ * Timestamp: 0:32:55.208388628; bps: 76032000; fps: 110.43; CPU: 46; DSP: 73; 
  * mem_seg: DDR2; base: 0x8fb86cde; size: 0x20000; maxblocklen: 0x15f28; used: 0x9de8; 
  * mem_seg: DDRALGHEAP; base: 0x88000000; size: 0x7a00000; maxblocklen: 0x74ec080; used: 0x513f18; 
  * mem_seg: L1DSRAM; base: 0x11f04000; size: 0x10000; maxblocklen: 0x800; used: 0xf800;  
@@ -363,7 +363,7 @@ gst_dmaiperf_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
       
       idx = g_snprintf (info, GST_TIME_FORMAT_MAX_SIZE, "Timestamp: %" GST_TIME_FORMAT"; "
           "bps: %llu; "
-          "fps: %d.%d",
+          "fps: %d.%2.2d; ",
           GST_TIME_ARGS (time), (dmaiperf->bps * factor_d / factor_n), fps_int, fps_frac);
 
       dmaiperf->fps = 0;
