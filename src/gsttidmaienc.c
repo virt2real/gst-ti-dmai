@@ -74,6 +74,7 @@ enum
     PROP_0,
     PROP_SIZE_OUTPUT_BUF, /* sizeOutputBuf  (int)     */
     PROP_COPY_OUTPUT,     /* copyOutput    (boolean) */
+    PROP_FIX_TIMESTAMP,
 };
 
 /* Declare a global pointer to our element base class */
@@ -307,6 +308,12 @@ static void gst_tidmaienc_class_init(GstTIDmaiencClass *klass)
             "Copy the output buffers",
             "Boolean that set if the output buffers should be copied into standard gst buffers",
             FALSE, G_PARAM_READWRITE));
+    g_object_class_install_property(gobject_class, PROP_FIX_TIMESTAMP,
+        g_param_spec_boolean("fixTimestamp",
+            "Fix timestamps to follow framerate setting",
+            "Boolean that set if the buffers timestamp should be changed \n" 
+            "\t\t\tto follow pipeline framerate. This property ignores input buffer timestamp",
+            FALSE, G_PARAM_READWRITE));
 
     /* Install custom properties for this codec type */
     if (encoder->eops->install_properties){
@@ -452,6 +459,11 @@ static void gst_tidmaienc_set_property(GObject *object, guint prop_id,
         GST_LOG("seeting \"copyOutput\" to %s\n",
             dmaienc->copyOutput?"TRUE":"FALSE");
         break;
+    case PROP_FIX_TIMESTAMP:
+        dmaienc->fixTimestamp = g_value_get_boolean(value);
+        GST_LOG("seeting \"fixTimestamp\" to %s\n",
+            dmaienc->fixTimestamp?"TRUE":"FALSE");
+        break;
     default:
         /* If this codec provide custom properties...
          * We allow custom codecs to overwrite the generic properties
@@ -492,6 +504,9 @@ static void gst_tidmaienc_get_property(GObject *object, guint prop_id,
         break;
     case PROP_COPY_OUTPUT:
         g_value_set_boolean(value,dmaienc->copyOutput);
+        break;
+    case PROP_FIX_TIMESTAMP:
+        g_value_set_boolean(value,dmaienc->fixTimestamp);
         break;
     default:
         /* If this codec provide custom properties...
@@ -1397,6 +1412,13 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
         if (!GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DURATION(outBuf))) {
             GST_BUFFER_DURATION(outBuf) = dmaienc->averageDuration;
         }
+
+    if(dmaienc->fixTimestamp){
+        dmaienc->basets += dmaienc->averageDuration;
+        GST_BUFFER_TIMESTAMP(outBuf) = dmaienc->basets;
+        GST_BUFFER_DURATION(outBuf) = dmaienc->averageDuration;
+    }
+
     } else if (encoder->eops->codec_type == AUDIO) {
         GST_BUFFER_DURATION(outBuf) = (ret / dmaienc->asampleSize)
             * dmaienc->asampleTime;
