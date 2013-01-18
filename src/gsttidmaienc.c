@@ -1313,6 +1313,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     GstBuffer     *outBuf;
     GList *element;
     gint unused;
+    gint bufferSize;
     struct cmemSlice *slice;
     int ret = -1;
 
@@ -1323,6 +1324,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
     /* Obtain a free output buffer for the raw data */
     hSrcBuf = get_raw_buffer(dmaienc,rawData);
     hDstBuf = encode_buffer_get_free(dmaienc,&element);
+    bufferSize = Buffer_getNumBytesUsed(hDstBuf);
 
     if (!hSrcBuf || !hDstBuf){
         goto failure;
@@ -1348,10 +1350,10 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
                                     + 0x20);
     GMUTEX_LOCK(dmaienc->freeMutex);
     /* Return unused memory */
-    unused = dmaienc->singleOutBufSize - Buffer_getNumBytesUsed(hDstBuf);
+    unused = bufferSize - Buffer_getNumBytesUsed(hDstBuf);
     slice->start -= unused;
     slice->size += unused;
-    if (slice->size == 0){
+    if (slice->size <= 0){
         g_free(slice);
         dmaienc->freeSlices = g_list_delete_link (dmaienc->freeSlices,element);
     }
