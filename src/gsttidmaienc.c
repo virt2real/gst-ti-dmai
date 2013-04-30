@@ -1148,8 +1148,10 @@ void release_cb(gpointer data, GstTIDmaiBufferTransport *buf){
 }
 
 GList *sliceAvailable(GstTIDmaienc *dmaienc, gint *size){
-    GList *e,*a;
-    struct cmemSlice *slice, *maxSliceAvailable;
+    GList *e;
+    GList *a = NULL;
+    struct cmemSlice *slice;
+    struct cmemSlice *maxSliceAvailable = NULL;
     int maxSize = 0;
 
     /* Find free memory */
