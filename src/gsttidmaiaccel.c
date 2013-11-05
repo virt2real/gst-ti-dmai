@@ -209,20 +209,26 @@ static gboolean gst_tidmaiaccel_set_caps (GstBaseTransform *trans,
         GST_ERROR("Failed to get height \n");
     }
 
-    if (!gst_structure_get_fourcc(structure, "format", &fourcc)) {
-        GST_ERROR("failed to get fourcc from cap\n");
-    }
+    if (gst_structure_has_name (structure, "video/x-raw-yuv")) {
+      if (!gst_structure_get_fourcc(structure, "format", &fourcc)) {
+          GST_ERROR("failed to get fourcc from cap\n");
+      }
 
-    switch (fourcc) {
-    case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
-        dmaiaccel->colorSpace = ColorSpace_UYVY;
-        break;
-    case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
-        dmaiaccel->colorSpace = ColorSpace_YUV422PSEMI;
-        break;
-    case GST_MAKE_FOURCC('N', 'V', '1', '2'):
-        dmaiaccel->colorSpace = ColorSpace_YUV420PSEMI;
-        break;
+      switch (fourcc) {
+      case GST_MAKE_FOURCC('U', 'Y', 'V', 'Y'):
+          dmaiaccel->colorSpace = ColorSpace_UYVY;
+          break;
+      case GST_MAKE_FOURCC('Y', '8', 'C', '8'):
+          dmaiaccel->colorSpace = ColorSpace_YUV422PSEMI;
+          break;
+      case GST_MAKE_FOURCC('N', 'V', '1', '2'):
+          dmaiaccel->colorSpace = ColorSpace_YUV420PSEMI;
+          break;
+      }
+    } else if (gst_structure_has_name (structure, "video/x-raw-bayer")) {
+       /* Using Gray color space since Bayer is not defined and Gray have
+        * the same bbp */
+       dmaiaccel->colorSpace = ColorSpace_GRAY;
     }
 
     if (!gst_structure_get_int(structure, "pitch", &dmaiaccel->lineLength)) {
