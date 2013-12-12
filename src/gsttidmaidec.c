@@ -840,13 +840,13 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             dmaidec->width,dmaidec->height,dmaidec->colorSpace);
         dmaidec->inBufSize = dmaidec->outBufSize;
 #if PLATFORM == dm365
-        /* DM365 NV12 decoders inserts padding at the end of each line
-         * For decoding proposes, the output buffers aren't 1.5 x time the with*height,
-         * but instead around 1.8
-         */
+        /* For DM365 NV12 decoding, the output buffers aren't 1.5 x times the width*height,
+         * but instead around 1.8. The formula to calculate the output buffer was taken from 
+         * the H.264 decoder datasheet */
         if (dmaidec->colorSpace == ColorSpace_YUV420PSEMI &&
             decoder->dops->codec_type == VIDEO) {
-             dmaidec->outBufSize = (dmaidec->width * dmaidec->height * 9 / 5);
+                dmaidec->outBufSize = (((dmaidec->width + 48 + 0x1F) & ~(0x1F)) *
+                 (dmaidec->height + 96) * 3) >> 1;
         }
 #endif
         /* Trying to get a downstream buffer (if we know our caps) */
@@ -2051,9 +2051,14 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         if (decoder->dops->codec_type == VIDEO ||
             decoder->dops->codec_type == IMAGE) {
-            gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
-                gst_ti_calculate_bufSize(dmaidec->width,dmaidec->height,
-                    BufferGfx_getColorSpace(hDstBuf)));
+#if PLATFORM == dm365
+          /* Using precalculated buffer size */
+          gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf), dmaidec->outBufSize);
+#else
+          gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
+                  gst_ti_calculate_bufSize(dmaidec->width,dmaidec->height,
+                      BufferGfx_getColorSpace(hDstBuf)));
+#endif
         } else {
             gst_buffer_set_data(outBuf, GST_BUFFER_DATA(outBuf),
                 Buffer_getNumBytesUsed(hDstBuf));
