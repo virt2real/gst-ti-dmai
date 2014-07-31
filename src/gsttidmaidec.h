@@ -48,8 +48,16 @@ G_BEGIN_DECLS
 typedef struct _GstTIDmaidec      GstTIDmaidec;
 typedef struct _GstTIDmaidecData  GstTIDmaidecData;
 typedef struct _GstTIDmaidecClass GstTIDmaidecClass;
+typedef struct _MetaBufTab MetaBufTab;
 
 #include "gsttiparsers.h"
+
+/* structure to store the buffer information */
+struct _MetaBufTab
+{
+    GstBuffer buffer;
+    gboolean is_dummy;
+};
 
 /* _GstTIDmaidec object */
 struct _GstTIDmaidec
@@ -125,7 +133,7 @@ struct _GstTIDmaidec
     BufTab_Handle       hOutBufTab;
     gint                outBufSize;
     gint                inBufSize;
-    GstBuffer           *metaTab;
+    MetaBufTab          *metaBufTab;
 #ifdef GLIB_2_31_AND_UP
     GMutex              metaTabMutex;
 #else

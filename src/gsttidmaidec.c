@@ -440,7 +440,7 @@ static void gst_tidmaidec_init(GstTIDmaidec *dmaidec, GstTIDmaidecClass *gclass)
 
     dmaidec->numOutputBufs      = 0UL;
     dmaidec->numInputBufs       = 0UL;
-    dmaidec->metaTab            = NULL;
+    dmaidec->metaBufTab         = NULL;
 
     GST_LOG_OBJECT(dmaidec,"Leave");
 }
@@ -984,14 +984,16 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     dmaidec->metaTabMutex = g_mutex_new();
 #endif
     /* Create array to keep information of incoming buffers */
-    dmaidec->metaTab = g_malloc0(sizeof(GstBuffer) * dmaidec->numOutputBufs);
-    if (dmaidec->metaTab == NULL) {
+    dmaidec->metaBufTab = (MetaBufTab*)g_malloc0(sizeof(MetaBufTab) * dmaidec->numOutputBufs);
+
+    if (dmaidec->metaBufTab == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
             ("failed to create meta output buffers"));
          return FALSE;
     }
     for (i = 0; i  < dmaidec->numOutputBufs; i++) {
-        GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
+        GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[i].buffer) = GST_CLOCK_TIME_NONE;
+        dmaidec->metaBufTab[i].is_dummy = FALSE;
     }
 
     GST_LOG_OBJECT(dmaidec,"Leave");
@@ -1053,9 +1055,9 @@ static gboolean gst_tidmaidec_deconfigure_codec (GstTIDmaidec  *dmaidec)
         gst_buffer_unref(dmaidec->allocated_buffer);
     }
 
-    if (dmaidec->metaTab) {
-        g_free(dmaidec->metaTab);
-        dmaidec->metaTab = NULL;
+    if (dmaidec->metaBufTab) {
+        g_free(dmaidec->metaBufTab);
+        dmaidec->metaBufTab = NULL;
     }
 
 #ifdef GLIB_2_31_AND_UP
@@ -1789,14 +1791,15 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     Buffer_Handle  hDstBuf = NULL;
     Buffer_Handle  hFreeBuf;
     GstBuffer     *outBuf;
+    int id = 0;
 
-    GST_DEBUG_OBJECT(dmaidec,"Entry");
+    GST_DEBUG_OBJECT(dmaidec,"Entry, buffer timestamp: %llu", GST_BUFFER_TIMESTAMP(encData));
 
     gclass = (GstTIDmaidecClass *) (G_OBJECT_GET_CLASS (dmaidec));
     decoder = (GstTIDmaidecData *)
        g_type_get_qdata(G_OBJECT_CLASS_TYPE(gclass),GST_TIDMAIDEC_PARAMS_QDATA);
 
-    if (GST_BUFFER_SIZE(encData) == 0){
+    if (GST_BUFFER_SIZE(encData) == 0 && !GST_BUFFER_TIMESTAMP_IS_VALID(encData)){
         GST_DEBUG_OBJECT(dmaidec,"Decode is draining\n");
 
         /* When no input remains, we must flush any remaining display
@@ -1902,16 +1905,23 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
     }
 
     GMUTEX_LOCK(dmaidec->metaTabMutex);
-    gst_buffer_copy_metadata(&dmaidec->metaTab[Buffer_getId(hDstBuf)],encData,
+
+    if (hDstBuf != NULL)
+        id = Buffer_getId(hDstBuf);
+
+    gst_buffer_copy_metadata(&dmaidec->metaBufTab[id].buffer,encData,
         GST_BUFFER_COPY_FLAGS| GST_BUFFER_COPY_TIMESTAMPS);
+    dmaidec->metaBufTab[id].is_dummy = GST_TIDMAIBUFFERTRANSPORT_IS_DUMMY(encData);
 
     /* Worth to try to flush before sleeping for a while on the decode
        operation
      */
     if (dmaidec->flushing){
+        GST_DEBUG("flush before sleeping during the decode operation");
         gst_buffer_unref(encData);
         gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
-        GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
+
+        GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) =  GST_CLOCK_TIME_NONE;
         Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
             decoder->dops->outputUseMask);
         GMUTEX_UNLOCK(dmaidec->metaTabMutex);
@@ -1937,6 +1947,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * different one than the one we passed it.
          */
         hDstBuf = decoder->dops->codec_get_data(dmaidec);
+        if (hDstBuf != NULL)
+            id = Buffer_getId(hDstBuf);
     }
 
     /* Release buffers no longer in use by the codec */
@@ -1953,7 +1965,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         if (hDstBuf) {
             Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
                decoder->dops->outputUseMask);
-            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) =  GST_CLOCK_TIME_NONE;
         }
         GMUTEX_UNLOCK(dmaidec->metaTabMutex);
         return GST_FLOW_OK;
@@ -1997,24 +2009,23 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                 dmaidec->sample_duration = ((Buffer_getNumBytesUsed(hDstBuf) /
                     (dmaidec->channels * (dmaidec->depth >> 3))) * GST_SECOND)
                     / dmaidec->rate;
-                dmaidec->current_timestamp =
-                    (GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) /
+                    dmaidec->current_timestamp =
+                    (GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) /
                     dmaidec->sample_duration) * dmaidec->sample_duration;
             }
         }
 
-        if (GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)])
-            != GST_CLOCK_TIME_NONE) {
+        if (GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) != GST_CLOCK_TIME_NONE) {
             if (gst_tidmaidec_clip_buffer(dmaidec,
-                GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]))){
+                GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer))){
                 clip = TRUE;
-                GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
+                GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) =
                     GST_CLOCK_TIME_NONE;
             }
         } else {
             GST_ERROR("No valid timestamp found for output buffer");
             clip = TRUE;
-            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) =
                 GST_CLOCK_TIME_NONE;
         }
 
@@ -2024,6 +2035,8 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
                 decoder->dops->outputUseMask);
             if (decoder->dops->codec_type == VIDEO) {
                 hDstBuf = decoder->dops->codec_get_data(dmaidec);
+                if (hDstBuf != NULL)
+                    id = Buffer_getId(hDstBuf);
             } else {
                 hDstBuf = NULL;
             }
@@ -2035,9 +2048,9 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
            really calculate the timestamps and duration
          */
         if (decoder->dops->codec_type == AUDIO) {
-            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) =
                 dmaidec->current_timestamp;
-            GST_BUFFER_DURATION(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =
+           GST_BUFFER_DURATION(&dmaidec->metaBufTab[id].buffer) =
                 dmaidec->sample_duration;
             dmaidec->current_timestamp += dmaidec->sample_duration;
         }
@@ -2049,7 +2062,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          */
         outBuf = gst_tidmaibuffertransport_new(hDstBuf,
             &dmaidec->bufTabMutex, &dmaidec->bufTabCond, FALSE);
-        gst_buffer_copy_metadata(outBuf,&dmaidec->metaTab[Buffer_getId(hDstBuf)],
+        gst_buffer_copy_metadata(outBuf,&dmaidec->metaBufTab[id].buffer,
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         if (decoder->dops->codec_type == VIDEO ||
             decoder->dops->codec_type == IMAGE) {
@@ -2068,7 +2081,19 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
         gst_buffer_set_caps(outBuf, GST_PAD_CAPS(dmaidec->srcpad));
 
         if (TRUE) { /* Forward playback*/
-            GST_DEBUG_OBJECT(dmaidec,"Pushing buffer downstream: %p",outBuf);
+            /* In case we are draining and we generated a dummy buffer, process it but do not push it to the next element.
+             * If the buffer is pushed, it causes an error when we ask for the position of a pipeline and we
+             * get the reply from the basesink, which calculates it based on the last buffer received.
+             */
+             if (codecFlushed && dmaidec->metaBufTab[id].is_dummy){
+                GST_DEBUG_OBJECT(dmaidec,"Skipping buffer -> we do not push dummy generated buffers");
+                /* We need to unref the output buffer because we are not going to push it downstream */
+                gst_buffer_unref(outBuf);
+                outBuf = NULL;
+                goto no_buffer_pushed;
+            }
+
+            GST_DEBUG_OBJECT(dmaidec,"Pushing buffer downstream: %p with timestamp: %llu",outBuf, GST_BUFFER_TIMESTAMP(outBuf));
 
             /* In case of failure we lost our reference to the buffer
              * anyway, so we don't need to call unref
@@ -2109,9 +2134,11 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
             GMUTEX_LOCK(dmaidec->metaTabMutex);
 #endif
         }
-
+no_buffer_pushed:
         if (decoder->dops->codec_type == VIDEO) {
             hDstBuf = decoder->dops->codec_get_data(dmaidec);
+            if (hDstBuf != NULL)
+                id = Buffer_getId(hDstBuf);
         } else {
             hDstBuf = NULL;
         }
@@ -2136,7 +2163,7 @@ failure:
     if (hDstBuf) {
         Buffer_freeUseMask(hDstBuf, gst_tidmaibuffertransport_GST_FREE |
             decoder->dops->outputUseMask);
-        GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[Buffer_getId(hDstBuf)]) =  GST_CLOCK_TIME_NONE;
+        GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[id].buffer) =  GST_CLOCK_TIME_NONE;
 
         /* We only have the lock if hDstBuf was set to something */
         GMUTEX_UNLOCK(dmaidec->metaTabMutex);
@@ -2145,6 +2172,7 @@ failure:
     if (encData != NULL){
         gstti_dmaidec_circ_buffer_flush(dmaidec,GST_BUFFER_SIZE(encData));
         gst_buffer_unref(encData);
+        encData = NULL;
     }
 
     GST_LOG_OBJECT(dmaidec,"Leave");
@@ -2282,10 +2310,11 @@ static void gst_tidmaidec_start_flushing(GstTIDmaidec *dmaidec)
         dmaidec->outList = NULL;
     }
 */
-    if (dmaidec->metaTab) {
+    if (dmaidec->metaBufTab) {
         GMUTEX_LOCK(dmaidec->metaTabMutex);
         for (i = 0; i  < dmaidec->numOutputBufs; i++) {
-            GST_BUFFER_TIMESTAMP(&dmaidec->metaTab[i]) =  GST_CLOCK_TIME_NONE;
+            GST_BUFFER_TIMESTAMP(&dmaidec->metaBufTab[i].buffer) = GST_CLOCK_TIME_NONE;
+            dmaidec->metaBufTab[i].is_dummy = FALSE;
         }
         GMUTEX_UNLOCK(dmaidec->metaTabMutex);
     }
