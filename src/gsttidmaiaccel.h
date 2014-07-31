@@ -52,7 +52,6 @@ struct _GstTIDmaiaccel
   GstPad              *sinkpad;
   GstPad              *srcpad;
 
-  gboolean            disabled;
   gint                width;
   gint                height;
   ColorSpace_Type     colorSpace;
@@ -61,6 +60,7 @@ struct _GstTIDmaiaccel
   BufTab_Handle       hOutBufTab;
   pthread_mutex_t     bufTabMutex;
   pthread_cond_t      bufTabCond;
+  gboolean            bufTabAllocated;
 };
 
 /* _GstTIDmaiaccelClass object */

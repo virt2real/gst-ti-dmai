@@ -77,10 +77,10 @@ static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans);
 static void gst_tidmaiaccel_init (GstTIDmaiaccel *dmaiaccel)
 {
     gst_base_transform_set_qos_enabled (GST_BASE_TRANSFORM (dmaiaccel), TRUE);
-    dmaiaccel->disabled = FALSE;
     dmaiaccel->colorSpace = ColorSpace_NOTSET;
     dmaiaccel->width = 0;
     dmaiaccel->height = 0;
+    dmaiaccel->bufTabAllocated = FALSE;
 }
 
 
@@ -183,7 +183,7 @@ static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans)
         dmaiaccel->hOutBufTab = NULL;
     }
 
-    dmaiaccel->disabled = FALSE;
+    dmaiaccel->bufTabAllocated = FALSE;
 
     GST_LOG("Finish\n");
 
@@ -270,12 +270,11 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     Bool isContiguous = FALSE;
     UInt32 phys = 0;
 
-    if (!dmaiaccel->disabled){
-        phys = Memory_getBufferPhysicalAddress(
+    /* Always check if the buffer is contiguous */
+    phys = Memory_getBufferPhysicalAddress(
                     GST_BUFFER_DATA(inBuf),
                     GST_BUFFER_SIZE(inBuf),
                     &isContiguous);
-    }
 
     if (isContiguous && dmaiaccel->width){
         GST_DEBUG("Is contiguous video buffer");
@@ -314,8 +313,7 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
     } else {
         GST_DEBUG("Copying into contiguous video buffer");
         /* This is a contiguous buffer, create a dmai buffer transport */
-
-        if (!dmaiaccel->disabled){
+        if (!dmaiaccel->bufTabAllocated){
             /* Initialize our buffer tab */
             BufferGfx_Attrs gfxAttrs    = BufferGfx_Attrs_DEFAULT;
 
@@ -334,7 +332,7 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
                     ("failed to create output buffer tab"));
                 return GST_FLOW_ERROR;
             }
-            dmaiaccel->disabled = TRUE;
+            dmaiaccel->bufTabAllocated = TRUE;
         }
 
         pthread_mutex_lock(&dmaiaccel->bufTabMutex);
