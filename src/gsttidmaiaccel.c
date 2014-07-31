@@ -295,7 +295,7 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
         BufferGfx_setColorSpace(hOutBuf,gfxAttrs.colorSpace);
         Buffer_setUserPtr(hOutBuf, (Int8*)GST_BUFFER_DATA(inBuf));
         Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
-        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL);
+        *outBuf = gst_tidmaibuffertransport_new(hOutBuf, NULL, NULL, FALSE);
         gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
             Buffer_getSize(hOutBuf));
         gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);
@@ -356,7 +356,7 @@ static GstFlowReturn gst_tidmaiaccel_prepare_output_buffer (GstBaseTransform
             GST_BUFFER_SIZE(inBuf));
         Buffer_setNumBytesUsed(hOutBuf, GST_BUFFER_SIZE(inBuf));
         *outBuf = gst_tidmaibuffertransport_new(hOutBuf, &dmaiaccel->bufTabMutex,
-            &dmaiaccel->bufTabCond);
+            &dmaiaccel->bufTabCond, FALSE);
         gst_buffer_set_data(*outBuf, (guint8*) Buffer_getUserPtr(hOutBuf),
             Buffer_getSize(hOutBuf));
         gst_buffer_copy_metadata(*outBuf,inBuf,GST_BUFFER_COPY_ALL);

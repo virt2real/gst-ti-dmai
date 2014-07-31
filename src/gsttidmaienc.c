@@ -1342,7 +1342,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
      * buffer for re-use in this element when the source pad calls
      * gst_buffer_unref().
          */
-    outBuf = gst_tidmaibuffertransport_new(hDstBuf,NULL, NULL);
+    outBuf = gst_tidmaibuffertransport_new(hDstBuf,NULL, NULL, FALSE);
     GST_BUFFER_SIZE(outBuf) = Buffer_getNumBytesUsed(hDstBuf);
     GST_DEBUG("Encoded buffer: %d size=%d\n", Buffer_getUserPtr(hDstBuf), GST_BUFFER_SIZE(outBuf));
 

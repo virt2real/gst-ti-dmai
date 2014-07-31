@@ -1170,7 +1170,7 @@ gst_dmai_resizer_chain (GstPad * pad, GstBuffer * buf)
   } else {
     pushBuffer =
       gst_tidmaibuffertransport_new (outBuffer, &dmairesizer->bufTabMutex,
-          &dmairesizer->bufTabCond);
+          &dmairesizer->bufTabCond, FALSE);
     if (!pushBuffer) {
       GST_ELEMENT_ERROR (dmairesizer, RESOURCE, NO_SPACE_LEFT, (NULL),
           ("Failed to create dmai buffer"));

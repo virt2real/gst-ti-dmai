@@ -1683,7 +1683,7 @@ static GstBuffer *__gstti_dmaidec_circ_buffer_peek
         Buffer_setNumBytesUsed(hBuf,size);
         Buffer_setSize(hBuf,size);
 
-        buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
+        buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL, FALSE);
 
         /* We have to find the metadata for this buffer */
         GMUTEX_LOCK(dmaidec->circMetaMutex);
@@ -1740,7 +1740,9 @@ static GstBuffer *gstti_dmaidec_circ_buffer_drain(GstTIDmaidec *dmaidec){
         Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaidec->circBuf));
         Buffer_setNumBytesUsed(hBuf,1);
         Buffer_setSize(hBuf,1);
-        buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL);
+
+        /* Mark the buffer as dummy, it does not contain any data to decode */
+        buf = gst_tidmaibuffertransport_new(hBuf, NULL, NULL, TRUE);
         GST_BUFFER_SIZE(buf) = 0;
     }
 
@@ -2046,7 +2048,7 @@ static GstFlowReturn decode(GstTIDmaidec *dmaidec,GstBuffer * encData){
          * gst_buffer_unref().
          */
         outBuf = gst_tidmaibuffertransport_new(hDstBuf,
-            &dmaidec->bufTabMutex, &dmaidec->bufTabCond);
+            &dmaidec->bufTabMutex, &dmaidec->bufTabCond, FALSE);
         gst_buffer_copy_metadata(outBuf,&dmaidec->metaTab[Buffer_getId(hDstBuf)],
             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
         if (decoder->dops->codec_type == VIDEO ||

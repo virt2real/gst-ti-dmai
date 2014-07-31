@@ -45,6 +45,8 @@ typedef struct _GstTIDmaiBufferTransport GstTIDmaiBufferTransport;
      GstTIDmaiBufferTransport))
 #define GST_TIDMAIBUFFERTRANSPORT_DMAIBUF(obj) \
     (GST_TIDMAIBUFFERTRANSPORT(obj)->dmaiBuffer)
+#define GST_TIDMAIBUFFERTRANSPORT_IS_DUMMY(obj) \
+    (GST_TIDMAIBUFFERTRANSPORT(obj)->is_dummy)
 
 #define gst_tidmaibuffertransport_GST_FREE  0x1
 
@@ -56,11 +58,12 @@ struct _GstTIDmaiBufferTransport {
   gpointer          cb_data;
   pthread_mutex_t   *mutex;
   pthread_cond_t   *cond;
+  gboolean is_dummy;
 };
 
 /* External function declarations */
 GType      gst_tidmaibuffertransport_get_type(void);
-GstBuffer* gst_tidmaibuffertransport_new(Buffer_Handle hBuf, pthread_mutex_t *, pthread_cond_t *);
+GstBuffer* gst_tidmaibuffertransport_new(Buffer_Handle hBuf, pthread_mutex_t *, pthread_cond_t *, gboolean is_dummy);
 void       gst_tidmaibuffertransport_set_release_callback
     (GstTIDmaiBufferTransport *,
      void (*)(gpointer,GstTIDmaiBufferTransport *),

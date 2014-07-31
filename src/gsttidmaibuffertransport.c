@@ -124,6 +124,7 @@ static void gst_tidmaibuffertransport_init(GTypeInstance *instance,
     buf->cb_data = NULL;
     buf->mutex = NULL;
     buf->cond = NULL;
+    buf->is_dummy = FALSE;
 }
 
 
@@ -185,7 +186,7 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
  *    Create a new DMAI buffer transport object.
  ******************************************************************************/
 GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
-    pthread_mutex_t *mutex, pthread_cond_t *cond)
+    pthread_mutex_t *mutex, pthread_cond_t *cond, gboolean is_dummy)
 {
     GstTIDmaiBufferTransport *buf;
 
@@ -207,6 +208,7 @@ GstBuffer *gst_tidmaibuffertransport_new(Buffer_Handle hBuf,
     buf->dmaiBuffer = hBuf;
     buf->mutex = mutex;
     buf->cond = cond;
+    buf->is_dummy = is_dummy;
     GST_LOG("end new\n");
 
     return GST_BUFFER(buf);
