@@ -180,7 +180,10 @@ static gboolean gst_tidmaiaccel_stop (GstBaseTransform *trans)
 
     if (dmaiaccel->hOutBufTab){
         BufTab_delete(dmaiaccel->hOutBufTab);
+        dmaiaccel->hOutBufTab = NULL;
     }
+
+    dmaiaccel->disabled = FALSE;
 
     GST_LOG("Finish\n");
 
