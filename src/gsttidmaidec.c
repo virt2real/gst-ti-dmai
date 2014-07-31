@@ -926,8 +926,8 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
             ("Unknown codec type, can't parse the caps"));
         return FALSE;
     }
-    GST_DEBUG_OBJECT(dmaidec,"Codec input buffer size %d\n",dmaidec->inBufSize);
-    GST_DEBUG_OBJECT(dmaidec,"Codec output buffer size %d\n",dmaidec->outBufSize);
+    GST_DEBUG_OBJECT(dmaidec,"Codec input buffer size %d, number of input buffers %d\n",dmaidec->inBufSize, dmaidec->numInputBufs);
+    GST_DEBUG_OBJECT(dmaidec,"Codec output buffer size %d, number of output buffers %d\n",dmaidec->outBufSize, dmaidec->numOutputBufs);
 
     if (dmaidec->hOutBufTab == NULL) {
         GST_ELEMENT_ERROR(dmaidec,RESOURCE,NO_SPACE_LEFT,(NULL),
@@ -954,7 +954,7 @@ static gboolean gst_tidmaidec_configure_codec (GstTIDmaidec  *dmaidec)
     }
 
     /* Create codec input circular buffer */
-    GST_DEBUG_OBJECT(dmaidec,"creating input circular buffer\n");
+    GST_DEBUG_OBJECT(dmaidec,"creating input circular buffer: numInputBufs: %d, inBufSize:%d\n", dmaidec->numInputBufs, dmaidec->inBufSize);
 
     Attrs.useMask = gst_tidmaibuffertransport_GST_FREE;
     dmaidec->circBuf = Buffer_create(

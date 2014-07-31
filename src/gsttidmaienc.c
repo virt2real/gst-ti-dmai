@@ -1212,7 +1212,7 @@ Buffer_Handle encode_buffer_get_free(GstTIDmaienc *dmaienc, GList **e){
     offset = slice->start - size;
 
     hBuf = Buffer_create(size,&Attrs);
-    GST_DEBUG("Creating buffer at offset %d",offset);
+    GST_DEBUG("Creating buffer at offset %d with size %d",offset, size);
     Buffer_setUserPtr(hBuf,Buffer_getUserPtr(dmaienc->outBuf) + offset);
     Buffer_setNumBytesUsed(hBuf,size);
     Buffer_setSize(hBuf,size);
@@ -1344,6 +1344,7 @@ static int encode(GstTIDmaienc *dmaienc,GstBuffer * rawData){
          */
     outBuf = gst_tidmaibuffertransport_new(hDstBuf,NULL, NULL);
     GST_BUFFER_SIZE(outBuf) = Buffer_getNumBytesUsed(hDstBuf);
+    GST_DEBUG("Encoded buffer: %d size=%d\n", Buffer_getUserPtr(hDstBuf), GST_BUFFER_SIZE(outBuf));
 
     /* Do a 32 byte aligment on the circular buffer, otherwise
        the DSP may corrupt data.
