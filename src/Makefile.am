@@ -13,7 +13,7 @@ gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c gsttidmaiperf.c \
 gstticommonutils.c ti_encoders.c ti_decoders.c ittiam_encoders.c ittiam_caps.c caps.c \
 gsttidmaibasedualencoder.c gsttidmaibasevideodualencoder.c \
 gsttidmaih264dualencoder.c gsttidmaividenc1.c \
-gsttidmaivideoutils.c
+gsttidmaivideoutils.c gsttidm365facedetect.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
@@ -34,7 +34,7 @@ gsttisupport_wma.h gsttisupport_jpeg.h ti_encoders.h ti_decoders.h caps.h gsttid
 gsttidmaienc.h gsttidmaiaccel.h gsttipriority.h ittiam_encoders.h ittiam_caps.h \
 gsttidmaibasedualencoder.h gsttidmaibasevideodualencoder.h \
 gsttidmaih264dualencoder.h gsttidmaividenc1.h \
-gsttidmaivideoutils.h
+gsttidmaivideoutils.h gsttidm365facedetect.h
 
 # XDC Configuration
 CONFIGURO     = $(XDC_INSTALL_DIR)/xs xdc.tools.configuro

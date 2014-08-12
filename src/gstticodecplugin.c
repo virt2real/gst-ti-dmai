@@ -58,8 +58,9 @@
 #include "ti_encoders.h"
 #include "ti_decoders.h"
 #include "ittiam_encoders.h"
-#include "gsttidmaih264dualencoder.h"
 
+#include "gsttidmaih264dualencoder.h"
+#include "gsttidm365facedetect.h"
 
 extern struct gstti_decoder_ops gstti_viddec_ops;
 extern struct gstti_decoder_ops gstti_viddec2_ops;
@@ -478,13 +479,15 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
     if (!gst_element_register(TICodecPlugin, "dmairesizer",
         GST_RANK_PRIMARY,GST_TYPE_DMAI_RESIZER))
         return FALSE;
-    
-	if (!gst_element_register(TICodecPlugin, "dmaidualenc_h264",
-        GST_RANK_PRIMARY,GST_TYPE_TI_DMAI_H264_DUALENCODER)) {
-		return FALSE;
-	}
-	
-	
+
+    if (!gst_element_register(TICodecPlugin, "dmaidualenc_h264",
+        GST_RANK_PRIMARY,GST_TYPE_TI_DMAI_H264_DUALENCODER)) 
+        return FALSE;
+
+    if (!gst_element_register(TICodecPlugin, "dm365facedetect",
+        GST_RANK_PRIMARY,GST_TYPE_DM365_FACEDETECT))
+        return FALSE;
+
     return TRUE;
 }
 
