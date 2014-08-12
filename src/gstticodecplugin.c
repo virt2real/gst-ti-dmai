@@ -58,6 +58,7 @@
 #include "ti_encoders.h"
 #include "ti_decoders.h"
 #include "ittiam_encoders.h"
+#include "gsttidmaih264dualencoder.h"
 
 
 extern struct gstti_decoder_ops gstti_viddec_ops;
@@ -477,7 +478,13 @@ TICodecPlugin_init (GstPlugin * TICodecPlugin)
     if (!gst_element_register(TICodecPlugin, "dmairesizer",
         GST_RANK_PRIMARY,GST_TYPE_DMAI_RESIZER))
         return FALSE;
-
+    
+	if (!gst_element_register(TICodecPlugin, "dmaidualenc_h264",
+        GST_RANK_PRIMARY,GST_TYPE_TI_DMAI_H264_DUALENCODER)) {
+		return FALSE;
+	}
+	
+	
     return TRUE;
 }
 

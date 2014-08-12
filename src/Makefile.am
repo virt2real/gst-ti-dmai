@@ -9,8 +9,11 @@ gsttisupport_generic.c gsttisupport_mpeg4.c gsttisupport_h264.c gsttisupport_jpe
 gsttisupport_mpeg2.c \
 gsttiauddec1.c gsttiauddec.c gsttiaudenc1.c gsttiaudenc.c gsttiimgenc1.c gsttiimgenc.c \
 gsttiimgdec.c gsttiimgdec1.c \
-gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c gsttidmaiperf.c\
-gstticommonutils.c ti_encoders.c ti_decoders.c ittiam_encoders.c ittiam_caps.c caps.c
+gsttisupport_aac.c gsttisupport_mp3.c gsttisupport_wma.c gsttidmaiperf.c \
+gstticommonutils.c ti_encoders.c ti_decoders.c ittiam_encoders.c ittiam_caps.c caps.c \
+gsttidmaibasedualencoder.c gsttidmaibasevideodualencoder.c \
+gsttidmaih264dualencoder.c gsttidmaividenc1.c \
+gsttidmaivideoutils.c
 
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
@@ -28,7 +31,10 @@ noinst_HEADERS = gsttidmaibuffertransport.h gsttidmaivideosink.h \
 gsttiparsers.h gsttisupport_generic.h gsttisupport_h264.h gsttisupport_mpeg2.h \
 gsttisupport_mpeg4.h gsttisupport_aac.h gsttisupport_mp3.h \
 gsttisupport_wma.h gsttisupport_jpeg.h ti_encoders.h ti_decoders.h caps.h gsttidmaidec.h \
-gsttidmaienc.h gsttidmaiaccel.h gsttipriority.h ittiam_encoders.h ittiam_caps.h
+gsttidmaienc.h gsttidmaiaccel.h gsttipriority.h ittiam_encoders.h ittiam_caps.h \
+gsttidmaibasedualencoder.h gsttidmaibasevideodualencoder.h \
+gsttidmaih264dualencoder.h gsttidmaividenc1.h \
+gsttidmaivideoutils.h
 
 # XDC Configuration
 CONFIGURO     = $(XDC_INSTALL_DIR)/xs xdc.tools.configuro

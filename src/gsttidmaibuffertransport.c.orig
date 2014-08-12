@@ -146,42 +146,37 @@ static void gst_tidmaibuffertransport_finalize(GstTIDmaiBufferTransport *cbuf)
     /* If the DMAI buffer is part of a BufTab, free it for re-use.  Otherwise,
      * destroy the buffer.
      */
-	
-	if(cbuf->dmaiBuffer != NULL) 
-	{
-		if (Buffer_getBufTab(cbuf->dmaiBuffer) != NULL) {
-			/* Hold mutex, if available */
-			if (cbuf->mutex)
-				pthread_mutex_lock(cbuf->mutex);
+    if (Buffer_getBufTab(cbuf->dmaiBuffer) != NULL) {
+        /* Hold mutex, if available */
+        if (cbuf->mutex)
+            pthread_mutex_lock(cbuf->mutex);
 
-			Buffer_freeUseMask(cbuf->dmaiBuffer,
-				gst_tidmaibuffertransport_GST_FREE);
+        Buffer_freeUseMask(cbuf->dmaiBuffer,
+            gst_tidmaibuffertransport_GST_FREE);
 
-			GST_DEBUG("clearing useMask bit so buffer %p can be reused: new mask %dh\n",
-				cbuf->dmaiBuffer,Buffer_getUseMask(cbuf->dmaiBuffer));
-			/* If pthread conditional is set then wake-up caller */
-			if (cbuf->cond) {
-				if (Buffer_getUseMask(cbuf->dmaiBuffer) == 0) {
-					pthread_cond_broadcast(cbuf->cond);
-				} else {
-					GST_DEBUG("Not broadcasting buffer free at finalize, since use mask is not clean yet");
-				}
-			}
-			/* Release mutex, if available */
-			if (cbuf->mutex)
-			   pthread_mutex_unlock(cbuf->mutex);
-		} else {
-			GST_LOG("calling Buffer_delete()\n");
-			Buffer_delete(cbuf->dmaiBuffer);
-		}
-	}
+        GST_DEBUG("clearing useMask bit so buffer %p can be reused: new mask %dh\n",
+            cbuf->dmaiBuffer,Buffer_getUseMask(cbuf->dmaiBuffer));
+        /* If pthread conditional is set then wake-up caller */
+        if (cbuf->cond) {
+            if (Buffer_getUseMask(cbuf->dmaiBuffer) == 0) {
+                pthread_cond_broadcast(cbuf->cond);
+            } else {
+                GST_DEBUG("Not broadcasting buffer free at finalize, since use mask is not clean yet");
+            }
+        }
+        /* Release mutex, if available */
+        if (cbuf->mutex)
+           pthread_mutex_unlock(cbuf->mutex);
+    } else {
+        GST_LOG("calling Buffer_delete()\n");
+        Buffer_delete(cbuf->dmaiBuffer);
+    }
     
     gst_caps_replace (&GST_BUFFER_CAPS (GST_BUFFER(cbuf)), NULL);
-    
-	/* finalize the parent class */
+
     GST_MINI_OBJECT_CLASS (parent_class)->finalize                                                             
         (GST_MINI_OBJECT_CAST (cbuf)); 
-    	
+    
     GST_LOG("end finalize\n");
 }
 
