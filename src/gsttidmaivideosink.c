@@ -196,7 +196,7 @@ static void gst_tidmaivideosink_class_init(GstTIDmaiVideoSinkClass * klass)
             "Video Standard used\n"
             "\tAUTO (if supported), CIF, SIF_NTSC, SIF_PAL, VGA, D1_NTSC\n"
             "\tD1_PAL, 480P, 576P, 720P_60, 720P_50, 1080I_30, 1080I_25\n"
-            "\t1080P_30, 1080P_25, 1080P_24\n",
+            "\t1080P_30, 1080P_25, 1080P_24, PRGB\n",
             NULL, G_PARAM_READWRITE));
 
     g_object_class_install_property(gobject_class, PROP_VIDEOOUTPUT,
@@ -547,6 +547,9 @@ static int gst_tidmaivideosink_videostd_get_attrs(VideoStd_Type videoStd,
             vattrs->framerate = 60;
             break;
         #endif
+	case VideoStd_PRGB:
+            vattrs->framerate = 30;
+            break;
 
         default:
             return -1;
@@ -712,13 +715,15 @@ static int gst_tidmaivideosink_convert_attrs(int attr,
             else if (!strcasecmp(sink->videoStd, "VGA"))
                 return VideoStd_VGA;
             #endif
+			else if (!strcasecmp(sink->videoStd, "PRGB"))
+                return VideoStd_PRGB;
             else {
                 GST_ELEMENT_ERROR(sink,STREAM,FAILED,(NULL),
                 ("Invalid videoStd entered (%s).  "
                 "Please choose from:\n"
                 "\tAUTO (if supported), CIF, SIF_NTSC, SIF_PAL, VGA, D1_NTSC\n"
                 "\tD1_PAL, 480P, 576P, 720P_60, 720P_50, 1080I_30, 1080I_25\n"
-                "\t1080P_30, 1080P_25, 1080P_24\n", sink->videoStd));
+                "\t1080P_30, 1080P_25, 1080P_24, PRGB\n", sink->videoStd));
                 return -1;
             }
             break;
