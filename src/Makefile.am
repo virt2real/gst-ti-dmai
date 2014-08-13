@@ -38,6 +38,11 @@ gsttidmaih264dualencoder.h gsttidmaividenc1.h \
 gsttidmaivideoutils.h 
 # gsttidm365facedetect.h
 
+CURRENT_DIR = `pwd`
+DVSDK_INCLUDE = -I$(DMAI_INSTALL_DIR)/packages -I$(XDC_INSTALL_DIR)/packages -I$(FC_INSTALL_DIR)/packages -I$(CE_INSTALL_DIR)/packages -I$(XDAIS_INSTALL_DIR)/packages -I$(CODEC_INSTALL_DIR)/packages -I$(CMEM_INSTALL_DIR)/packages 
+DVSDK_CONFIG = -march=armv5t -Dxdc_target_name__=GCArmv5T -Dxdc_cfg__header__="$(CURRENT_DIR)/dm365_xv5T.h" -Dxdc_target_types__="gnu/targets/arm/std.h"
+INCLUDES = $(DVSDK_INCLUDE) $(DVSDK_CONFIG)
+
 # XDC Configuration
 CONFIGURO     = $(XDC_INSTALL_DIR)/xs xdc.tools.configuro
 BUILT_SOURCES = @XDC_CONFIG_BASENAME@/compiler.opt @XDC_CONFIG_BASENAME@/linker.cmd
