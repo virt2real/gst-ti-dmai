@@ -498,10 +498,10 @@ gst_tidmai_h264_dualencoder_set_extend_params(GstTIDmaiBaseDualEncoder * base_du
 	                                &MBRowinfo_Attrs); /* size: heigh-in-pixels * 4  */
 	frameInfo_buffer_handle = Buffer_create(encStatus.bufInfo.minOutBufSize[2], &frameInfo_Attrs);
 		  
-	base_dualencoder->motionVector = gst_tidmaibuffertransport_new(mvsad_buffer_handle, NULL, NULL);
-	base_dualencoder->MBinfo = gst_tidmaibuffertransport_new(MBinfo_handle, NULL, NULL);
-	base_dualencoder->MBRowInfo = gst_tidmaibuffertransport_new(MBRowinfo_handle, NULL, NULL);
-	base_dualencoder->frameInfo = gst_tidmaibuffertransport_new(frameInfo_buffer_handle, NULL, NULL);
+	base_dualencoder->motionVector = gst_tidmaibuffertransport_new(mvsad_buffer_handle, NULL, NULL, FALSE);
+	base_dualencoder->MBinfo = gst_tidmaibuffertransport_new(MBinfo_handle, NULL, NULL, FALSE);
+	base_dualencoder->MBRowInfo = gst_tidmaibuffertransport_new(MBRowinfo_handle, NULL, NULL, FALSE);
+	base_dualencoder->frameInfo = gst_tidmaibuffertransport_new(frameInfo_buffer_handle, NULL, NULL, FALSE);
    }	
 		
 	/* Set the params in the codec instance */

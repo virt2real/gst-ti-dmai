@@ -110,7 +110,12 @@ struct _GstTIDmaiBaseDualEncoder
   GList *freeSlices;
 
   /* Mutex for control the manipulation to out_buffers */
+#ifdef GLIB_2_31_AND_UP  
+  GMutex freeMutex;
+#else
   GMutex *freeMutex;
+#endif
+
   
   /*******************************/
   /** Encoders instances manage **/

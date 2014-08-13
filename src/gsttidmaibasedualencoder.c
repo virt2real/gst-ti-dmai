@@ -461,7 +461,7 @@ gst_tidmai_base_dualencoder_get_output_buffer (GstTIDmaiBaseDualEncoder * base_d
   Buffer_setUserPtr(hBuf, ((Int8 *)GST_BUFFER_DATA(base_dualencoder->submitted_output_buffers)) + offset);
   Buffer_setNumBytesUsed(hBuf, size);
   Buffer_setSize(hBuf, size);
-  output_buffer = gst_tidmaibuffertransport_new(hBuf,NULL, NULL);
+  output_buffer = gst_tidmaibuffertransport_new(hBuf,NULL, NULL, FALSE);
   gst_tidmaibuffertransport_set_release_callback(
         (GstTIDmaiBufferTransport *)output_buffer, gst_tidmai_base_dualencoder_buffer_finalize, base_dualencoder);
   

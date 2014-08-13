@@ -92,7 +92,11 @@ struct _Gstdm365facedetect
     FaceInfo face_info;
 
     /* Lock to prevent the state to change while working */
+#ifdef GLIB_2_31_AND_UP  
+    GMutex state_lock;
+#else
     GMutex *state_lock;
+#endif
 };
 
 struct _Gstdm365facedetectClass

@@ -383,8 +383,11 @@ gst_tidmai_base_video_dualencoder_default_realize_instance (GstTIDmaiBaseVideoDu
     slice->start = 0;
     slice->end = GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->outBufSize;
     slice->size = GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->outBufSize;
-    GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->freeMutex = g_malloc0(sizeof(GMutex));
-    g_mutex_init(GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->freeMutex);
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_init(&(GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->freeMutex));
+#else
+    GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->freeMutex  = g_mutex_new();
+#endif
     GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->freeSlices =
         g_list_append (GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->freeSlices, slice);
 
@@ -396,7 +399,7 @@ gst_tidmai_base_video_dualencoder_default_realize_instance (GstTIDmaiBaseVideoDu
 	outBufHandle = Buffer_create(GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->outBufSize, &Attrs);
 	
 	GST_TI_DMAI_BASE_DUALENCODER (video_dualencoder)->submitted_output_buffers = 
-		gst_tidmaibuffertransport_new(outBufHandle, NULL, NULL);
+		gst_tidmaibuffertransport_new(outBufHandle, NULL, NULL, FALSE);
 	
   }
   /* Encode the actual buffer */
@@ -586,8 +589,11 @@ gst_tidmai_base_video_dualencoder_init (GstTIDmaiBaseVideoDualEncoder * video_du
       video_dualencoder);
   
   /* Init the mutex for the set_caps */
-  video_dualencoder->set_caps_mutex = g_malloc0(sizeof(GMutex));
-  g_mutex_init(video_dualencoder->set_caps_mutex);
+#ifdef GLIB_2_31_AND_UP
+  g_mutex_init(&video_dualencoder->set_caps_mutex);
+#else
+  video_dualencoder->set_caps_mutex = g_mutex_new();
+#endif
   
   GST_DEBUG_OBJECT (video_dualencoder, "Leave _init video dualencoder");
 

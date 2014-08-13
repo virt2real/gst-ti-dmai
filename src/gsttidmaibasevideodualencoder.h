@@ -49,8 +49,12 @@ struct _GstTIDmaiBaseVideoDualEncoder
   GstTIDmaiBaseDualEncoder base_dualencoder;
   
   /* Mutex for control the acces to set_caps function */
+#ifdef GLIB_2_31_AND_UP  
+  GMutex set_caps_mutex;
+#else
   GMutex *set_caps_mutex;
-  
+#endif
+
 };
 
 
