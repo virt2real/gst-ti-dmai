@@ -30,7 +30,7 @@
 #include "gsttidmaienc.h"
 #include <ti/sdo/dmai/ce/Aenc1.h>
 #ifdef AACLC_ARM_ITTIAM_ENCODER 
-#include <ittiam/codecs/aaclc_enc/ieaacplusenc.h>
+#include <ittiam/app/aaclc_enc_app/ieaacplusenc.h>
 #endif
 #ifdef MP3_ARM_ITTIAM_ENCODER 
 #include <ittiam/codecs/mp3_enc/imp3enc.h>   
