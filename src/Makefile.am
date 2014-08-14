@@ -19,7 +19,7 @@ gsttidmaivideoutils.c
 # flags used to compile this plugin
 # add other _CFLAGS and _LIBS as needed
 libgstticodecplugin_la_CFLAGS  = $(GST_CFLAGS) $(UST_CFLAGS)\
-$(shell cat @XDC_CONFIG_BASENAME@/compiler.opt) -DPLATFORM=$(PLATFORM) -Dxdc__RESTRICT__
+$(shell cat @XDC_CONFIG_BASENAME@/compiler.opt | sed 's/-march=armv5t//') -DPLATFORM=$(PLATFORM) -Dxdc__RESTRICT__
 
 libgstticodecplugin_la_LIBADD  = $(GST_LIBS) $(GST_BASE_LIBS) $(UST_LIBS)\
 $(GST_PLUGINS_BASE_LIBS) -lgstvideo-0.10 -lm -ldl
