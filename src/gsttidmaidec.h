@@ -114,7 +114,7 @@ struct _GstTIDmaidec
 
     /* Buffer management */
     Buffer_Handle       circBuf;
-#ifdef GLIB_2_31_AND_UP     
+#ifdef GLIB_2_31_AND_UP
     GMutex              circMutex;
     GMutex              circMetaMutex;
 #else

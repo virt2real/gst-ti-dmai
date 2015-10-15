@@ -29,21 +29,10 @@
 #include <stdlib.h>
 #include "gsttidmaibuffertransport.h"
 #include "gsttidmairesizer.h"
+#include "gstticommonutils.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_tidmairesizer_debug);
 #define GST_CAT_DEFAULT gst_tidmairesizer_debug
-
-#ifdef GLIB_2_31_AND_UP  
-    #define GMUTEX_LOCK(mutex) g_mutex_lock(&mutex)
-#else
-    #define GMUTEX_LOCK(mutex) if (mutex) g_mutex_lock(mutex)
-#endif
-
-#ifdef GLIB_2_31_AND_UP  
-    #define GMUTEX_UNLOCK(mutex) g_mutex_unlock(&mutex)
-#else
-    #define GMUTEX_UNLOCK(mutex) if (mutex) g_mutex_unlock(mutex)
-#endif
 
 static const GstElementDetails resizer_details =
 GST_ELEMENT_DETAILS ("TI Dmai Video Resizer",

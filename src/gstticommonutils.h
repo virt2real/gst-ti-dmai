@@ -84,6 +84,18 @@ gint gst_ti_calculate_bufSize (gint width, gint height,
 /* Function to black fill a buffer*/
 gboolean gst_ti_blackFill(Buffer_Handle hBuf);
 
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_LOCK(mutex) g_mutex_lock(&mutex)
+#else
+    #define GMUTEX_LOCK(mutex) if (mutex) g_mutex_lock(mutex)
+#endif
+
+#ifdef GLIB_2_31_AND_UP  
+    #define GMUTEX_UNLOCK(mutex) g_mutex_unlock(&mutex)
+#else
+    #define GMUTEX_UNLOCK(mutex) if (mutex) g_mutex_unlock(mutex)
+#endif
+
 #endif
 
 /******************************************************************************
