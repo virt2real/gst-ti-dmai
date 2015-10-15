@@ -57,10 +57,13 @@ gst_tidmai_base_dualencoder_finalize_attributes (GstTIDmaiBaseDualEncoder * base
   }
   
   if(base_dualencoder->freeSlices != NULL) {
-    
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_clear(&base_dualencoder->freeMutex);
+#else
     g_free(base_dualencoder->freeMutex);
-    g_list_free(base_dualencoder->freeSlices);
     base_dualencoder->freeMutex = NULL;
+#endif
+    g_list_free(base_dualencoder->freeSlices);
     base_dualencoder->freeSlices = NULL;
     base_dualencoder->outBufSize = 0;
   }
@@ -185,7 +188,7 @@ gst_tidmai_base_dualencoder_restore_unused_memory (GstTIDmaiBaseDualEncoder * ba
   GST_BUFFER_SIZE(buffer) = base_dualencoder->memoryUsed;
   
 
-  g_mutex_lock (base_dualencoder->freeMutex);
+  GMUTEX_LOCK(base_dualencoder->freeMutex);
   /* Return unused memory */
   unused =
       GST_BUFFER_SIZE (encoder_instance->input_buffer) -
@@ -198,7 +201,7 @@ gst_tidmai_base_dualencoder_restore_unused_memory (GstTIDmaiBaseDualEncoder * ba
     base_dualencoder->freeSlices =
         g_list_delete_link (base_dualencoder->freeSlices, *actual_free_slice);
   }
-  g_mutex_unlock (base_dualencoder->freeMutex);
+  GMUTEX_UNLOCK(base_dualencoder->freeMutex);
 
 }
 
@@ -257,7 +260,7 @@ gst_tidmai_base_dualencoder_get_valid_slice (GstTIDmaiBaseDualEncoder * base_dua
 
   /* Find free memory */
   GST_DEBUG ("Finding free memory");
-  g_mutex_lock (base_dualencoder->freeMutex);
+  GMUTEX_LOCK(base_dualencoder->freeMutex);
   first_fit = base_dualencoder->freeSlices;
   while (first_fit) {
     slice = (struct cmemSlice *) first_fit->data;
@@ -270,7 +273,7 @@ gst_tidmai_base_dualencoder_get_valid_slice (GstTIDmaiBaseDualEncoder * base_dua
        */
       slice->start += *size;
       slice->size -= *size;
-      g_mutex_unlock (base_dualencoder->freeMutex);
+      GMUTEX_UNLOCK(base_dualencoder->freeMutex);
       return first_fit;
     }
     if (slice->size > maxSize) {
@@ -291,7 +294,7 @@ gst_tidmai_base_dualencoder_get_valid_slice (GstTIDmaiBaseDualEncoder * base_dua
   *size = maxSliceAvailable->size;
   maxSliceAvailable->size = 0;
 
-  g_mutex_unlock (base_dualencoder->freeMutex);
+  GMUTEX_UNLOCK (base_dualencoder->freeMutex);
   return alternative_fit;
 }
 
@@ -305,7 +308,7 @@ gst_tidmai_base_dualencoder_buffer_finalize (gpointer data, GstTIDmaiBufferTrans
   g_print("Entry gst_tidmai_base_dualencoder_buffer_finalize\n");	
   
   GstTIDmaiBaseDualEncoder *base_dualencoder = (GstTIDmaiBaseDualEncoder *)data;
-  g_mutex_lock (base_dualencoder->freeMutex);
+  GMUTEX_LOCK(base_dualencoder->freeMutex);
    
 
   GstBuffer *buffer;
@@ -368,7 +371,7 @@ gst_tidmai_base_dualencoder_buffer_finalize (gpointer data, GstTIDmaiBufferTrans
               g_list_delete_link (base_dualencoder->freeSlices, actual_element);
         }
       }
-      g_mutex_unlock (base_dualencoder->freeMutex);
+      GMUTEX_UNLOCK(base_dualencoder->freeMutex);
 	  return;
     }
     if (slice->end == spos) {
@@ -390,7 +393,7 @@ gst_tidmai_base_dualencoder_buffer_finalize (gpointer data, GstTIDmaiBufferTrans
               g_list_next (actual_element));
         }
       }
-      g_mutex_unlock (base_dualencoder->freeMutex);
+      GMUTEX_UNLOCK(base_dualencoder->freeMutex);
 	  return;
     }
     /* Create a new free slice */
@@ -404,7 +407,7 @@ gst_tidmai_base_dualencoder_buffer_finalize (gpointer data, GstTIDmaiBufferTrans
       base_dualencoder->freeSlices =
           g_list_insert_before (base_dualencoder->freeSlices, actual_element,
           nslice);
-      g_mutex_unlock (base_dualencoder->freeMutex);
+      GMUTEX_UNLOCK(base_dualencoder->freeMutex);
 	  return;
     }
 
@@ -423,7 +426,7 @@ gst_tidmai_base_dualencoder_buffer_finalize (gpointer data, GstTIDmaiBufferTrans
       g_list_insert_before (base_dualencoder->freeSlices, NULL, nslice);
 	   
 	  
-  g_mutex_unlock (base_dualencoder->freeMutex);
+  GMUTEX_UNLOCK(base_dualencoder->freeMutex);
 }
 
 
@@ -726,7 +729,11 @@ gst_tidmai_base_dualencoder_init (GstTIDmaiBaseDualEncoder * base_dualencoder,
   base_dualencoder->submitted_output_buffers = NULL;
   base_dualencoder->first_buffer = FALSE;
   base_dualencoder->outBufSize = 0;
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_clear(&base_dualencoder->freeMutex);
+#else
   base_dualencoder->freeMutex = NULL;
+#endif
   base_dualencoder->freeSlices = NULL;
   base_dualencoder->low_resolution_encoder = NULL;
   base_dualencoder->high_resolution_encoder = NULL;

@@ -64,9 +64,11 @@ static
 void gst_tidmai_base_video_dualencoder_finalize (GObject * object)
 {
     GstTIDmaiBaseVideoDualEncoder *base_video_dualencoder = (GstTIDmaiBaseVideoDualEncoder *)object;
-    
+#ifdef GLIB_2_31_AND_UP
+    g_mutex_clear(&base_video_dualencoder->set_caps_mutex);
+#else
 	g_free(base_video_dualencoder->set_caps_mutex);
-
+#endif
     G_OBJECT_CLASS(g_type_class_peek_parent(G_OBJECT_GET_CLASS (object)))
         ->finalize (object);
 }
@@ -168,7 +170,7 @@ gst_tidmai_base_video_dualencoder_sink_set_caps (GstPad * pad, GstCaps * caps)
   GstTIDmaiBaseVideoDualEncoder *video_dualencoder = GST_TI_DMAI_BASE_VIDEO_DUALENCODER(base_dualencoder);
   
   /* Lock the entry */
-  g_mutex_lock(video_dualencoder->set_caps_mutex);
+  GMUTEX_LOCK(video_dualencoder->set_caps_mutex);
   
   /* Check the current encoder instance */
   if(base_dualencoder->low_resolution_encoder->collect->pad ==
@@ -242,7 +244,7 @@ gst_tidmai_base_video_dualencoder_sink_set_caps (GstPad * pad, GstCaps * caps)
   GST_DEBUG("Leave default_sink_set_caps base video dualencoder");
   
   /* Un-lock the entry */
-  g_mutex_unlock(video_dualencoder->set_caps_mutex);
+  GMUTEX_UNLOCK(video_dualencoder->set_caps_mutex);
    	
   return TRUE;
 	
@@ -253,7 +255,7 @@ refuse_caps:
     GST_ERROR ("refused caps %" GST_PTR_FORMAT, caps);
 	
 	/* Un-lock the entry */ 
-	g_mutex_unlock(video_dualencoder->set_caps_mutex);
+	GMUTEX_UNLOCK(video_dualencoder->set_caps_mutex);
 	
     return FALSE;
   }

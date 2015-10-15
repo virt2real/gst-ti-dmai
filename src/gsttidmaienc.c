@@ -56,17 +56,6 @@
 /* Declare variable used to categorize GST_LOG output */
 GST_DEBUG_CATEGORY (gst_tidmaienc_debug);
 #define GST_CAT_DEFAULT gst_tidmaienc_debug
-#ifdef GLIB_2_31_AND_UP  
-    #define GMUTEX_LOCK(mutex) g_mutex_lock(&mutex)
-#else
-    #define GMUTEX_LOCK(mutex) if (mutex) g_mutex_lock(mutex)
-#endif
-
-#ifdef GLIB_2_31_AND_UP  
-    #define GMUTEX_UNLOCK(mutex) g_mutex_unlock(&mutex)
-#else
-    #define GMUTEX_UNLOCK(mutex) if (mutex) g_mutex_unlock(mutex)
-#endif
 
 /* Element property identifiers */
 enum

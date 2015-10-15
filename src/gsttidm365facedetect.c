@@ -27,6 +27,7 @@
 
 #include "gsttidm365facedetect.h"
 #include "gsttidmaibuffertransport.h"
+#include "gstticommonutils.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_dm365facedetect_debug);
 #define GST_CAT_DEFAULT gst_dm365facedetect_debug
@@ -34,9 +35,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_dm365facedetect_debug);
 #define GST_DM365_FACEDETECT_GET_STATE_LOCK(s) \
     (GST_DM365_FACEDETECT(s)->state_lock)
 #define GST_DM365_FACEDETECT_STATE_LOCK(s) \
-    (g_mutex_lock(GST_DM365_FACEDETECT_GET_STATE_LOCK(s)))
+    (GMUTEX_LOCK(GST_DM365_FACEDETECT_GET_STATE_LOCK(s)))
 #define GST_DM365_FACEDETECT_STATE_UNLOCK(s) \
-    (g_mutex_unlock(GST_DM365_FACEDETECT_GET_STATE_LOCK(s)))
+    (GMUTEX_UNLOCK(GST_DM365_FACEDETECT_GET_STATE_LOCK(s)))
 
 
 #define FD_IMAGE_WIDTH 320
