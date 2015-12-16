@@ -70,7 +70,11 @@ static GstStaticPadTemplate video_sink_template_factory =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")", pixel-aspect-ratio=(fraction) [0/1, MAX ]"));
+    GST_STATIC_CAPS (GST_VIDEO_CAPS_YUV ("UYVY")", pixel-aspect-ratio=(fraction) [0/1, MAX ];"
+#if PLATFORM == dm365
+    GST_VIDEO_CAPS_YUV ("NV12")
+#endif
+    ));
 
 static void gst_dmai_resizer_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
